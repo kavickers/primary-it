@@ -24,7 +24,9 @@ class RemoveDeployableBooleanFromStatusLabels extends Migration
     public function down()
     {
         Schema::table('status_labels', function ($table) {
-            $table->boolean('deployable');
+            // A default is required so SQL Server can add this NOT NULL column to
+            // a non-empty table (MySQL implicitly defaults it; SQL Server does not).
+            $table->boolean('deployable')->default(1);
         });
     }
 }

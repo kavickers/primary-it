@@ -179,8 +179,8 @@ class ReportsController extends Controller
         $pluckAction = function (string $actionType, Carbon $start, Carbon $end): array {
             return Actionlog::where('action_type', $actionType)
                 ->whereBetween('created_at', [$start, $end])
-                ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
-                ->groupBy('date')
+                ->selectRaw($this->reportDateExpr('created_at').' as date, COUNT(*) as count')
+                ->groupByRaw($this->reportDateExpr('created_at'))
                 ->pluck('count', 'date')
                 ->toArray();
         };
@@ -189,8 +189,8 @@ class ReportsController extends Controller
         $pluckCreated = function (string $modelClass, Carbon $start, Carbon $end): array {
             return $modelClass::withTrashed()
                 ->whereBetween('created_at', [$start, $end])
-                ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
-                ->groupBy('date')
+                ->selectRaw($this->reportDateExpr('created_at').' as date, COUNT(*) as count')
+                ->groupByRaw($this->reportDateExpr('created_at'))
                 ->pluck('count', 'date')
                 ->toArray();
         };
@@ -201,8 +201,8 @@ class ReportsController extends Controller
             return Maintenance::withTrashed()
                 ->whereHas('asset')
                 ->whereBetween('maintenances.created_at', [$start, $end])
-                ->selectRaw('DATE(maintenances.created_at) as date, COUNT(*) as count')
-                ->groupBy('date')
+                ->selectRaw($this->reportDateExpr('maintenances.created_at').' as date, COUNT(*) as count')
+                ->groupByRaw($this->reportDateExpr('maintenances.created_at'))
                 ->pluck('count', 'date')
                 ->toArray();
         };
@@ -212,8 +212,8 @@ class ReportsController extends Controller
             return Actionlog::where('action_type', $actionType)
                 ->where('item_type', $modelClass)
                 ->whereBetween('created_at', [$start, $end])
-                ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
-                ->groupBy('date')
+                ->selectRaw($this->reportDateExpr('created_at').' as date, COUNT(*) as count')
+                ->groupByRaw($this->reportDateExpr('created_at'))
                 ->pluck('count', 'date')
                 ->toArray();
         };
@@ -222,8 +222,8 @@ class ReportsController extends Controller
             return User::withTrashed()
                 ->whereNotNull('deleted_at')
                 ->whereBetween('deleted_at', [$start, $end])
-                ->selectRaw('DATE(deleted_at) as date, COUNT(*) as count')
-                ->groupBy('date')
+                ->selectRaw($this->reportDateExpr('deleted_at').' as date, COUNT(*) as count')
+                ->groupByRaw($this->reportDateExpr('deleted_at'))
                 ->pluck('count', 'date')
                 ->toArray();
         };
@@ -233,8 +233,8 @@ class ReportsController extends Controller
             return Actionlog::whereIn('action_type', ['checkin', 'checkin from'])
                 ->where('item_type', $modelClass)
                 ->whereBetween('created_at', [$start, $end])
-                ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
-                ->groupBy('date')
+                ->selectRaw($this->reportDateExpr('created_at').' as date, COUNT(*) as count')
+                ->groupByRaw($this->reportDateExpr('created_at'))
                 ->pluck('count', 'date')
                 ->toArray();
         };
@@ -271,5 +271,20 @@ class ReportsController extends Controller
             'labels' => array_map(fn ($d) => Carbon::parse($d)->format('M j'), $curDates),
             'prev_label' => $prevStart->format('M j').' – '.$prevEnd->format('M j'),
         ], $datasets));
+    }
+
+    /**
+     * Driver-aware SQL expression that truncates a datetime column to a date,
+     * used for grouping report counts by day.
+     *
+     * MySQL has DATE(), SQLite has date(), but SQL Server needs CAST(... AS DATE).
+     */
+    private function reportDateExpr(string $column): string
+    {
+        return match (\Illuminate\Support\Facades\DB::getDriverName()) {
+            'sqlsrv' => 'CAST('.$column.' AS DATE)',
+            'sqlite' => 'date('.$column.')',
+            default => 'DATE('.$column.')',
+        };
     }
 }

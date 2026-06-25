@@ -175,9 +175,13 @@ class AssetModelsController extends Controller
 
             if ($model->wasChanged('eol')) {
                 if ($model->eol > 0) {
-                    $newEol = $model->eol;
+                    $newEol = (int) $model->eol;
+                    // SQL Server uses DATEADD(datepart, number, date); MySQL uses DATE_ADD(date, INTERVAL n unit).
+                    $eolExpression = DB::getDriverName() === 'sqlsrv'
+                        ? DB::raw('DATEADD(MONTH, '.$newEol.', purchase_date)')
+                        : DB::raw('DATE_ADD(purchase_date, INTERVAL '.$newEol.' MONTH)');
                     $model->assets()->whereNotNull('purchase_date')->where('eol_explicit', false)
-                        ->update(['asset_eol_date' => DB::raw('DATE_ADD(purchase_date, INTERVAL '.$newEol.' MONTH)')]);
+                        ->update(['asset_eol_date' => $eolExpression]);
                 } elseif ($model->eol == 0) {
                     $model->assets()->whereNotNull('purchase_date')->where('eol_explicit', false)
                         ->update(['asset_eol_date' => DB::raw('null')]);

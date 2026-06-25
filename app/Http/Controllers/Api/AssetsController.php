@@ -441,9 +441,16 @@ class AssetsController extends Controller
                         }
                     }
 
-                    // This may not work for all databases, but it works for MySQL
+                    // Force numeric ordering on a text-backed custom field column.
                     if ($numeric_sort) {
-                        $assets->orderByRaw(DB::getTablePrefix().'assets.'.$sort_override.' * 1 '.$order);
+                        $column = DB::getTablePrefix().'assets.'.$sort_override;
+                        if (DB::getDriverName() === 'sqlsrv') {
+                            // SQL Server errors on "text * 1" for non-numeric values;
+                            // TRY_CAST yields NULL instead of throwing.
+                            $assets->orderByRaw('TRY_CAST('.$column.' AS FLOAT) '.$order);
+                        } else {
+                            $assets->orderByRaw($column.' * 1 '.$order);
+                        }
                     } else {
                         $assets->orderBy($sort_override, $order);
                     }

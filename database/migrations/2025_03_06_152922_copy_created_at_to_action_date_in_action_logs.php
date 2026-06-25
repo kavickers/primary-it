@@ -24,5 +24,13 @@ return new class extends Migration
     /**
      * Reverse the migrations.
      */
-    public function down(): void {}
+    public function down(): void
+    {
+        // Drop the index created in up(). This is required for SQL Server, where
+        // a later rollback that drops the action_date column would otherwise fail
+        // because the index still depends on it. (Also correct migration hygiene.)
+        Schema::table('action_logs', function (Blueprint $table) {
+            $table->dropIndex(['action_date']);
+        });
+    }
 };

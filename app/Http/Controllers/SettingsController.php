@@ -418,10 +418,16 @@ class SettingsController extends Controller
             // Batch update the dates. We have to use this method to avoid time limit exceeded errors on very large datasets,
             // but it DOES mean this change doesn't get logged in the action logs, since it skips the observer.
             // @see https://stackoverflow.com/questions/54879160/laravel-observer-not-working-on-bulk-insert
+            // SQL Server uses DATEADD(datepart, number, date); MySQL uses DATE_ADD(date, INTERVAL n unit).
+            // $audit_diff_months may be negative; both functions accept negative month offsets.
+            $auditDateExpression = DB::getDriverName() === 'sqlsrv'
+                ? DB::raw('DATEADD(MONTH, '.$audit_diff_months.', next_audit_date)')
+                : DB::raw('DATE_ADD(next_audit_date, INTERVAL '.$audit_diff_months.' MONTH)');
+
             $affected = Asset::whereNotNull('next_audit_date')
                 ->whereNull('deleted_at')
                 ->update(
-                    ['next_audit_date' => DB::raw('DATE_ADD(next_audit_date, INTERVAL '.$audit_diff_months.' MONTH)')]
+                    ['next_audit_date' => $auditDateExpression]
                 );
 
             Log::debug($affected.' assets affected by audit interval update');
