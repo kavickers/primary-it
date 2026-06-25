@@ -128,11 +128,26 @@ return [
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'host' => env('DB_HOST', 'localhost'),
+            'port' => (int) env('DB_PORT', 1433),
             'database' => env('DB_DATABASE', 'forge'),
             'username' => env('DB_USERNAME', 'forge'),
             'password' => env('DB_PASSWORD', ''),
-            'charset' => 'utf8',
-            'prefix' => '',
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => env('DB_PREFIX', ''),
+            'prefix_indexes' => true,
+            // ODBC Driver 18 enables encryption by default. For a local instance
+            // with a self-signed certificate, trust the server cert. Set
+            // DB_ENCRYPT=true / DB_TRUST_SERVER_CERTIFICATE=false in production
+            // when using a properly signed certificate.
+            'encrypt' => env('DB_ENCRYPT', 'yes'),
+            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'true'),
+            // By default pdo_sqlsrv returns integer/numeric columns as PHP
+            // strings, unlike MySQL's native driver. The app assumes native
+            // numeric types (e.g. Carbon's addMonths() requires int under
+            // Carbon 3), so request numeric fetches to match MySQL behavior.
+            'options' => (extension_loaded('pdo_sqlsrv')) ? [
+                PDO::SQLSRV_ATTR_FETCHES_NUMERIC_TYPE => true,
+            ] : [],
         ],
 
     ],

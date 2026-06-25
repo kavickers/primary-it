@@ -19,7 +19,7 @@ class DatabaseSeeder extends Seeder
     public function run()
     {
         Model::unguard();
-        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        $this->toggleForeignKeyChecks(false);
 
         // Only create default settings if they do not exist in the db.
         if (! Setting::first()) {
@@ -52,9 +52,32 @@ class DatabaseSeeder extends Seeder
         Log::info($output);
 
         Model::reguard();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        $this->toggleForeignKeyChecks(true);
 
         DB::table('imports')->truncate();
         DB::table('requested_assets')->truncate();
+    }
+
+    /**
+     * Enable or disable foreign key constraint checking across drivers.
+     *
+     * MySQL/MariaDB use the session-level SET FOREIGN_KEY_CHECKS toggle, while
+     * SQL Server toggles every table's constraints. SQLite and others are
+     * left untouched (seeders run in dependency order).
+     */
+    private function toggleForeignKeyChecks(bool $enabled): void
+    {
+        $driver = DB::getDriverName();
+
+        if ($driver === 'mysql' || $driver === 'mariadb') {
+            DB::statement('SET FOREIGN_KEY_CHECKS='.($enabled ? '1' : '0'));
+
+            return;
+        }
+
+        if ($driver === 'sqlsrv') {
+            $clause = $enabled ? 'WITH CHECK CHECK CONSTRAINT ALL' : 'NOCHECK CONSTRAINT ALL';
+            DB::statement('EXEC sp_MSforeachtable "ALTER TABLE ? '.$clause.'"');
+        }
     }
 }

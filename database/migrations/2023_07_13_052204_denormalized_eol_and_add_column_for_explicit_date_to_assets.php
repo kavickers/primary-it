@@ -90,6 +90,11 @@ class DenormalizedEolAndAddColumnForExplicitDateToAssets extends Migration
             return DB::raw("date(purchase_date + interval '1 month' * (SELECT eol FROM ".DB::getTablePrefix().'models WHERE models.id = assets.model_id))');
         }
 
+        if (DB::getDriverName() === 'sqlsrv') {
+            // SQL Server uses DATEADD(datepart, number, date) instead of MySQL's INTERVAL syntax.
+            return DB::raw('DATEADD(MONTH, '.DB::getTablePrefix().'models.eol, purchase_date)');
+        }
+
         // Default to MySQL's method
         return DB::raw('DATE_ADD(purchase_date, INTERVAL '.DB::getTablePrefix().'models.eol MONTH)');
     }

@@ -1195,6 +1195,13 @@ trait Searchable
             return implode("||' '||", $mappedColumns).' LIKE ?';
         }
 
+        if ($driver === 'sqlsrv') {
+            // SQL Server's CONCAT() exists (2012+), but unlike MySQL it treats
+            // double-quoted text as an identifier, so the space separator must
+            // be a single-quoted string literal.
+            return 'CONCAT('.implode(",' ',", $mappedColumns).') LIKE ?';
+        }
+
         // Default to MySQL's concatenation method
         return 'CONCAT('.implode('," ",', $mappedColumns).') LIKE ?';
     }

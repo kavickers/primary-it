@@ -63,7 +63,11 @@ class MigrateMacAddress extends Migration
         });
 
         if (Schema::hasColumn('assets', '_snipeit_mac_address')) {
-            DB::statement('ALTER TABLE assets CHANGE _snipeit_mac_address mac_address varchar(255)');
+            // Mirror the up() renameColumn rather than raw MySQL "CHANGE" so the
+            // rollback is driver-agnostic (works on SQL Server, etc.).
+            Schema::table('assets', function (Blueprint $table) {
+                $table->renameColumn('_snipeit_mac_address', 'mac_address');
+            });
         }
     }
 }

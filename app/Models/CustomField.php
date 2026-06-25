@@ -174,6 +174,14 @@ class CustomField extends Model
                     }
                 );
 
+                // The `created` event fires before Eloquent syncs the model's
+                // original attributes, so getDirty() would otherwise treat every
+                // attribute (including the auto-increment `id`) as dirty. MySQL
+                // tolerates "id = id" in the resulting UPDATE, but SQL Server
+                // rejects updating an identity column. Syncing here ensures only
+                // db_column is written back.
+                $custom_field->syncOriginal();
+
                 // Update the db_column property in the custom fields table
                 $custom_field->db_column = $custom_field->convertUnicodeDbSlug();
                 $custom_field->save();

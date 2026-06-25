@@ -33,8 +33,15 @@ class FixDefaultsAccessories extends Migration
      */
     public function down()
     {
-        //
-        DB::statement('ALTER TABLE `'.DB::getTablePrefix().'accessories` MODIFY `order_number` varchar(255);');
-        DB::statement('ALTER TABLE `'.DB::getTablePrefix().'consumables` MODIFY `order_number` varchar(255);');
+        // Revert order_number to a non-nullable varchar(255) using the schema
+        // builder so it works across MySQL, SQL Server, and SQLite (the original
+        // raw "MODIFY ... varchar(255)" was MySQL-only syntax).
+        Schema::table('accessories', function (Blueprint $table) {
+            $table->string('order_number')->nullable(false)->change();
+        });
+
+        Schema::table('consumables', function (Blueprint $table) {
+            $table->string('order_number')->nullable(false)->change();
+        });
     }
 }

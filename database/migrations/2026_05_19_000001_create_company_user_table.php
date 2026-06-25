@@ -17,12 +17,24 @@ return new class extends Migration
             $table->unique(['company_id', 'user_id']);
         });
 
-        // Seed pivot from existing users.company_id values
+        // Seed pivot from existing users.company_id values.
+        // insertOrIgnore() is not supported by the SQL Server driver, so we
+        // explicitly skip pairs that already exist — this is driver-agnostic
+        // and preserves the original "ignore duplicates" intent.
         DB::table('users')
             ->whereNotNull('company_id')
             ->orderBy('id')
             ->each(function ($user) {
-                DB::table('company_user')->insertOrIgnore([
+                $alreadyExists = DB::table('company_user')
+                    ->where('company_id', $user->company_id)
+                    ->where('user_id', $user->id)
+                    ->exists();
+
+                if ($alreadyExists) {
+                    return;
+                }
+
+                DB::table('company_user')->insert([
                     'company_id' => $user->company_id,
                     'user_id' => $user->id,
                     'created_at' => now(),

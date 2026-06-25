@@ -17,8 +17,16 @@ class AddCheckoutTimeAndExpectedCheckoutDateToAssets extends Migration
             $answer = $table->dateTime('last_checkout')->nullable();
             $table->date('expected_checkin')->nullable();
         });
-        DB::statement('UPDATE '.DB::getTablePrefix().'assets SET last_checkout=(SELECT MAX(created_at) FROM '.DB::getTablePrefix().'asset_logs WHERE '.DB::getTablePrefix().'asset_logs.id='.DB::getTablePrefix()."assets.id AND action_type='checkout') WHERE assigned_to IS NOT NULL");
-        DB::statement('UPDATE '.DB::getTablePrefix().'assets SET expected_checkin=(SELECT expected_checkin FROM '.DB::getTablePrefix().'asset_logs WHERE '.DB::getTablePrefix().'asset_logs.id='.DB::getTablePrefix()."assets.id AND action_type='checkout' ORDER BY id DESC limit 1) WHERE assigned_to IS NOT NULL");
+        $prefix = DB::getTablePrefix();
+
+        DB::statement('UPDATE '.$prefix.'assets SET last_checkout=(SELECT MAX(created_at) FROM '.$prefix.'asset_logs WHERE '.$prefix.'asset_logs.id='.$prefix."assets.id AND action_type='checkout') WHERE assigned_to IS NOT NULL");
+
+        // "single newest row" is expressed as LIMIT 1 in MySQL/SQLite but TOP 1 in SQL Server.
+        if (DB::getDriverName() === 'sqlsrv') {
+            DB::statement('UPDATE '.$prefix.'assets SET expected_checkin=(SELECT TOP 1 expected_checkin FROM '.$prefix.'asset_logs WHERE '.$prefix.'asset_logs.id='.$prefix."assets.id AND action_type='checkout' ORDER BY id DESC) WHERE assigned_to IS NOT NULL");
+        } else {
+            DB::statement('UPDATE '.$prefix.'assets SET expected_checkin=(SELECT expected_checkin FROM '.$prefix.'asset_logs WHERE '.$prefix.'asset_logs.id='.$prefix."assets.id AND action_type='checkout' ORDER BY id DESC limit 1) WHERE assigned_to IS NOT NULL");
+        }
     }
 
     /**

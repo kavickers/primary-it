@@ -52,6 +52,20 @@ return new class extends Migration
                   AND al.company_id IS NULL
                   AND al.deleted_at IS NULL
             ", [self::AUDIT_ACTION, self::ASSET_CLASS]);
+        } elseif ($driver === 'sqlsrv') {
+            // SQL Server supports UPDATE ... FROM ... JOIN, but not LIMIT.
+            DB::statement("
+                UPDATE al
+                SET al.company_id = src.company_id
+                FROM {$actionLogs} al
+                INNER JOIN {$assets} src
+                    ON src.id = al.item_id
+                    AND src.company_id IS NOT NULL
+                WHERE al.action_type = ?
+                  AND al.item_type = ?
+                  AND al.company_id IS NULL
+                  AND al.deleted_at IS NULL
+            ", [self::AUDIT_ACTION, self::ASSET_CLASS]);
         } else {
             // SQLite / PostgreSQL: use a correlated subquery update
             DB::statement("
