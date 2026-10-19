@@ -40,8 +40,19 @@ return [
 
     'bulkdelete' => [
         'error' => 'Nie wybrano modeli, więc nic nie zostało usunięte.',
+        'nothing_deletable' => 'None of the selected models can be deleted because they still have assets associated with them.',
         'success' => 'Model usunięty!|:success_count modele usunięte!',
         'success_partial' => ':success_count model(i) zostało usuniętych, jednakże :fail_count nie udało się usunąć, ponieważ wciąż są powiązane z nimi środki.',
+    ],
+
+    'merge' => [
+        'min_two' => 'Zaznacz co najmniej dwa modele do scalenia.',
+        'no_target' => 'Wskaż model do zachowania przed scaleniem.',
+        'not_found' => 'One or more of the selected models could not be loaded. Refresh the models list and try again.',
+        'information' => 'You are about to merge :count models. Pick the model you want to keep. Every asset attached to the other models will be reassigned to the model you pick, then the source models will be deleted.',
+        'warning' => 'This cannot be undone. Reassigned assets will inherit the surviving model\'s category, fieldset, and depreciation settings.',
+        'pick_target' => 'Który model chcesz zachować?',
+        'success' => 'Merged :source_count model(s) into ":target". :asset_count asset(s) were reassigned.',
     ],
 
 ];

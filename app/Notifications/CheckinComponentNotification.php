@@ -2,10 +2,12 @@
 
 namespace App\Notifications;
 
+use App\Models\Company;
 use App\Models\Component;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Channels\SlackWebhookChannel;
 use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
@@ -18,8 +20,7 @@ use NotificationChannels\GoogleChat\Widgets\KeyValue;
 use NotificationChannels\MicrosoftTeams\MicrosoftTeamsChannel;
 use NotificationChannels\MicrosoftTeams\MicrosoftTeamsMessage;
 
-#[AllowDynamicProperties]
-class CheckinComponentNotification extends Notification
+class CheckinComponentNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -30,13 +31,14 @@ class CheckinComponentNotification extends Notification
      *
      * @param  $params
      */
-    public function __construct(Component $component, $checkedOutTo, User $checkedInBy, $note)
+    public function __construct(
+        public Component $item,
+        public $target,
+        public User $admin,
+        public                 $note,
+        public Company|Setting $webhookSource,
+    )
     {
-        $this->target = $checkedOutTo;
-        $this->item = $component;
-        $this->admin = $checkedInBy;
-        $this->note = $note;
-        $this->settings = Setting::getSettings();
     }
 
     /**
@@ -48,16 +50,16 @@ class CheckinComponentNotification extends Notification
     {
         $notifyBy = [];
 
-        if (Setting::getSettings()->webhook_selected == 'google' && Setting::getSettings()->webhook_endpoint) {
+        if ($this->webhookSource->webhook_selected == 'google' && $this->webhookSource->webhook_endpoint) {
 
             $notifyBy[] = GoogleChatChannel::class;
         }
-        if (Setting::getSettings()->webhook_selected == 'microsoft' && Setting::getSettings()->webhook_endpoint) {
+        if ($this->webhookSource->webhook_selected == 'microsoft' && $this->webhookSource->webhook_endpoint) {
 
             $notifyBy[] = MicrosoftTeamsChannel::class;
         }
 
-        if (Setting::getSettings()->webhook_selected == 'slack' || Setting::getSettings()->webhook_selected == 'general') {
+        if ($this->webhookSource->webhook_selected == 'slack' || $this->webhookSource->webhook_selected == 'general') {
             $notifyBy[] = SlackWebhookChannel::class;
         }
 
@@ -70,8 +72,8 @@ class CheckinComponentNotification extends Notification
         $admin = $this->admin;
         $item = $this->item;
         $note = $this->note;
-        $botname = ($this->settings->webhook_botname) ? $this->settings->webhook_botname : 'Snipe-Bot';
-        $channel = ($this->settings->webhook_channel) ? $this->settings->webhook_channel : '';
+        $botname = ($this->webhookSource->webhook_botname) ? $this->webhookSource->webhook_botname : 'Snipe-Bot';
+        $channel = ($this->webhookSource->webhook_channel) ? $this->webhookSource->webhook_channel : '';
 
         if ($admin) {
             $fields = [
@@ -111,17 +113,17 @@ class CheckinComponentNotification extends Notification
         $admin = $this->admin;
         $item = $this->item;
         $note = $this->note;
-        if (! Str::contains(Setting::getSettings()->webhook_endpoint, 'workflows')) {
+        if (!Str::contains($this->webhookSource->webhook_endpoint, 'workflows')) {
             return MicrosoftTeamsMessage::create()
-                ->to($this->settings->webhook_endpoint)
+                ->to($this->webhookSource->webhook_endpoint)
                 ->type('success')
                 ->addStartGroupToSection('activityTitle')
                 ->title(trans('mail.Component_checkin_notification'))
                 ->addStartGroupToSection('activityText')
                 ->fact(htmlspecialchars_decode($item->display_name), '', 'header')
-                ->fact(trans('mail.Component_checkin_notification').' by ', $admin->display_name ?: 'CLI tool')
-                ->fact(trans('mail.checkedin_from'), $target->display_name)
-                ->fact(trans('admin/consumables/general.remaining'), $item->numRemaining())
+                ->fact(trans('mail.Component_checkin_notification').' by ', $admin?->display_name ?: 'CLI tool')
+                ->fact(trans('mail.checkedin_from'), (string) ($target?->display_name ?? ''))
+                ->fact(trans('admin/consumables/general.remaining'), (string) $item->numRemaining())
                 ->fact(trans('mail.notes'), $note ?: '');
         }
 
@@ -143,7 +145,7 @@ class CheckinComponentNotification extends Notification
         $note = $this->note;
 
         return GoogleChatMessage::create()
-            ->to($this->settings->webhook_endpoint)
+            ->to($this->webhookSource->webhook_endpoint)
             ->card(
                 Card::create()
                     ->header(

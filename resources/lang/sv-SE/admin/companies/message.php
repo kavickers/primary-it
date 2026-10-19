@@ -16,5 +16,7 @@ return [
         'confirm' => 'Är du säker på att du vill ta bort det här företaget?',
         'error' => 'Ett fel uppstod när företaget skulle tas bort. Vänligen försök igen.',
         'success' => 'Företag raderat.',
+        'bulk_success' => 'Företaget har raderats.|:count företag har raderats.',
+        'partial_success' => 'Företaget har raderats. Se ytterligare information nedan. |:count företag har raderats. Se ytterligare information nedan.',
     ],
 ];

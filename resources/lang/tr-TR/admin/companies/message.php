@@ -16,5 +16,7 @@ return [
         'confirm' => 'Bu firmayı silmek istediğinize emin misiniz?',
         'error' => 'Firmayı silerken bir sorun oluştu. Lütfen yeniden deneyin.',
         'success' => 'Firma başarıyla silindi.',
+        'bulk_success' => 'Şirket başarıyla silindi.|:count şirket başarıyla silindi.',
+        'partial_success' => 'Şirket başarıyla silindi. Aşağıda ek bilgiler verilmiştir.|:count şirket başarıyla silindi. Aşağıda ek bilgiler verilmiştir.',
     ],
 ];

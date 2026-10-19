@@ -8,8 +8,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use UnhandledMatchError;
 use Watson\Validating\ValidatingTrait;
 
+/**
+ * @mixin IdeHelperReportTemplate
+ */
 class ReportTemplate extends Model
 {
     use HasFactory;
@@ -26,12 +30,17 @@ class ReportTemplate extends Model
 
     protected $fillable = [
         'created_by',
+        'type',
         'name',
         'options',
         'is_shared',
     ];
 
     protected $rules = [
+        'type' => [
+            'required',
+            'in:asset,component,consumable',
+        ],
         'name' => [
             'required',
             'string',
@@ -48,13 +57,15 @@ class ReportTemplate extends Model
 
     protected static function booted()
     {
-        // Scope to current user or if template is shared
+        // Scope to templates the current user owns OR that are marked
+        // shared.
         static::addGlobalScope(
             'current_user', function (Builder $builder) {
-
                 if (auth()->check()) {
-                    $builder->where('created_by', auth()->id())
-                        ->orWhere('is_shared', 1);
+                    $builder->where(function (Builder $inner) {
+                        $inner->where('created_by', auth()->id())
+                            ->orWhere('is_shared', 1);
+                    });
                 }
             }
         );
@@ -196,5 +207,17 @@ class ReportTemplate extends Model
     public function getDisplayNameAttribute()
     {
         return $this->name;
+    }
+
+    /**
+     * @throws UnhandledMatchError
+     */
+    public function getViewPath(): string
+    {
+        return match ($this->type) {
+            'asset' => 'reports.custom.asset',
+            'component' => 'reports.custom.component',
+            'consumable' => 'reports.custom.consumable',
+        };
     }
 }

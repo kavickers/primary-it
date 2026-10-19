@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenses were deleted successfully after checking in :seats seats.',
+        'partial_success' => ':count licenses were deleted successfully after checking in :seats seats. See additional information below.',
+    ],
+
     'checkout' => [
         'error' => 'Възникна проблем при изписването на лиценза. Моля, опитайте отново.',
         'success' => 'Лицензът е изписан',
@@ -55,6 +60,10 @@ return [
         'error' => 'Възникна проблем при вписването на лиценза. Моля, опитайте отново.',
         'not_reassignable' => 'Лиценза е изпозлван',
         'success' => 'Лицензът е вписан',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'License ":license" has no free seats. ":target" was not assigned to a seat.',
     ],
 
 ];

@@ -36,11 +36,12 @@ return [
 
     'assets' => [
         'name' => 'Varlıklar',
-        'note' => 'Uygulamanın Varlıklar bölümüne erişim sağlar.',
+        'note' => 'Uygulamanın Varlıklar bölümüne erişim sağlar. ',
     ],
 
     'assetsview' => [
         'name' => 'Varlıkları Görüntüle',
+        'note' => 'Bu izne sahip kullanıcıların varlık modeline yüklenen dosyaları da görebileceğini unutmayın (değiştiremez veya silemezler). Bu, kullanım kılavuzları gibi ortak belgeleri her varlığa ayrı ayrı yüklemeden paylaşmayı ve kullanıcıya varlık dosyalarını değiştirme izni vermek zorunda kalmamayı sağlar. Bu izne sahip kullanıcılar düzenleme ve teslim alma geçmişini de görüntüleyebilir.',
     ],
 
     'assetscreate' => [
@@ -71,8 +72,8 @@ return [
     ],
 
     'assetsviewrequestable' => [
-        'name' => 'Talep Edilebilir Varlıkları Görüntüle',
-        'note' => 'Kullanıcının talep edilebilir olarak işaretlenmiş varlıkları görüntülemesine izin verir.',
+        'name' => 'Talep Edilebilir Öğeleri Görüntüle',
+        'note' => 'Kullanıcının talep edilebilir olarak işaretlenmiş öğeleri görüntülemesini sağlar.',
     ],
 
     'assetsviewencrypted-custom-fields' => [
@@ -255,6 +256,7 @@ return [
     ],
     'usersview' => [
         'name' => 'Kullanıcıları Görüntüle',
+        'note' => 'Bu izne sahip kullanıcıların kullanıcı profiline yüklenen dosyaları da görebileceğini unutmayın (değiştiremez veya silemezler). Bu kullanıcılar düzenleme ve teslim alma geçmişini de görüntüleyebilir.',
     ],
     'userscreate' => [
         'name' => 'Yeni Kullanıcılar Oluştur',

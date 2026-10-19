@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'crwdns13558:0crwdne13558:0', // not used anymore
     'maintenances' => 'crwdns13614:0crwdne13614:0',
+    'create' => 'crwdns16137:0crwdne16137:0',
     'edit' => 'crwdns13560:0crwdne13560:0',
     'delete' => 'crwdns13562:0crwdne13562:0',
     'view' => 'crwdns13564:0crwdne13564:0',

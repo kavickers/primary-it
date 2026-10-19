@@ -36,11 +36,12 @@ return [
 
     'assets' => [
         'name' => '資產',
-        'note' => '授予應用程式資產區段的存取權限。',
+        'note' => 'Grants access to the Assets section of the application. ',
     ],
 
     'assetsview' => [
         'name' => '檢視資產',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the asset model as well. This is to make it easier to share common documents like user manuals across assets without having to upload them to every asset, and to avoid having to grant the user permission to modify asset files. Users with this permission will also be able to view edit and checkin history.',
     ],
 
     'assetscreate' => [
@@ -71,8 +72,8 @@ return [
     ],
 
     'assetsviewrequestable' => [
-        'name' => '檢視可申請資產',
-        'note' => '允許使用者查看標記為可申請的資產。',
+        'name' => 'View Requestable Items',
+        'note' => 'Allows the user to view items that are marked as requestable.',
     ],
 
     'assetsviewencrypted-custom-fields' => [
@@ -255,6 +256,7 @@ return [
     ],
     'usersview' => [
         'name' => '檢視使用者',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the user as well. Users with this permission will also be able to view edit and checkin history.',
     ],
     'userscreate' => [
         'name' => '新增使用者',

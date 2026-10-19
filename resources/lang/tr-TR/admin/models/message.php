@@ -40,8 +40,19 @@ return [
 
     'bulkdelete' => [
         'error' => 'Hiçbir model seçilmedi, bu nedenle hiçbir şey silinmedi.',
+        'nothing_deletable' => 'Seçilen modellerin hiçbiri silinemiyor; çünkü bu modellerle ilişkili varlıklar hâlâ mevcut.',
         'success' => 'Model silindi!|:success_count modelleri silindi!',
         'success_partial' => ':success_count adet model(ler) silindi, ancak :fail_count adet için silme işlemini tamamlayamadık, çünkü bunlar halâ varlıklarla ilişkilendirilmiş durumda.',
+    ],
+
+    'merge' => [
+        'min_two' => 'Birleştirmek için en az iki model seçin.',
+        'no_target' => 'Birleştirme işleminden önce tutulacak modeli seçin.',
+        'not_found' => 'Seçilen modellerden biri veya birkaçı yüklenemedi. Model listesini yenileyip tekrar deneyin.',
+        'information' => ':count modeli birleştirmek üzeresiniz. Tutmak istediğiniz modeli seçin. Diğer modellere bağlı tüm varlıklar seçtiğiniz modele aktarılacak, ardından kaynak modeller silinecektir.',
+        'warning' => 'Bu işlem geri alınamaz. Yeniden atanan varlıklar, kalan modelin kategorisini, alan kümesini ve amortisman ayarlarını devralır.',
+        'pick_target' => 'Hangi model tutulsun?',
+        'success' => '":target" modelinde :source_count model birleştirildi. :asset_count varlık yeniden atandı.',
     ],
 
 ];

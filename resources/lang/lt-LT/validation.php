@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => ':attribute turi būti unikalus :table1 ir :table2. ',
     'unique_undeleted' => ':attribute turi būti unikalus.',
     'non_circular' => ':attribute neturi kurti žiedinės nuorodos.',
+    'parent_must_be_top_level' => 'Pasirinktas :attribute pats turi būti aukščiausio lygio elementas. Leidžiamas tik vienas įdėjimo (susluoksniavimo) lygis.',
+    'must_have_no_children' => 'Šis elementas jau turi savo vaikinius elementus, todėl jam negalima priskirti pagrindinio elemento.',
+    'parent_within_scope' => 'Pasirinktas :attribute yra už jums priskirtos srities ribų.',
     'not_array' => ':attribute negali būti masyvas.',
     'disallow_same_pwd_as_user_fields' => 'Slaptažodis negali sutapti su naudotojo vardu.',
     'letters' => 'Slaptažodyje turi būti bent viena raidė.',
@@ -171,10 +174,19 @@ return [
     'uploaded' => ':attribute įkelti nepavyko.',
     'uppercase' => ':attribute lauke turi būti tik didžiosios raidės.',
     'url' => ':attribute lauke turi būti galiojantis URL adresas.',
+    'external_url' => 'Laukas :attribute turi būti galiojantis išorinis URL (http:// arba https://), kuris nenukreipia į privatų ar vietinį adresą.',
+    'asset_tag_pattern_placeholder' => 'Inventorinio numerio šablone turi būti bent vienas vietaženklis iš :placeholders; priešingu atveju kiekvienas sinchronizuotas turto vienetas gautų tą patį numerį ir būtų išsaugotas tik pirmasis.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Custom Extras must be valid JSON. Parser error: :error',
+        'not_array' => 'Custom Extras must be a JSON array (starting with [ and ending with ]).',
+        'entry_not_object' => 'Custom Extras entry #:index must be a JSON object with key, label, and path fields.',
+        'missing_field' => 'Custom Extras entry #:index is missing the required ":field" field.',
+    ],
     'ulid' => ':attribute lauke turi būti galiojantis ULID identifikatorius.',
     'uuid' => ':attribute lauke turi būti galiojantis UUID identifikatorius.',
     'valid_css_color' => ':attribute laukas turi būti galiojanti CSS spalva (hex, rgb, rgba, hsl arba hsla).',
-    'fmcs_location' => 'Administratoriaus nustatymuose yra įjungtas pilnas kelių įmonių palaikymas ir vietos susiejimas, o pasirinkta vieta ir pasirinkta įmonė yra nesuderinamos.',
+    'fmcs_company' => 'Laukas :attribute yra privalomas, nes yra įjungtas visiškas kelių įmonių palaikymas ir nėra leidžiami „bendri visiems“ objektai.',
+    'fmcs_location' => 'Vieta ":location" priklauso :location_company, kuri nesutampa su pasirinkta įmone.',
     'is_unique_across_company_and_location' => ':attribute turi būti unikalus pasirinktai įmonei ir vietai.',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => 'Vienas ar keli el. pašto adresai yra neteisingi.',
     'checkboxes' => ':attribute yra neteisingų parinkčių.',
     'radio_buttons' => ':atributas yra neteisingas.',
+    'image_file_too_large' => ':attribute negali būti didesnis nei :max.',
 
     'custom' => [
         'alpha_space' => 'Lauke :attribute yra simbolis, kurio negalima naudoti.',

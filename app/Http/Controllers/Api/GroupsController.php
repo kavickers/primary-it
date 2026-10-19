@@ -7,6 +7,7 @@ use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\FilterRequest;
 use App\Http\Transformers\GroupsTransformer;
+use App\Http\Transformers\SelectlistTransformer;
 use App\Models\Group;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +27,7 @@ class GroupsController extends Controller
 
         $this->authorize('view', Group::class);
 
-        $groups = Group::select(['id', 'name', 'permissions', 'notes', 'created_at', 'updated_at', 'created_by'])->with('adminuser')->withCount('users as users_count');
+        $groups = Group::select(['permission_groups.id', 'permission_groups.name', 'permission_groups.permissions', 'permission_groups.notes', 'permission_groups.created_at', 'permission_groups.updated_at', 'permission_groups.created_by'])->with('adminuser')->withCount('users as users_count');
 
         // This invokes the Searchable model trait scopeTextSearch and will handle input by search or by advanced search filter
         if ($request->filled('filter') || $request->filled('search')) {
@@ -37,7 +38,8 @@ class GroupsController extends Controller
             $groups->where('name', '=', $request->input('name'));
         }
 
-        $offset = ($request->input('offset') > $groups->count()) ? $groups->count() : app('api_offset_value');
+        $total = $groups->count();
+        $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
         $limit = app('api_limit_value');
         $order = $request->input('order') === 'asc' ? 'asc' : 'desc';
 
@@ -61,7 +63,6 @@ class GroupsController extends Controller
                 break;
         }
 
-        $total = $groups->count();
         $groups = $groups->skip($offset)->take($limit)->get();
 
         return (new GroupsTransformer)->transformGroups($groups, $total);
@@ -168,5 +169,20 @@ class GroupsController extends Controller
         $group->delete();
 
         return response()->json(Helper::formatStandardApiResponse('success', null, trans('admin/groups/message.delete.success')));
+    }
+
+    public function selectlist(Request $request): array
+    {
+        $this->authorize('superadmin');
+
+        $groups = Group::select(['id', 'name']);
+
+        if ($request->filled('search')) {
+            $groups->where('name', 'LIKE', '%'.$request->input('search').'%');
+        }
+
+        $sorted = $groups->orderBy('name', 'asc')->get();
+
+        return (new SelectlistTransformer)->transformSelectlist(Helper::paginateCollectionOrAll($sorted));
     }
 }

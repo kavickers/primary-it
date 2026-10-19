@@ -40,22 +40,27 @@ trait ConvertsBase64ToFiles
                     return;
                 }
 
-                // Generate a temporary path to store the Base64 contents
+                // Validate the data URI envelope BEFORE allocating a
+                // tempfile.
+                if (! Str::startsWith($base64Contents, 'data:') || count(explode(',', $base64Contents)) <= 1) {
+                    throw new ValidationException("Need Base64 URL starting with 'data:'");
+                }
+
                 $tempFilePath = tempnam(sys_get_temp_dir(), $filename);
 
-                // Store the contents using a stream, or throw an Error (which doesn't do anything?)
-                if (Str::startsWith($base64Contents, 'data:') && count(explode(',', $base64Contents)) > 1) {
-                    $source = fopen($base64Contents, 'r'); // PHP has special processing for "data:" URL's
-                    $destination = fopen($tempFilePath, 'w');
+                // Clean up the tempfile at the end of the request.
+                register_shutdown_function(static function () use ($tempFilePath) {
+                    if (is_file($tempFilePath)) {
+                        @unlink($tempFilePath);
+                    }
+                });
 
-                    stream_copy_to_stream($source, $destination);
-
-                    fclose($source);
-                    fclose($destination);
-                } else {
-                    // TODO - to get a better error message here, can we maybe do something with modifying the errorBag?
-                    throw new ValidationException("Need Base64 URL starting with 'data:'"); // This doesn't actually throw?
-                }
+                // PHP has special processing for "data:" URL's.
+                $source = fopen($base64Contents, 'r');
+                $destination = fopen($tempFilePath, 'w');
+                stream_copy_to_stream($source, $destination);
+                fclose($source);
+                fclose($destination);
 
                 $uploadedFile = new UploadedFile($tempFilePath, $filename, null, null, true);
 

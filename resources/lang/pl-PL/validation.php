@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => ':attribute musi być unikalny pomiędzy :table1 i :table2. ',
     'unique_undeleted' => 'Wartość :attribute musi być unikalna.',
     'non_circular' => ':attribute nie może tworzyć odwołań cyklicznych.',
+    'parent_must_be_top_level' => 'The selected :attribute must itself be a top-level item. Only one level of nesting is allowed.',
+    'must_have_no_children' => 'This item already has children of its own, so it cannot be assigned a parent.',
+    'parent_within_scope' => 'The selected :attribute is outside your assigned scope.',
     'not_array' => ':attribute nie może być tablicą.',
     'disallow_same_pwd_as_user_fields' => 'Hasło nie może być takie samo jak nazwa użytkownika.',
     'letters' => 'Hasło musi zawierać co najmniej jedną literę.',
@@ -171,10 +174,19 @@ return [
     'uploaded' => 'Nie udało się przesłać atrybutu:.',
     'uppercase' => 'Pole :attribute musi być wielkimi literami.',
     'url' => 'Pole :attribute musi być prawidłowym adresem URL.',
+    'external_url' => 'The :attribute field must be a valid external URL (http:// or https://) that does not point at a private or local address.',
+    'asset_tag_pattern_placeholder' => 'The asset tag pattern must include at least one placeholder from :placeholders, otherwise every synced asset would receive the same tag and only the first would save.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Custom Extras must be valid JSON. Parser error: :error',
+        'not_array' => 'Custom Extras must be a JSON array (starting with [ and ending with ]).',
+        'entry_not_object' => 'Custom Extras entry #:index must be a JSON object with key, label, and path fields.',
+        'missing_field' => 'Custom Extras entry #:index is missing the required ":field" field.',
+    ],
     'ulid' => 'Pole :attribute musi być poprawnym ULID.',
     'uuid' => 'Pole :attribute musi być prawidłowym UUID.',
     'valid_css_color' => 'The :attribute field must be a valid CSS color (hex, rgb, rgba, hsl, or hsla).',
-    'fmcs_location' => 'Pełna obsługa wielu firm i zakres lokalizacji są włączone w Ustawieniach Administratora, a wybrane lokalizacja i firma nie są zgodne.',
+    'fmcs_company' => 'The :attribute field is required because full multiple companies support is enabled and floaters are not allowed.',
+    'fmcs_location' => 'Location ":location" belongs to :location_company, which does not match the selected company.',
     'is_unique_across_company_and_location' => ':attribute musi być unikalny w wybranej firmie i lokalizacji.',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => 'Jeden lub więcej wprowadzonych adresów jest nieprawidłowy.',
     'checkboxes' => ':attribute zawiera nieprawidłowe opcje.',
     'radio_buttons' => ':attribute jest nieprawidłowy.',
+    'image_file_too_large' => 'The :attribute may not be larger than :max.',
 
     'custom' => [
         'alpha_space' => 'Pole: attribute zawiera znak, który nie jest dozwolony.',

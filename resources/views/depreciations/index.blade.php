@@ -10,8 +10,16 @@
 {{-- Page content --}}
 @section('content')
     <x-container>
-        <x-box>
+        <x-box name="depreciation" sr_only_title>
+
+            <x-slot:table_header>{{ trans('general.depreciations') }}</x-slot:table_header>
+
+            <x-slot:bulkactions>
+                <x-table.bulk-depreciations />
+            </x-slot:bulkactions>
+
             <x-table
+                    name="depreciation"
                     show_column_search="false"
                     buttons="depreciationButtons"
                     fixed_right_number="1"

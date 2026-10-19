@@ -17,11 +17,11 @@
 @if (isset($item->manufacturer))
 | **{{ trans('general.manufacturer') }}** | {{ $item->manufacturer->name }} |
 @endif
-@if (isset($qty))
-| **{{ trans('general.qty') }}** | {{ $qty }} |
-@endif
 @if (isset($item->model_no))
 | **{{ trans('general.model_no') }}** | {{ $item->model_no }} |
+@endif
+@if ($target->location)
+| **{{ trans('general.location') }}** | {{ $target->location->name }} |
 @endif
 @if ($note)
 | **{{ trans('mail.additional_notes') }}** | {{ $note }} |

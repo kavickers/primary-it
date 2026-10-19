@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenses were deleted successfully after checking in :seats seats.',
+        'partial_success' => ':count licenses were deleted successfully after checking in :seats seats. See additional information below.',
+    ],
+
     'checkout' => [
         'error' => 'Houve um problema de registro na licença. Favor tentar novamente.',
         'success' => 'A licença foi registrada com sucesso',
@@ -55,6 +60,10 @@ return [
         'error' => 'Houve um problema de registro na licença. Favor tentar novamente.',
         'not_reassignable' => 'Seat has been used',
         'success' => 'A licença foi registrada com sucesso.',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'A licença ":license" não possui assentos livres. ":target" não foi atribuído a um assento.',
     ],
 
 ];

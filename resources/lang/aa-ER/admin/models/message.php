@@ -40,8 +40,19 @@ return [
 
     'bulkdelete' => [
         'error' => 'crwdns1975:0crwdne1975:0',
+        'nothing_deletable' => 'crwdns15197:0crwdne15197:0',
         'success' => 'crwdns11513:0crwdne11513:0',
         'success_partial' => 'crwdns1977:0crwdne1977:0',
+    ],
+
+    'merge' => [
+        'min_two' => 'crwdns17077:0crwdne17077:0',
+        'no_target' => 'crwdns17079:0crwdne17079:0',
+        'not_found' => 'crwdns17081:0crwdne17081:0',
+        'information' => 'crwdns17083:0crwdne17083:0',
+        'warning' => 'crwdns17085:0crwdne17085:0',
+        'pick_target' => 'crwdns17087:0crwdne17087:0',
+        'success' => 'crwdns17089:0crwdne17089:0',
     ],
 
 ];

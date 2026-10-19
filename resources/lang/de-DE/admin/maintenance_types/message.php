@@ -1,22 +1,24 @@
 <?php
 
 return [
-    'not_found' => 'Maintenance type not found.',
+    'not_found' => 'Wartungsart nicht gefunden.',
     'create' => [
-        'error' => 'Maintenance type was not created, please try again.',
-        'success' => 'Maintenance type created successfully.',
+        'error' => 'Wartungsart wurde nicht erstellt, bitte versuchen Sie es erneut.',
+        'success' => 'Wartungsart erfolgreich erstellt.',
     ],
     'update' => [
-        'error' => 'Maintenance type was not updated, please try again.',
-        'success' => 'Maintenance type updated successfully.',
+        'error' => 'Wartungsart wurde nicht aktualisiert, bitte versuchen Sie es erneut.',
+        'success' => 'Wartungsart erfolgreich aktualisiert.',
     ],
     'delete' => [
-        'confirm' => 'Are you sure you wish to delete this maintenance type?',
-        'error' => 'There was an issue deleting this maintenance type. Please try again.',
-        'success' => 'The maintenance type was deleted successfully.',
+        'confirm' => 'Sind Sie sicher, dass Sie diesen Wartungstyp löschen möchten?',
+        'error' => 'Beim Löschen dieses Wartungstyps ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+        'success' => 'Der Wartungstyp wurde erfolgreich gelöscht.',
+        'bulk_success' => 'Wartungstyp erfolgreich gelöscht.|:count Wartungstypen wurden erfolgreich gelöscht.',
+        'partial_success' => 'Wartungstyp wurde erfolgreich gelöscht. Siehe weitere Informationen unten. | :count Wartungstypen wurden erfolgreich gelöscht. Siehe weitere Informationen unten.',
     ],
     'complete' => [
-        'success' => 'Maintenance marked as complete.',
-        'error' => 'There was an issue marking this maintenance as complete. Please try again.',
+        'success' => 'Wartung als abgeschlossen gekennzeichnet.',
+        'error' => 'Beim Abschließen der Wartung gab es einen Fehler. Bitte versuchen Sie es erneut.',
     ],
 ];

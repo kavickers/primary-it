@@ -13,8 +13,8 @@ return [
     |
     */
 
-    'week_start_select' => 'Select Day of Week',
-    'week_start' => 'Day the Week Starts On',
+    'week_start_select' => 'Válassza ki a hét napját',
+    'week_start' => 'Hét első napja',
     'today' => 'Ma',
     'clear' => 'Kiürítés',
     'days' => [

@@ -9,4 +9,7 @@ return [
     'total' => 'Total',
     'update' => 'Opdater forbrugsstoffer',
     'inventory_warning' => 'Denne forbrugsvares lagerbeholdning er under minimumsmængden på :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

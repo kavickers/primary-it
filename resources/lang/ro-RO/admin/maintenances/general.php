@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Întreținerea activelor', // not used anymore
     'maintenances' => 'Mentenanțe',
+    'create' => 'Creați întreținerea activelor',
     'edit' => 'Editați întreținerea activelor',
     'delete' => 'Șterge întreținerea activelor',
     'view' => 'Vizualizați detaliile de întreținere a activelor',

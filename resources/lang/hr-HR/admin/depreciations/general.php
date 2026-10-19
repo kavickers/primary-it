@@ -6,15 +6,16 @@ return [
     'asset_depreciations' => 'Deprecijacija imovine',
     'create' => 'Stvorite amortizaciju',
     'depreciation_name' => 'Naziv amortizacije',
-    'depreciation_min' => 'Donja granica vrijednosti za amortizaciju',
     'number_of_months' => 'Broj mjeseci',
+    'rate_multiplier' => 'Rate Multiplier',
     'update' => 'Ažuriraj amortizaciju',
-    'depreciation_min' => 'Minimalna vrijednost nakon amortizacije',
+    'fiscal_year_start_month' => 'Fiscal Year Start Month',
     'no_depreciations_warning' => '<strong>Upozorenje</strong>
                       Trenutno nemate postavljene stope amortizacije za svoju imovinu.
                       Molimo vas da postavite barem jednu stopu amortizacije kako bi mogli vidjeti izvještaj o amortizaciji.',
     'depreciation_method' => 'Izvješće o amortizaciji',
     'linear_depreciation' => 'Linearno (Default)',
+    'diminishing_depreciation' => 'Diminishing Value Depreciation',
     'half_1' => 'Polu-godišnji skup, uvijek primijenjen',
     'half_2' => 'Polu-godišnji skup, primijenjen uz uslov',
 ];

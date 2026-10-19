@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Services\Saml;
 use Illuminate\Http\RedirectResponse;
@@ -42,8 +43,6 @@ class SamlController extends Controller
      * @author Johnson Yi <jyi.dev@outlook.com>
      *
      * @since 5.0.0
-     *
-     * @return Response
      */
     public function metadata(Request $request)
     {
@@ -93,10 +92,23 @@ class SamlController extends Controller
      */
     public function acs(Request $request)
     {
+        // RelayState is attacker-controllable via a hostile IdP or a
+        // crafted SAML POST binding. Sanitize before storing so any
+        // downstream consumer that skips Helper::getRedirectOption
+        // (LoginController::authenticated, RedirectIfAuthenticated,
+        // DashboardController, etc. all call redirect()->intended()
+        // directly, which does no host validation) can't be steered
+        // off-site. sameOriginUrl() also strips CR/LF and rejects
+        // non-http(s) schemes. Runs before getAuth() so the sanitize
+        // step is unconditional even if SAML happens to be disabled at
+        // request time.
+        if ($relayState = Helper::sameOriginUrl($request->post('RelayState'))) {
+            session()->put('url.intended', $relayState);
+        }
+
         $saml = $this->saml;
         $auth = $saml->getAuth();
         $saml_exception = false;
-        session()->put('url.intended', str_replace(["\r", "\n"], '', $request->post('RelayState')));
         try {
             $auth->processResponse();
         } catch (\Exception $e) {
@@ -149,6 +161,18 @@ class SamlController extends Controller
             return view('errors.403');
         }
 
-        return redirect()->route('logout.get')->with(['saml_logout' => true, 'saml_slo_redirect_url' => $sloUrl]);
+        // SLO RelayState sanitize. $sloUrl is whatever onelogin/saml2's
+        // processSLO returned as the RelayState from the IdP's
+        // LogoutResponse. In the legitimate flow Snipe-IT sets its own
+        // RelayState at SLO initiation, so the value here is same-origin.
+        // A hostile IdP (or an IdP that reflects an attacker-chosen
+        // RelayState) can inject an external URL that LoginController's
+        // SLO-response branch would later feed to redirect()->away().
+        // Sanitize at the write path, mirror of the ACS RelayState guard
+        // closed under GHSA-579m-9gf4-28jp. Null survives as null and the
+        // read side falls back to the usual logout destination.
+        $safeSloUrl = Helper::sameOriginUrl($sloUrl);
+
+        return redirect()->route('logout.get')->with(['saml_logout' => true, 'saml_slo_redirect_url' => $safeSloUrl]);
     }
 }

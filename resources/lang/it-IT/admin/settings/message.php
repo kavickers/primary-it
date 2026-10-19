@@ -13,9 +13,14 @@ return [
         'file_not_found' => 'Quel file di backup non può essere trovato sul server.',
         'restore_warning' => 'Si, ripristina. Riconosco che il ripristino sovrascriverà tutti i dati al momento presenti nel database. Inoltre, tutti gli utenti verranno disconnessi (incluso te).',
         'restore_confirm' => 'Sei sicuro di voler ripristinare il tuo database da :filename?',
+        'delete_disabled_help' => 'L\'eliminazione dei backup è disabilitata. Contatta l\'admin per abilitare l\'eliminazione dei backup.',
     ],
     'restore' => [
         'success' => 'Il backup del sistema è stato ripristinato. Effettua nuovamente il login.',
+        'archive_invalid' => 'Il file di backup selezionato (:filename) non è un archivio zip valido. Ripristino interrotto prima di toccare il database.',
+        'zip_extension_missing' => 'L\'estensione PHP zip non è caricata su questo server. Impossibile convalidare l\'archivio di backup e il ripristino è stato interrotto per prevenire la perdita di dati. Chiedi all\'amministratore del server di installare ext-zip.',
+        'pre_backup_failed' => 'Impossibile creare un backup di sicurezza pre-ripristino. Ripristino interrotto in modo che il database esistente non venga distrutto senza un percorso di ripristino.',
+        'failed_with_backup' => 'Ripristino fallito. Il database pre-esistente è stato cancellato come parte del tentativo di ripristino, ma un backup pre-ripristino è stato salvato in :backup e può essere utilizzato per recuperare.',
     ],
     'purge' => [
         'error' => 'Si è verificato un errore durante la pulizia. ',

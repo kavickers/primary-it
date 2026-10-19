@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Vedlikehold av eiendeler', // not used anymore
     'maintenances' => 'Vedlikehold',
+    'create' => 'Opprett lisens',
     'edit' => 'Rediger Vedlikehold',
     'delete' => 'Slett Vedlikehold',
     'view' => 'Vedlikehold detaljer',

@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'ინვენტარის მომსახურებები', // not used anymore
     'maintenances' => 'მომსახურებები',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Edit Asset Maintenance',
     'delete' => 'Delete Asset Maintenance',
     'view' => 'View Asset Maintenance Details',

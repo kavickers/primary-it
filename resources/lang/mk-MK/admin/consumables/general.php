@@ -9,4 +9,7 @@ return [
     'total' => 'Вкупно',
     'update' => 'Ажурирај потрошен материјал',
     'inventory_warning' => 'Залихата на оваа потрошна стока е под минималната количина од :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

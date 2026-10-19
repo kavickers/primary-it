@@ -13,9 +13,14 @@ return [
         'file_not_found' => 'Ce fichier de sauvegarde n\'a pas pu être trouvé sur le serveur .',
         'restore_warning' => 'Oui, restaurez-le. Je reconnais que cela écrasera toutes les données existantes actuellement dans la base de données. Cela déconnectera également tous vos utilisateurs existants (vous y compris).',
         'restore_confirm' => 'Êtes-vous sûr de vouloir restaurer votre base de données à partir de :filename ?',
+        'delete_disabled_help' => 'Deleting backups is disabled. Contact your administrator if you wish to enable deleting backups.',
     ],
     'restore' => [
-        'success' => 'Your system backup has been restored. Please log in again.',
+        'success' => 'La sauvegarde de votre système a été restaurée. Veuillez vous reconnecter.',
+        'archive_invalid' => 'The selected backup file (:filename) is not a valid zip archive. Restore aborted before touching the database.',
+        'zip_extension_missing' => 'PHP zip extension is not loaded on this server. Cannot validate the backup archive, and restore has been aborted to prevent data loss. Ask your server administrator to install ext-zip.',
+        'pre_backup_failed' => 'Could not create a pre-restore safety backup. Restore aborted so that the existing database is not destroyed without a recovery path.',
+        'failed_with_backup' => 'Restore failed. The pre-existing database was wiped as part of the restore attempt, but a pre-restore backup was saved to :backup and can be used to recover.',
     ],
     'purge' => [
         'error' => 'Une erreur est survenue durant la purge. ',
@@ -53,7 +58,7 @@ return [
         'ms_teams_deprecation' => 'The selected Microsoft Teams webhook URL will be deprecated Dec 31st, 2025. Please use a workflow URL. Microsoft\'s documentation on creating a workflow can be found <a href="https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498" target="_blank"> here.</a>',
     ],
     'location_scoping' => [
-        'not_saved' => 'Your settings were not saved.',
+        'not_saved' => 'Vos paramètres n\'ont pas été enregistrés.',
         'mismatch' => 'There is 1 item in the database that need your attention before you can enable location scoping.|There are :count items in the database that need your attention before you can enable location scoping.',
     ],
     'oauth' => [

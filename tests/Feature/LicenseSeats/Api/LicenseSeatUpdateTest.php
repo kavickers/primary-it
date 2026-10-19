@@ -99,7 +99,7 @@ class LicenseSeatUpdateTest extends TestCase
         $asset = Asset::factory()->create();
         $licenseSeat = LicenseSeat::factory()->assignedToAsset($asset)->create();
 
-        $this->actingAsForApi(User::factory()->checkoutLicenses()->create())
+        $this->actingAsForApi(User::factory()->checkoutLicenses()->checkinLicenses()->create())
             ->patchJson($this->route($licenseSeat), [
                 'assigned_to' => null,
                 'asset_id' => null,
@@ -271,7 +271,7 @@ class LicenseSeatUpdateTest extends TestCase
             'unreassignable_seat' => false,
         ]);
 
-        $this->actingAsForApi(User::factory()->checkoutLicenses()->create())
+        $this->actingAsForApi(User::factory()->checkoutLicenses()->checkinLicenses()->create())
             ->patchJson($this->route($licenseSeat), [
                 'asset_id' => null,
                 'notes' => 'Checking in the seat',
@@ -303,7 +303,7 @@ class LicenseSeatUpdateTest extends TestCase
             'unreassignable_seat' => false,
         ]);
 
-        $this->actingAsForApi(User::factory()->checkoutLicenses()->create())
+        $this->actingAsForApi(User::factory()->checkoutLicenses()->checkinLicenses()->create())
             ->patchJson($this->route($licenseSeat), [
                 'assigned_to' => null,
                 'notes' => 'Checking in the seat',
@@ -330,7 +330,7 @@ class LicenseSeatUpdateTest extends TestCase
     {
         $licenseSeat = LicenseSeat::factory()->create(['asset_id' => 100000]);
 
-        $this->actingAsForApi(User::factory()->checkoutLicenses()->create())
+        $this->actingAsForApi(User::factory()->checkoutLicenses()->checkinLicenses()->create())
             ->patchJson($this->route($licenseSeat), [
                 'asset_id' => null,
                 'assigned_to' => null,
@@ -360,7 +360,7 @@ class LicenseSeatUpdateTest extends TestCase
     {
         $licenseSeat = LicenseSeat::factory()->unreassignable()->create(['assigned_to' => 100000]);
 
-        $this->actingAsForApi(User::factory()->checkoutLicenses()->create())
+        $this->actingAsForApi(User::factory()->checkoutLicenses()->checkinLicenses()->create())
             ->patchJson($this->route($licenseSeat), [
                 // purposefully leaving asset_id off here
                 // because it is a realistic scenario.
@@ -393,7 +393,7 @@ class LicenseSeatUpdateTest extends TestCase
         $licenseSeat = LicenseSeat::factory()->assignedToAsset($asset)->create();
         $licenseSeat->asset->delete();
 
-        $this->actingAsForApi(User::factory()->checkoutLicenses()->create())
+        $this->actingAsForApi(User::factory()->checkoutLicenses()->checkinLicenses()->create())
             ->patchJson($this->route($licenseSeat), [
                 'asset_id' => null,
                 'notes' => 'Checking in the seat',
@@ -422,7 +422,7 @@ class LicenseSeatUpdateTest extends TestCase
         $licenseSeat = LicenseSeat::factory()->unreassignable()->assignedToUser($user)->create();
         $licenseSeat->user->delete();
 
-        $this->actingAsForApi(User::factory()->checkoutLicenses()->create())
+        $this->actingAsForApi(User::factory()->checkoutLicenses()->checkinLicenses()->create())
             ->patchJson($this->route($licenseSeat), [
                 'assigned_to' => null,
                 'notes' => 'Checking in the seat',
@@ -451,7 +451,7 @@ class LicenseSeatUpdateTest extends TestCase
 
         [$companyA, $companyB] = Company::factory()->count(2)->create();
 
-        $superuser = User::factory()->superuser()->create(['company_id' => null]);
+        $superuser = User::factory()->superuser()->withoutCompany()->create();
         $licenseInCompanyA = License::factory()->for($companyA)->create();
         $seatForCompanyA = LicenseSeat::factory()->create([
             'license_id' => $licenseInCompanyA->id,
@@ -459,7 +459,7 @@ class LicenseSeatUpdateTest extends TestCase
             'asset_id' => null,
             'notes' => null,
         ]);
-        $userInCompanyB = User::factory()->for($companyB)->create();
+        $userInCompanyB = User::factory()->forCompany($companyB)->create();
 
         $this->actingAsForApi($superuser)
             ->patchJson($this->route($seatForCompanyA), [

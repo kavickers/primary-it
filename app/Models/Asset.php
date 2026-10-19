@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use App\Enums\FileStorage;
 use App\Events\CheckoutableCheckedOut;
 use App\Exceptions\CheckoutNotAllowed;
 use App\Helpers\Helper;
 use App\Http\Traits\UniqueUndeletedTrait;
+use App\Models\Builders\AssetQueryBuilder;
 use App\Models\Traits\Acceptable;
 use App\Models\Traits\CompanyableTrait;
+use App\Models\Traits\HasCalendarEvents;
+use App\Models\Traits\HasImageUpload;
+use App\Models\Traits\HasOrders;
 use App\Models\Traits\HasUploads;
 use App\Models\Traits\Loggable;
 use App\Models\Traits\Requestable;
@@ -18,10 +23,12 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Watson\Validating\ValidatingTrait;
 
@@ -29,6 +36,17 @@ use Watson\Validating\ValidatingTrait;
  * Model for Assets.
  *
  * @version v1.0
+ *
+ * @property ?int $location_id
+ * @property \Carbon\Carbon|string|null $next_audit_date
+ * @property \Carbon\Carbon|string|null $last_audit_date
+ * @property \Carbon\Carbon|string|null $asset_eol_date
+ * @property ?int $company_id
+ * @property \Carbon\Carbon|string|null $last_checkin
+ * @property bool $requestable
+ * @property Asset|Location|User|null $assigned Current checkout target. morphTo relation named `assigned` (declared on method `assignedTo()`). Eloquent resolves the dynamic property by the morphTo name arg, not the method name, so this `@property` is distinct from `@property ... $assignedTo` written by ide-helper.
+ *
+ * @mixin IdeHelperAsset
  */
 class Asset extends Depreciable
 {
@@ -37,7 +55,10 @@ class Asset extends Depreciable
     // protected $with = ['model', 'adminuser', 'location', 'company'];
 
     use CompanyableTrait;
+    use HasCalendarEvents;
     use HasFactory;
+    use HasImageUpload;
+    use HasOrders;
     use HasUploads;
     use Loggable;
     use Presentable;
@@ -54,10 +75,14 @@ class Asset extends Depreciable
 
     use Acceptable;
 
+    public static function fileStorage(): FileStorage
+    {
+        return FileStorage::Assets;
+    }
+
     /**
      * Run after the checkout acceptance was declined by the user
      *
-     * @param  User  $acceptedBy
      * @param  string  $signature
      */
     public function declinedCheckout(User $declinedBy, $signature)
@@ -94,7 +119,7 @@ class Asset extends Depreciable
         'eol_explicit' => 'boolean',
         'last_checkout' => 'datetime',
         'last_checkin' => 'datetime',
-        'expected_checkin' => 'datetime:m-d-Y',
+        'expected_checkin' => 'datetime',
         'last_audit_date' => 'datetime',
         'next_audit_date' => 'datetime:m-d-Y',
         'model_id' => 'integer',
@@ -108,12 +133,42 @@ class Asset extends Depreciable
         'deleted_at' => 'datetime',
     ];
 
+    /**
+     * location_id and company_id should store NULL when there's no
+     * assignment, never 0. Old data and previous bugs occasionally
+     * left `0` behind (empty select2 → '' → integer-cast → 0), which
+     * then breaks `exists:` validation and FMCS queries that treat
+     * NULL and 0 as different. `set` normalizes on write, `get`
+     * normalizes on read so legacy rows already storing 0 present as
+     * null at the model boundary until they're re-saved.
+     *
+     * @return Attribute<int|null, int|null>
+     */
+    protected function locationId(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => ($value === null || (int) $value === 0) ? null : (int) $value,
+            set: fn ($value) => ($value === '' || $value === null || (int) $value === 0) ? null : (int) $value,
+        );
+    }
+
+    /**
+     * @return Attribute<int|null, int|null>
+     */
+    protected function companyId(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => ($value === null || (int) $value === 0) ? null : (int) $value,
+            set: fn ($value) => ($value === '' || $value === null || (int) $value === 0) ? null : (int) $value,
+        );
+    }
+
     protected $rules = [
         'model_id' => ['required', 'integer', 'exists:models,id,deleted_at,NULL', 'not_array'],
         'status_id' => ['required', 'integer', 'exists:status_labels,id'],
         'asset_tag' => ['required', 'min:1', 'max:255', 'unique_undeleted:assets,asset_tag', 'not_array'],
         'name' => ['nullable', 'max:255'],
-        'company_id' => ['nullable', 'integer', 'exists:companies,id'],
+        'company_id' => ['nullable', 'integer', 'exists:companies,id', 'fmcs_company'],
         'warranty_months' => ['nullable', 'numeric', 'digits_between:0,240'],
         'last_checkout' => ['nullable', 'date_format:Y-m-d H:i:s'],
         'last_checkin' => ['nullable', 'date_format:Y-m-d H:i:s'],
@@ -142,7 +197,7 @@ class Asset extends Depreciable
     /**
      * The attributes that are mass assignable.
      *
-     * @var array
+     * @var list<string>
      */
     protected $fillable = [
         'asset_tag',
@@ -212,6 +267,7 @@ class Asset extends Depreciable
         'category' => ['name'],
         'manufacturer' => ['name'],
         'assigned_to' => ['name'],
+        'externalSource' => ['primary_mac', 'primary_ip', 'os', 'os_version'],
     ];
 
     /**
@@ -230,22 +286,77 @@ class Asset extends Depreciable
         'rtd_location' => 'defaultLoc',
     ];
 
+    protected $searchableRelationColumns = [
+        'jobtitle' => ['relation' => 'assignedTo', 'column' => 'jobtitle', 'types' => [\App\Models\User::class]],
+        'employee_num' => ['relation' => 'assignedTo', 'column' => 'employee_num', 'types' => [\App\Models\User::class]],
+    ];
+
     protected static function booted(): void
     {
         static::forceDeleted(function (Asset $asset) {
             $asset->requests()->forceDelete();
+
+            // Image + Files-tab attachments wipe on hard-delete only, so
+            // a restored soft-deleted asset keeps its image and files.
+            // Attachment action_log rows get soft-deleted (not
+            // hard-deleted) so the audit trail of what was attached-
+            // and-when survives even after the parent is gone.
+            if ($asset->image) {
+                try {
+                    Storage::disk('public')->delete(FileStorage::Assets->publicPath().$asset->image);
+                } catch (\Exception $e) {
+                    Log::info($e->getMessage());
+                }
+            }
+
+            foreach ($asset->uploads as $upload) {
+                if (($path = $upload->uploads_file_path()) !== null) {
+                    try {
+                        Storage::delete($path);
+                    } catch (\Exception $e) {
+                        Log::info($e->getMessage());
+                    }
+                }
+                $upload->delete();
+            }
         });
 
         static::softDeleted(function (Asset $asset) {
             $asset->requests()->delete();
         });
+
+        // When an asset moves between companies, its own calendar
+        // events pick up the new company_id through the HasCalendarEvents
+        // trait's updated hook, but child Maintenances resolve their
+        // calendar_events company_id from the parent asset and would
+        // otherwise keep the stale value until they themselves are
+        // touched. Cascade the re-sync here so FMCS filtering stays
+        // accurate on both the asset's and the maintenance's rows.
+        static::updated(function (Asset $asset) {
+            if (array_key_exists('company_id', $asset->getChanges())) {
+                // withoutGlobalScopes bypasses CompanyableChildScope on
+                // Maintenance so the cascade reaches every related
+                // maintenance regardless of the saving context's auth
+                // state (CLI, system jobs, cross-tenant admin saves).
+                $asset->maintenances()->withoutGlobalScopes()->get()->each(
+                    fn (Maintenance $m) => $m->forceSyncCalendarEvents(),
+                );
+            }
+        });
     }
 
-    // To properly set the expected checkin as Y-m-d
     public function setExpectedCheckinAttribute($value)
     {
         if ($value == '') {
             $value = null;
+        }
+        // Normalise to Y-m-d H:i:s so date-only strings ("2026-07-17") end
+        // up as valid datetime values in the DB. On MariaDB the DATETIME
+        // column would widen automatically, but SQLite (used in tests) is
+        // dynamically typed and stores the raw string, which then fails
+        // datetime BETWEEN comparisons in the DueForCheckin scope.
+        if ($value !== null && $value !== '') {
+            $value = Carbon::parse($value)->format('Y-m-d H:i:s');
         }
         $this->attributes['expected_checkin'] = $value;
     }
@@ -284,6 +395,13 @@ class Asset extends Depreciable
     {
         $this->rules += $this->customFieldValidationRules();
 
+        if ($this->model_id && $this->model && (string) $this->model->require_serial === '1') {
+            $this->rules['serial'] = array_merge(
+                array_filter($this->rules['serial'] ?? [], fn ($r) => $r !== 'nullable'),
+                ['required'],
+            );
+        }
+
         return parent::save($params);
     }
 
@@ -295,15 +413,26 @@ class Asset extends Depreciable
     /**
      * Returns the warranty expiration date as Carbon object
      *
-     * @return Carbon|null
+     * @return Attribute<Carbon|null, never>
+     *
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+     * `$value` is unused because this is a computed accessor - the
+     * warranty expiration is derived from purchase_date +
+     * warranty_months, not stored as its own column. Laravel's
+     * Attribute closure signature is positional though (`$value` must
+     * be the first parameter), so we can't drop it. Suppression tells
+     * PHPMD / Codacy to stop flagging.
      */
     protected function warrantyExpires(): Attribute
     {
         return Attribute::make(
-            get: fn (mixed $value, array $attributes) => ($attributes['warranty_months'] && $attributes['purchase_date']) ? Carbon::parse($attributes['purchase_date'])->addMonths((int) $attributes['warranty_months']) : null,
+            get: fn (mixed $value, array $attributes) => (! empty($attributes['warranty_months']) && ! empty($attributes['purchase_date'])) ? Carbon::parse($attributes['purchase_date'])->addMonths((int) $attributes['warranty_months']) : null,
         );
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function warrantyExpiresFormattedDate(): Attribute
     {
 
@@ -312,6 +441,9 @@ class Asset extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<float|null, never>
+     */
     protected function warrantyExpiresDiff(): Attribute
     {
         return Attribute::make(
@@ -320,6 +452,9 @@ class Asset extends Depreciable
 
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function warrantyExpiresDiffForHumans(): Attribute
     {
         return Attribute::make(
@@ -328,6 +463,9 @@ class Asset extends Depreciable
 
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function lastAuditFormattedDate(): Attribute
     {
 
@@ -336,6 +474,9 @@ class Asset extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<float|null, never>
+     */
     protected function lastAuditDiff(): Attribute
     {
         return Attribute::make(
@@ -344,6 +485,9 @@ class Asset extends Depreciable
 
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function lastAuditDiffForHumans(): Attribute
     {
         return Attribute::make(
@@ -352,6 +496,9 @@ class Asset extends Depreciable
 
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function nextAuditFormattedDate(): Attribute
     {
 
@@ -360,6 +507,9 @@ class Asset extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<float|null, never>
+     */
     protected function nextAuditDiffInDays(): Attribute
     {
         return Attribute::make(
@@ -367,6 +517,9 @@ class Asset extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function nextAuditDiffForHumans(): Attribute
     {
         return Attribute::make(
@@ -375,6 +528,9 @@ class Asset extends Depreciable
 
     }
 
+    /**
+     * @return Attribute<Carbon|null, never>
+     */
     protected function eolDate(): Attribute
     {
 
@@ -392,6 +548,9 @@ class Asset extends Depreciable
 
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function eolFormattedDate(): Attribute
     {
         return Attribute::make(
@@ -399,6 +558,9 @@ class Asset extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<float|null, never>
+     */
     protected function eolDiffInDays(): Attribute
     {
         return Attribute::make(
@@ -407,6 +569,9 @@ class Asset extends Depreciable
 
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function eolDiffForHumans(): Attribute
     {
 
@@ -416,13 +581,19 @@ class Asset extends Depreciable
 
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function expectedCheckinFormattedDate(): Attribute
     {
         return Attribute::make(
-            get: fn (mixed $value, array $attributes) => array_key_exists('expected_checkin', $attributes) ? Helper::getFormattedDateObject($attributes['expected_checkin'], 'date', false) : null,
+            get: fn (mixed $value, array $attributes) => array_key_exists('expected_checkin', $attributes) ? Helper::getFormattedDateObject($attributes['expected_checkin'], 'datetime', false) : null,
         );
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function expectedCheckinDiffForHumans(): Attribute
     {
         return Attribute::make(
@@ -506,12 +677,11 @@ class Asset extends Depreciable
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
-     * @param  User  $user
      * @param  User  $admin
      * @param  Carbon  $checkout_at
      * @param  Carbon  $expected_checkin
      * @param  string  $note
-     * @param  null  $name
+     * @param  string|null  $name
      * @return bool
      *
      * @since  [v3.0]
@@ -728,10 +898,8 @@ class Asset extends Depreciable
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
      * @since  [v4.0]
-     *
-     * @return Relation
      */
-    public function assignedTo()
+    public function assignedTo(): MorphTo
     {
         return $this->morphTo('assigned', 'assigned_type', 'assigned_to')->withTrashed();
     }
@@ -894,11 +1062,11 @@ class Asset extends Depreciable
     public function getImageUrl($path = null)
     {
         if ($this->image && ! empty($this->image)) {
-            return Storage::disk('public')->url(app('assets_upload_path').e($this->image));
+            return Storage::disk('public')->url(FileStorage::Assets->publicPath().e($this->image));
         } elseif ($this->model && ! empty($this->model->image)) {
-            return Storage::disk('public')->url(app('models_upload_path').e($this->model->image));
+            return Storage::disk('public')->url(FileStorage::Models->publicPath().e($this->model->image));
         } elseif ($this->model?->category && ! empty($this->model->category->image)) {
-            return Storage::disk('public')->url(app('categories_upload_path').e($this->model->category->image));
+            return Storage::disk('public')->url(FileStorage::Categories->publicPath().e($this->model->category->image));
         }
 
         return false;
@@ -998,7 +1166,7 @@ class Asset extends Depreciable
      */
     public function maintenances()
     {
-        return $this->hasMany(Maintenance::class, 'asset_id')
+        return $this->morphMany(Maintenance::class, 'item')
             ->orderBy('created_at', 'desc');
     }
 
@@ -1101,6 +1269,18 @@ class Asset extends Depreciable
     public function licenseseats()
     {
         return $this->hasMany(LicenseSeat::class, 'asset_id');
+    }
+
+    /**
+     * Sync-adapter side row: identity (source + external_id) plus
+     * last-known network / OS inventory (primary MAC / IP / OS /
+     * OS version / last seen). Nullable relation: only assets that
+     * have been synced from an adapter have a row. Detail view +
+     * assets table render these fields when the relation is present.
+     */
+    public function externalSource()
+    {
+        return $this->hasOne(AssetExternalSource::class);
     }
 
     /**
@@ -1303,7 +1483,13 @@ class Asset extends Depreciable
 
     public function getAccessoryCost()
     {
-        return (float) $this->accessories()->sum('purchase_cost');
+        // purchase_cost no longer lives on the accessories parent —
+        // per-unit cost is on the last OrderItem's price, with the
+        // parent's default_purchase_cost as fallback. lastOrderDefaults()
+        // encapsulates that fallback ladder.
+        return (float) $this->accessories()
+            ->get()
+            ->sum(fn ($accessory) => (float) ($accessory->lastOrderDefaults()['unit_cost'] ?? 0));
     }
 
     /**
@@ -1319,7 +1505,7 @@ class Asset extends Depreciable
      * in the database, but here we are.
      *
      * @param  $value
-     * @return void
+     * @return Attribute<string|null, string|null>
      */
     protected function nextAuditDate(): Attribute
     {
@@ -1329,6 +1515,9 @@ class Asset extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<string|null, string|null>
+     */
     protected function lastAuditDate(): Attribute
     {
         return Attribute::make(
@@ -1337,6 +1526,9 @@ class Asset extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<string|null, string|null>
+     */
     protected function lastCheckout(): Attribute
     {
         return Attribute::make(
@@ -1345,6 +1537,9 @@ class Asset extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<string|null, string|null>
+     */
     protected function lastCheckin(): Attribute
     {
         return Attribute::make(
@@ -1353,6 +1548,9 @@ class Asset extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<string|null, string|null>
+     */
     protected function assetEolDate(): Attribute
     {
         return Attribute::make(
@@ -1368,7 +1566,7 @@ class Asset extends Depreciable
      * This will also correctly parse a 1/0 if "true"/"false" is passed.
      *
      * @param  $value
-     * @return void
+     * @return Attribute<int, mixed>
      */
     protected function requestable(): Attribute
     {
@@ -1381,22 +1579,15 @@ class Asset extends Depreciable
     public function journal()
     {
         return $this->assetlog()->where('action_type', '=', 'note added')
-            ->orderBy('created_at', 'desc')
             ->withTrashed();
     }
 
     /**
-     * -----------------------------------------------
-     * BEGIN QUERY SCOPES
-     * -----------------------------------------------
-     **/
-
-    /**
-     * Run additional, advanced searches.
-     * This overrides the advancedTextSearch method on the Searchable model trait to add searching of assigned user, location, and assets.
+     * Run additional, advanced searches. Overrides advancedTextSearch
+     * on the Searchable trait to also search assigned user, location,
+     * and asset-to-asset checkouts.
      *
-     * @param  array  $terms  The search terms
-     * @return Builder
+     * @param  array<int, string>  $terms  The search terms
      */
     public function advancedTextSearch(Builder $query, array $terms)
     {
@@ -1461,698 +1652,60 @@ class Asset extends Depreciable
         return $query;
     }
 
-    /**
-     * Query builder scope for hardware
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeHardware($query)
+    public function calendarEventCompanyId(): ?int
     {
-        return $query->where('physical', '=', '1');
+        return $this->company_id;
     }
 
-    /**
-     * Query builder scope for pending assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopePending($query)
+    public function calendarEventDefinitions(): array
     {
-        // Pluck IDs then whereIn — do NOT replace with whereHas. whereHas generates a correlated EXISTS per row and causes severe slowdowns in withCount contexts.
-        $ids = Statuslabel::where('deployable', 0)->where('pending', 1)->where('archived', 0)->whereNull('deleted_at')->pluck('id');
-
-        return $query->whereIn('assets.status_id', $ids->isEmpty() ? [0] : $ids);
+        // Most entries are marked all_day: true because they represent
+        // date-only obligations (an audit due on 2026-09-15, an EOL
+        // date, a warranty expiration). The mixed cast metadata on
+        // Asset (next_audit_date is 'datetime:m-d-Y', expected_checkin
+        // and last_checkout are 'datetime', asset_eol_date has no cast)
+        // means cast-based auto-detection wouldn't catch them
+        // uniformly, so the flag is explicit per entry.
+        //
+        // last_checkout is the one exception. Checkout happens at a
+        // specific moment in time, so the calendar shows it at that
+        // hour rather than as an all-day marker. The transformer's
+        // isAllDayField() reads all_day directly from this array, so
+        // flipping the flag here is all that's needed to switch the
+        // rendered event's shape.
+        return [
+            [
+                'field' => 'next_audit_date',
+                'event_type' => 'asset.audit_due',
+                'all_day' => true,
+            ],
+            [
+                'field' => 'expected_checkin',
+                'event_type' => 'asset.expected_checkin',
+                'all_day' => true,
+            ],
+            [
+                'field' => 'last_checkout',
+                'event_type' => 'asset.checkout',
+                'all_day' => false,
+            ],
+            [
+                'field' => 'asset_eol_date',
+                'event_type' => 'asset.eol',
+                'all_day' => true,
+            ],
+            [
+                'field' => 'warranty_expires',
+                'event_type' => 'asset.warranty_expiration',
+                'trigger_fields' => ['purchase_date', 'warranty_months'],
+                'all_day' => true,
+            ],
+        ];
     }
 
-    /**
-     * Query builder scope for searching location
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeAssetsByLocation($query, $location)
+    public function newEloquentBuilder($query): AssetQueryBuilder
     {
-        return $query->where(
-            function ($query) use ($location) {
-                $query->whereHas(
-                    'assignedTo', function ($query) use ($location) {
-                        $query->where(
-                            [
-                                ['users.location_id', '=', $location->id],
-                                ['assets.assigned_type', '=', User::class],
-                            ]
-                        )->orWhere(
-                            [
-                                ['locations.id', '=', $location->id],
-                                ['assets.assigned_type', '=', Location::class],
-                            ]
-                        )->orWhere(
-                            [
-                                ['assets.rtd_location_id', '=', $location->id],
-                                ['assets.assigned_type', '=', self::class],
-                            ]
-                        );
-                    }
-                )->orWhere(
-                    function ($query) use ($location) {
-                        $query->where('assets.rtd_location_id', '=', $location->id);
-                        $query->whereNull('assets.assigned_to');
-                    }
-                );
-            }
-        );
-    }
-
-    /**
-     * Query builder scope for RTD assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeRTD($query)
-    {
-        // Pluck IDs then whereIn — do NOT replace with whereHas. whereHas generates a correlated EXISTS per row and causes severe slowdowns in withCount contexts.
-        $ids = Statuslabel::where('deployable', 1)->where('pending', 0)->where('archived', 0)->whereNull('deleted_at')->pluck('id');
-
-        return $query->whereNull('assets.assigned_to')
-            ->whereIn('assets.status_id', $ids->isEmpty() ? [0] : $ids);
-    }
-
-    /**
-     * Query builder scope for Undeployable assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeUndeployable($query)
-    {
-        // Pluck IDs then whereIn — do NOT replace with whereHas. whereHas generates a correlated EXISTS per row and causes severe slowdowns in withCount contexts.
-        $ids = Statuslabel::where('deployable', 0)->where('pending', 0)->where('archived', 0)->whereNull('deleted_at')->pluck('id');
-
-        return $query->whereIn('assets.status_id', $ids->isEmpty() ? [0] : $ids);
-    }
-
-    /**
-     * Query builder scope for non-Archived assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeNotArchived($query)
-    {
-        // Pluck IDs then whereIn — do NOT replace with whereHas. whereHas generates a correlated EXISTS per row and causes severe slowdowns in withCount contexts.
-        $ids = Statuslabel::where('archived', 0)->whereNull('deleted_at')->pluck('id');
-
-        return $query->whereIn('assets.status_id', $ids->isEmpty() ? [0] : $ids);
-    }
-
-    /**
-     * Query builder scope for Assets that are due for auditing, based on the assets.next_audit_date
-     * and settings.audit_warning_days.
-     *
-     * This is/will be used in the artisan command snipeit:upcoming-audits and also
-     * for an upcoming API call for retrieving a report on assets that will need to be audited.
-     *
-     * Due for audit soon:
-     * next_audit_date greater than or equal to now (must be in the future)
-     * and (next_audit_date - threshold days) <= now ()
-     *
-     * Example:
-     * next_audit_date = May 4, 2025
-     * threshold for alerts = 30 days
-     * now = May 4, 2019
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  v4.6.16
-     *
-     * @param  Setting  $settings
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeDueForAudit($query, $settings)
-    {
-        $interval = (int) $settings->audit_warning_days ?? 0;
-        $today = Carbon::now();
-        $interval_date = $today->copy()->addDays($interval)->format('Y-m-d');
-
-        return $query->whereNotNull('assets.next_audit_date')
-            ->whereBetween('assets.next_audit_date', [$today->format('Y-m-d'), $interval_date])
-            ->where('assets.archived', '=', 0)
-            ->NotArchived();
-    }
-
-    /**
-     * Query builder scope for Assets that are OVERDUE for auditing, based on the assets.next_audit_date
-     * and settings.audit_warning_days. It checks to see if assets.next audit_date is before now
-     *
-     * This is/will be used in the artisan command snipeit:upcoming-audits and also
-     * for an upcoming API call for retrieving a report on overdue assets.
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  v4.6.16
-     *
-     * @param  Setting  $settings
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOverdueForAudit($query)
-    {
-        return $query->whereNotNull('assets.next_audit_date')
-            ->where('assets.next_audit_date', '<', Carbon::now()->format('Y-m-d'))
-            ->where('assets.archived', '=', 0)
-            ->NotArchived();
-    }
-
-    /**
-     * Query builder scope for Assets that are due for auditing OR overdue, based on the assets.next_audit_date
-     * and settings.audit_warning_days.
-     *
-     * This is/will be used in the artisan command snipeit:upcoming-audits and also
-     * for an upcoming API call for retrieving a report on assets that will need to be audited.
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  v4.6.16
-     *
-     * @param  Setting  $settings
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeDueOrOverdueForAudit($query, $settings)
-    {
-
-        return $query->where(
-            function ($query) {
-                $query->OverdueForAudit();
-            }
-        )->orWhere(
-            function ($query) use ($settings) {
-                $query->DueForAudit($settings);
-            }
-        );
-    }
-
-    /**
-     * Query builder scope for Assets that are DUE for checkin, based on the assets.expected_checkin
-     * and settings.audit_warning_days. It checks to see if assets.expected_checkin is now
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  v6.4.0
-     *
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeDueForCheckin($query, $settings)
-    {
-        $interval = (int) $settings->due_checkin_days ?? 0;
-        $today = Carbon::now();
-        $interval_date = $today->copy()->addDays($interval)->format('Y-m-d');
-
-        return $query->whereNotNull('assets.expected_checkin')
-            ->whereBetween('assets.expected_checkin', [$today->format('Y-m-d'), $interval_date])
-            ->where('assets.archived', '=', 0)
-            ->whereNotNull('assets.assigned_to')
-            ->NotArchived();
-    }
-
-    /**
-     * Query builder scope for Assets that are overdue for checkin OR overdue
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  v6.4.0
-     *
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOverdueForCheckin($query)
-    {
-        return $query->whereNotNull('assets.expected_checkin')
-            ->where('assets.expected_checkin', '<', Carbon::now()->format('Y-m-d'))
-            ->where('assets.archived', '=', 0)
-            ->whereNotNull('assets.assigned_to')
-            ->NotArchived();
-    }
-
-    /**
-     * Query builder scope for Assets that are due for checkin OR overdue
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  v6.4.0
-     *
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeDueOrOverdueForCheckin($query, $settings)
-    {
-        return $query->where(
-            function ($query) {
-                $query->OverdueForCheckin();
-            }
-        )->orWhere(
-            function ($query) use ($settings) {
-                $query->DueForCheckin($settings);
-            }
-        );
-    }
-
-    /**
-     * Query builder scope for Archived assets counting
-     *
-     * This is primarily used for the tab counters so that IF the admin
-     * has chosen to not display archived assets in their regular lists
-     * and views, it will return the correct number.
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeAssetsForShow($query)
-    {
-        // Pluck IDs then whereIn — do NOT replace with whereHas. whereHas generates a correlated EXISTS per row and causes severe slowdowns in withCount contexts.
-        if (Setting::getSettings()->show_archived_in_list != 1) {
-            $validStatusIds = Statuslabel::where('archived', 0)
-                ->whereNull('deleted_at')
-                ->pluck('id');
-
-            return $query->whereIn('assets.status_id', $validStatusIds->isEmpty() ? [0] : $validStatusIds);
-        }
-
-        return $query;
-    }
-
-    /**
-     * Query builder scope for Archived assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeArchived($query)
-    {
-        // Pluck IDs then whereIn — do NOT replace with whereHas. whereHas generates a correlated EXISTS per row and causes severe slowdowns in withCount contexts.
-        $ids = Statuslabel::where('deployable', 0)->where('pending', 0)->where('archived', 1)->whereNull('deleted_at')->pluck('id');
-
-        return $query->whereIn('assets.status_id', $ids->isEmpty() ? [0] : $ids);
-    }
-
-    /**
-     * Query builder scope for Deployed assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeDeployed($query)
-    {
-        return $query->where('assigned_to', '>', '0');
-    }
-
-    /**
-     * Query builder scope for Requestable assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeRequestableAssets($query): Builder
-    {
-        $table = $query->getModel()->getTable();
-
-        return Company::scopeCompanyables($query->where($table.'.requestable', '=', 1))
-            ->whereHas(
-                'status', function ($query) {
-                    $query->where(
-                        function ($query) {
-                            $query->where('deployable', '=', 1)
-                                ->where('archived', '=', 0); // you definitely can't request something that's archived
-                        }
-                    )->orWhere('pending', '=', 1); // we've decided that even though an asset may be 'pending', you can still request it
-                }
-            );
-    }
-
-    /**
-     * scopeInModelList
-     * Get all assets in the provided listing of model ids
-     *
-     *
-     * @return mixed
-     *
-     * @author  Vincent Sposato <vincent.sposato@gmail.com>
-     *
-     * @version v1.0
-     */
-    public function scopeInModelList($query, array $modelIdListing)
-    {
-        return $query->whereIn('assets.model_id', $modelIdListing);
-    }
-
-    /**
-     * Query builder scope to get not-yet-accepted assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeNotYetAccepted($query)
-    {
-        return $query->where('accepted', '=', 'pending');
-    }
-
-    /**
-     * Query builder scope to get rejected assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeRejected($query)
-    {
-        return $query->where('accepted', '=', 'rejected');
-    }
-
-    /**
-     * Query builder scope to get accepted assets
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeAccepted($query)
-    {
-        return $query->where('accepted', '=', 'accepted');
-    }
-
-    /**
-     * Query builder scope to search on text for complex Bootstrap Tables API.
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $search  Search term
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeAssignedSearch($query, $search)
-    {
-        $search = explode(' OR ', $search);
-
-        return $query->leftJoin(
-            'users as assets_users', function ($leftJoin) {
-                $leftJoin->on('assets_users.id', '=', 'assets.assigned_to')
-                    ->where('assets.assigned_type', '=', User::class);
-            }
-        )->leftJoin(
-            'locations as assets_locations', function ($leftJoin) {
-                $leftJoin->on('assets_locations.id', '=', 'assets.assigned_to')
-                    ->where('assets.assigned_type', '=', Location::class);
-            }
-        )->leftJoin(
-            'assets as assigned_assets', function ($leftJoin) {
-                $leftJoin->on('assigned_assets.id', '=', 'assets.assigned_to')
-                    ->where('assets.assigned_type', '=', self::class);
-            }
-        )->where(
-            function ($query) use ($search) {
-                foreach ($search as $search) {
-                    $query->whereHas(
-                        'model', function ($query) use ($search) {
-                            $query->whereHas(
-                                'category', function ($query) use ($search) {
-                                    $query->where(
-                                        function ($query) use ($search) {
-                                            $query->where('categories.name', 'LIKE', '%'.$search.'%')
-                                                ->orWhere('models.name', 'LIKE', '%'.$search.'%')
-                                                ->orWhere('models.model_number', 'LIKE', '%'.$search.'%');
-                                        }
-                                    );
-                                }
-                            );
-                        }
-                    )->orWhereHas(
-                        'model', function ($query) use ($search) {
-                            $query->whereHas(
-                                'manufacturer', function ($query) use ($search) {
-                                    $query->where(
-                                        function ($query) use ($search) {
-                                            $query->where('manufacturers.name', 'LIKE', '%'.$search.'%');
-                                        }
-                                    );
-                                }
-                            );
-                        }
-                    )->orWhere(
-                        function ($query) use ($search) {
-                            $query->where('assets_users.first_name', 'LIKE', '%'.$search.'%')
-                                ->orWhere('assets_users.last_name', 'LIKE', '%'.$search.'%')
-                                ->orWhere('assets_users.username', 'LIKE', '%'.$search.'%')
-                                ->orWhere('assets_users.jobtitle', 'LIKE', '%'.$search.'%')
-                                ->orWhereMultipleColumns(
-                                    [
-                                        'assets_users.first_name',
-                                        'assets_users.last_name',
-                                        'assets_users.jobtitle',
-                                    ], $search
-                                )
-                                ->orWhere('assets_locations.name', 'LIKE', '%'.$search.'%')
-                                ->orWhere('assigned_assets.name', 'LIKE', '%'.$search.'%');
-                        }
-                    )->orWhere('assets.name', 'LIKE', '%'.$search.'%')
-                        ->orWhere('assets.asset_tag', 'LIKE', '%'.$search.'%')
-                        ->orWhere('assets.serial', 'LIKE', '%'.$search.'%')
-                        ->orWhere('assets.order_number', 'LIKE', '%'.$search.'%')
-                        ->orWhere('assets.notes', 'LIKE', '%'.$search.'%');
-                }
-
-            }
-        )->withTrashed()->whereNull('assets.deleted_at'); // workaround for laravel bug
-    }
-
-    /**
-     * Query builder scope to search the department ID of users assigned to assets
-     *
-     * @author [A. Gianotto] [<snipe@snipe.net>]
-     *
-     * @since  [v5.0]
-     *
-     * @return string | false
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeCheckedOutToTargetInDepartment($query, $search)
-    {
-        return $query->leftJoin(
-            'users as assets_dept_users', function ($leftJoin) {
-                $leftJoin->on('assets_dept_users.id', '=', 'assets.assigned_to')
-                    ->where('assets.assigned_type', '=', User::class);
-            }
-        )->where(
-            function ($query) use ($search) {
-                $query->whereIn('assets_dept_users.department_id', $search);
-
-            }
-        )->withTrashed()->whereNull('assets.deleted_at'); // workaround for laravel bug
-    }
-
-    /**
-     * Query builder scope to order on model
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderModels($query, $order)
-    {
-        return $query->join('models as asset_models', 'assets.model_id', '=', 'asset_models.id')->orderBy('asset_models.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on model number
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderModelNumber($query, $order)
-    {
-        return $query->leftJoin('models as model_number_sort', 'assets.model_id', '=', 'model_number_sort.id')->orderBy('model_number_sort.model_number', $order);
-    }
-
-    /**
-     * Query builder scope to order on created_by name
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderByCreatedByName($query, $order)
-    {
-        return $query->leftJoin('users as admin_sort', 'assets.created_by', '=', 'admin_sort.id')->select('assets.*')->orderBy('admin_sort.first_name', $order)->orderBy('admin_sort.last_name', $order);
-    }
-
-    /**
-     * Query builder scope to order on assigned user
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderAssigned($query, $order)
-    {
-        return $query->leftJoin('users as users_sort', 'assets.assigned_to', '=', 'users_sort.id')->select('assets.*')->orderBy('users_sort.first_name', $order)->orderBy('users_sort.last_name', $order);
-    }
-
-    /**
-     * Query builder scope to order on status
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderStatus($query, $order)
-    {
-        return $query->join('status_labels as status_sort', 'assets.status_id', '=', 'status_sort.id')->orderBy('status_sort.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on company
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderCompany($query, $order)
-    {
-        return $query->leftJoin('companies as company_sort', 'assets.company_id', '=', 'company_sort.id')->orderBy('company_sort.name', $order);
-    }
-
-    /**
-     * Query builder scope to return results of a category
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeInCategory($query, $category_id)
-    {
-        return $query->join('models as category_models', 'assets.model_id', '=', 'category_models.id')
-            ->join('categories', 'category_models.category_id', '=', 'categories.id')
-            ->whereIn('category_models.category_id', (! is_array($category_id) ? explode(',', $category_id) : $category_id));
-        // ->whereIn('category_models.category_id', $category_id);
-    }
-
-    /**
-     * Query builder scope to return results of a manufacturer
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeByManufacturer($query, $manufacturer_id)
-    {
-        return $query->join('models', 'assets.model_id', '=', 'models.id')
-            ->join('manufacturers', 'models.manufacturer_id', '=', 'manufacturers.id')->whereIn('models.manufacturer_id', (! is_array($manufacturer_id) ? explode(',', $manufacturer_id) : $manufacturer_id));
-    }
-
-    /**
-     * Query builder scope to order on category
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderCategory($query, $order)
-    {
-        return $query->join('models as order_model_category', 'assets.model_id', '=', 'order_model_category.id')
-            ->join('categories as category_order', 'order_model_category.category_id', '=', 'category_order.id')
-            ->orderBy('category_order.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on manufacturer
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderManufacturer($query, $order)
-    {
-        return $query->join('models as order_asset_model', 'assets.model_id', '=', 'order_asset_model.id')
-            ->leftjoin('manufacturers as manufacturer_order', 'order_asset_model.manufacturer_id', '=', 'manufacturer_order.id')
-            ->orderBy('manufacturer_order.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on location
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderLocation($query, $order)
-    {
-        return $query->leftJoin('locations as asset_locations', 'asset_locations.id', '=', 'assets.location_id')->orderBy('asset_locations.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on default
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderRtdLocation($query, $order)
-    {
-        return $query->leftJoin('locations as rtd_asset_locations', 'rtd_asset_locations.id', '=', 'assets.rtd_location_id')->orderBy('rtd_asset_locations.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on supplier name
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderSupplier($query, $order)
-    {
-        return $query->leftJoin('suppliers as suppliers_assets', 'assets.supplier_id', '=', 'suppliers_assets.id')->orderBy('suppliers_assets.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on supplier name
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderByJobTitle($query, $order)
-    {
-        return $query->leftJoin('users as users_sort', 'assets.assigned_to', '=', 'users_sort.id')->select('assets.*')->orderBy('users_sort.jobtitle', $order);
-    }
-
-    /**
-     * Query builder scope to search on location ID
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $search  Search term
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeByLocationId($query, $search)
-    {
-        return $query->where(
-            function ($query) use ($search) {
-                $query->whereHas(
-                    'location', function ($query) use ($search) {
-                        $query->where('locations.id', '=', $search);
-                    }
-                );
-            }
-        );
-
-    }
-
-    /**
-     * Query builder scope to search on depreciation name
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $search  Search term
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeByDepreciationId($query, $search)
-    {
-        return $query->join('models', 'assets.model_id', '=', 'models.id')
-            ->join('depreciations', 'models.depreciation_id', '=', 'depreciations.id')->where('models.depreciation_id', '=', $search);
-
+        return new AssetQueryBuilder($query);
     }
 
     /**

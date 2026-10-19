@@ -12,7 +12,7 @@ return [
     'create' => [
         'error' => 'A model nem lett létrehozva. Próbálkozz újra.',
         'success' => 'A modell sikeresen létrehozva.',
-        'duplicate_set' => 'Már létezik ilyen nevű eszközmodell, gyártó és modellszám.',
+        'duplicate_set' => 'Már létezik egy eszközmodell ezzel a névvel, gyártóval és modellszámmal.',
     ],
 
     'update' => [
@@ -22,7 +22,7 @@ return [
 
     'delete' => [
         'confirm' => 'Biztos benne, hogy törli ezt az eszközmodellt?',
-        'error' => 'A modell törlését okozta. Kérlek próbáld újra.',
+        'error' => 'Hiba történt a modell törlése közben. Próbálja újra.',
         'success' => 'A modell sikeresen törölve lett.',
     ],
 
@@ -40,8 +40,19 @@ return [
 
     'bulkdelete' => [
         'error' => 'Nem voltak eszközök kiválasztva, így semmi sem lett törölve.',
+        'nothing_deletable' => 'A kiválasztott modellek egyike sem törölhető, mert még tartoznak hozzájuk eszközök.',
         'success' => 'Eszköz modell törölve! Összesen |:success_count eszköz törölve!',
         'success_partial' => ': success_count modell(ek) törlésre kerültek, azonban ennyit nem sikerült törölni: a fail_count , mert még hozzárendelt eszközökkel rendelkeznek.',
+    ],
+
+    'merge' => [
+        'min_two' => 'Az egyesítéshez válasszon ki legalább két modellt.',
+        'no_target' => 'Válassza ki a megtartani kívánt modellt az egyesítés előtt.',
+        'not_found' => 'Az összevonás előtt válassza ki a megtartandó modellt.',
+        'information' => ':count modell összevonására készül. Válassza ki a megtartandó modellt. A többi modellhez tartozó összes eszköz ehhez a modellhez lesz átrendelve, majd a forrásmodellek törlésre kerülnek.',
+        'warning' => 'Ez a művelet nem vonható vissza. Az átrendelt eszközök a megtartott modell kategóriáját, mezőcsoportját és értékcsökkenési beállításait öröklik.',
+        'pick_target' => 'Melyik modellt kívánja megtartani?',
+        'success' => ':source_count modell összevonva a(z) „:target” modellbe. :asset_count eszköz átrendelve.',
     ],
 
 ];

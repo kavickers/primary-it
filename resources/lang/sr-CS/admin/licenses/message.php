@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name ima sedišta koja su trenutno zadužena i ne može biti izbrisana. Molim vas razdužite sva sedišta pre brisanja.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licence su uspešno izbrisane nakon razduživanja :seats sedišta.',
+        'partial_success' => ':count licence su uspešno izbrisane nakon razduživanja :seats sedišta. Pogledajte dodatne informacije ispod.',
+    ],
+
     'checkout' => [
         'error' => 'Došlo je do problema prilikom provere licence. Molim pokušajte ponovo.',
         'success' => 'Licenca je uspešno proverena',
@@ -55,6 +60,10 @@ return [
         'error' => 'Došlo je do problema prilikom provere licence. Molim pokušajte ponovo.',
         'not_reassignable' => 'Mesto je iskorišćeno',
         'success' => 'Licenca je uspešno proverena',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'Licenca ":license" nema slobodnih mesta. ":target" nije dodeljeno mesto.',
     ],
 
 ];

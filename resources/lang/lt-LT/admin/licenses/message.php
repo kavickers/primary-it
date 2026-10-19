@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name turi vietų, kurios šiuo metu yra išduotos ir negali būti panaikintos. Tam, kad panaikintumėte, turite paimti šias vietas.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => 'Licencijos (:count) buvo sėkmingai ištrintos po vietų (:seats) paėmimo.',
+        'partial_success' => 'Licencijos (:count) buvo sėkmingai ištrintos po vietų (:seats) paėmimo. Daugiau informacijos rasite žemiau.',
+    ],
+
     'checkout' => [
         'error' => 'Bandant išduoti licenciją įvyko klaida. Bandykite dar kartą.',
         'success' => 'Licencija sėkmingai išduota',
@@ -53,8 +58,12 @@ return [
 
     'checkin' => [
         'error' => 'Bandant paimti licenciją įvyko klaida. Bandykite dar kartą.',
-        'not_reassignable' => 'Vieta buvo panadota',
+        'not_reassignable' => 'Vieta buvo panaudota',
         'success' => 'Licencija sėkmingai paimta',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'Licencija „:license“ neturi laisvų vietų. „:target“ nebuvo priskirtas jokiai vietai.',
     ],
 
 ];

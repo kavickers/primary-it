@@ -40,8 +40,19 @@ return [
 
     'bulkdelete' => [
         'error' => 'Inga tillgångar valdes, så ingenting togs bort.',
+        'nothing_deletable' => 'Ingen av de valda modellerna kan tas bort eftersom de fortfarande har tillgångar kopplade till dem.',
         'success' => 'Modell borttagen! |:success_count modeller borttagna!',
         'success_partial' => ':success_count modell(erna) raderades, men :fail_count kunde inte raderas eftersom de fortfarande har tillgångar kopplade till sig.',
+    ],
+
+    'merge' => [
+        'min_two' => 'Välj minst två modeller att slå samman.',
+        'no_target' => 'Välj vilken modell som ska behållas innan du slår samman.',
+        'not_found' => 'Det gick inte att läsa in en eller flera av de valda modellerna. Uppdatera modellistan och försök igen.',
+        'information' => 'Du är på väg att slå samman :count modeller. Välj den modell du vill behålla. Alla tillgångar som är kopplade till de andra modellerna flyttas till den valda modellen och sedan tas de ursprungliga modellerna bort.',
+        'warning' => 'Detta kan inte ångras. Flyttade tillgångar ärver den kvarvarande modellens kategori, fältuppsättning och avskrivningsinställningar.',
+        'pick_target' => 'Vilken modell vill du behålla?',
+        'success' => ':source_count modell(er) har slagits samman med ”:target”. :asset_count tillgång(ar) har flyttats.',
     ],
 
 ];

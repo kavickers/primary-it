@@ -20,6 +20,8 @@ return [
         'confirm' => 'Bu Aksesuar silmek istediğinizden emin misiniz?',
         'error' => 'Aksesuarı silerken bir hata oluştu. Lütfen tekrar deneyin.',
         'success' => 'Aksesuar başarıyla silindi.',
+        'bulk_success' => 'Aksesuar başarıyla silindi.|:count aksesuar başarıyla silindi.',
+        'partial_success' => ':count aksesuar başarıyla silindi ancak diğer aksesuarlar silinemedi. Ayrıntılar için aşağıya bakın.|:count aksesuar başarıyla silindi ancak diğer aksesuarlar silinemedi. Ayrıntılar için aşağıya bakın.',
     ],
 
     'checkout' => [

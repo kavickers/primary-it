@@ -9,7 +9,7 @@
 @section('header_right')
     <form method="POST" action="{{ route('reports.activity.post') }}" accept-charset="UTF-8" class="form-horizontal">
     {{csrf_field()}}
-    <button type="submit" class="btn btn-default">
+        <button type="submit" class="btn btn-theme">
         <x-icon type="download" />
         {{ trans('general.download_all') }}
     </button>
@@ -20,7 +20,6 @@
 @section('content')
     <x-container>
         <x-box>
-
                 <table
                     data-columns="{{ \App\Presenters\HistoryPresenter::dataTableLayout() }}"
                         data-cookie-id-table="activityReport"
@@ -30,8 +29,8 @@
                         data-sort-order="desc"
                         data-sort-name="created_at"
                         id="activityReport"
-                        data-url="{{ route('api.activity.index') }}"
-                        class="table table-striped snipe-table"
+                    data-url="{{ $canManageReports ? route('api.activity.index') : route('api.dashboard.activity') }}"
+                    class="table table-striped snipe-table snipe-table--sticky-right-1"
                         data-export-options='{
                         "fileName": "activity-report-{{ date('Y-m-d') }}",
                         "ignoreColumn": ["actions","image","change","checkbox","checkincheckout","icon"]

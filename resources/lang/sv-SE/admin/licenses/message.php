@@ -37,9 +37,14 @@ return [
         'confirm' => 'Är du säker på att du vill radera denna licens?',
         'error' => 'Licensen kunde inte tas bort. Vänligen försök igen.',
         'success' => 'Licensen har tagits bort.',
-        'bulk_success' => 'The selected licenses were deleted successfully.',
-        'partial_success' => 'License deleted successfully. See additional information below. | :count licenses were deleted successfully. See additional information below.',
-        'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
+        'bulk_success' => 'De valda licenserna har raderats.',
+        'partial_success' => 'Licensen har raderats. Se ytterligare information nedan. |:count licenser har raderats. Se ytterligare information nedan.',
+        'bulk_checkout_warning' => ':license_name har licensplatser som för närvarande är utcheckade och kan inte raderas. Vänligen checka in alla platser innan du raderar.',
+    ],
+
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenser har raderats efter att :seats platser har checkats in.',
+        'partial_success' => ':count licenser har raderats efter att :seats platser har checkats in. Se ytterligare information nedan.',
     ],
 
     'checkout' => [
@@ -48,13 +53,17 @@ return [
         'not_enough_seats' => 'Inte tillräckligt med licenssäten tillgängliga för utcheckning',
         'mismatch' => 'Licenssätet som anges matchar inte licensen',
         'unavailable' => 'Detta säte är inte tillgängligt för utcheckning.',
-        'license_is_inactive' => 'This license is expired or terminated.',
+        'license_is_inactive' => 'Denna licens är utgången eller avslutad.',
     ],
 
     'checkin' => [
         'error' => 'Det gick inte att checka in licensen. Vänligen försök igen.',
-        'not_reassignable' => 'Seat has been used',
+        'not_reassignable' => 'Platsen har använts',
         'success' => 'Licens incheckad.',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'Licens ":license" har inga lediga platser. ":target" tilldelades inte en plats.',
     ],
 
 ];

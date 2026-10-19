@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Manufacturers\DeleteManufacturerAction;
+use App\Actions\Manufacturers\DestroyManufacturerAction;
+use App\Enums\FileStorage;
+use App\Exceptions\Handler;
 use App\Exceptions\ItemStillHasChildren;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
@@ -53,20 +55,20 @@ class ManufacturersController extends Controller
         ];
 
         $manufacturers = Manufacturer::select([
-            'id',
-            'name',
-            'url',
-            'support_url',
-            'warranty_lookup_url',
-            'support_email',
-            'support_phone',
-            'created_by',
-            'created_at',
-            'updated_at',
-            'image',
-            'deleted_at',
-            'tag_color',
-            'notes',
+            'manufacturers.id',
+            'manufacturers.name',
+            'manufacturers.url',
+            'manufacturers.support_url',
+            'manufacturers.warranty_lookup_url',
+            'manufacturers.support_email',
+            'manufacturers.support_phone',
+            'manufacturers.created_by',
+            'manufacturers.created_at',
+            'manufacturers.updated_at',
+            'manufacturers.image',
+            'manufacturers.deleted_at',
+            'manufacturers.tag_color',
+            'manufacturers.notes',
         ])
             ->with('adminuser')
             ->withCount('assets as assets_count')
@@ -117,7 +119,8 @@ class ManufacturersController extends Controller
         }
 
         // Make sure the offset and limit are actually integers and do not exceed system limits
-        $offset = ($request->input('offset') > $manufacturers->count()) ? $manufacturers->count() : app('api_offset_value');
+        $total = $manufacturers->count();
+        $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
         $limit = app('api_limit_value');
         $order = $request->input('order') === 'asc' ? 'asc' : 'desc';
         $sort_override = $request->input('sort');
@@ -132,7 +135,6 @@ class ManufacturersController extends Controller
                 break;
         }
 
-        $total = $manufacturers->count();
         $manufacturers = $manufacturers->skip($offset)->take($limit)->get();
 
         return (new ManufacturersTransformer)->transformManufacturers($manufacturers, $total);
@@ -206,18 +208,16 @@ class ManufacturersController extends Controller
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
      * @since [v4.0]
-     *
-     * @param  int  $id
      */
     public function destroy(Manufacturer $manufacturer): JsonResponse
     {
         $this->authorize('delete', $manufacturer);
         try {
-            DeleteManufacturerAction::run($manufacturer);
+            DestroyManufacturerAction::run($manufacturer);
         } catch (ItemStillHasChildren $e) {
             return response()->json(Helper::formatStandardApiResponse('error', null, trans('general.bulk_delete_associations.general_assoc_warning', ['item' => trans('general.manufacturer')])));
-        } catch (\Exception $e) {
-            report($e);
+        } catch (\Throwable $e) {
+            Handler::reportOrRethrow($e);
 
             return response()->json(Helper::formatStandardApiResponse('error', null, trans('general.something_went_wrong')));
         }
@@ -295,7 +295,7 @@ class ManufacturersController extends Controller
         // they may not have a ->name value but we want to display something anyway
         foreach ($manufacturers as $manufacturer) {
             $manufacturer->use_text = $manufacturer->name;
-            $manufacturer->use_image = ($manufacturer->image) ? Storage::disk('public')->url('manufacturers/'.$manufacturer->image, $manufacturer->image) : null;
+            $manufacturer->use_image = ($manufacturer->image) ? Storage::disk('public')->url(FileStorage::Manufacturers->publicPath().$manufacturer->image, $manufacturer->image) : null;
         }
 
         return (new SelectlistTransformer)->transformSelectlist($manufacturers);

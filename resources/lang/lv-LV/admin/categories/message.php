@@ -21,8 +21,15 @@ return [
         'confirm' => 'Vai tiešām vēlaties dzēst šo kategoriju?',
         'error' => 'Radās problēma, dzēšot kategoriju. Lūdzu mēģiniet vēlreiz.',
         'success' => 'Category was deleted successfully.',
-        'bulk_success' => 'Categories were deleted successfully.',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Category deleted successfully. See additional information below. | :count categories were deleted successfully. See additional information below.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Neviens laukums netika mainīts, tāpēc nekas netika atjaunināts.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

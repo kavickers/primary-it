@@ -43,6 +43,11 @@ return [
         'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenses were deleted successfully after checking in :seats seats.',
+        'partial_success' => ':count licenses were deleted successfully after checking in :seats seats. See additional information below.',
+    ],
+
     'checkout' => [
         'error' => 'بود یک موضوع چک کردن مجوز وجود دارد. لطفا دوباره تلاش کنید.',
         'success' => 'مجوز خارج بررسی شد موفقیت',
@@ -56,6 +61,10 @@ return [
         'error' => 'بود یک موضوع چک کردن در مجوز وجود دارد. لطفا دوباره تلاش کنید.',
         'not_reassignable' => 'Seat has been used',
         'success' => 'مجوز بررسی شده با موفقیت',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'License ":license" has no free seats. ":target" was not assigned to a seat.',
     ],
 
 ];

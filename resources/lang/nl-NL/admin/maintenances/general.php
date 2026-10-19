@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Asset onderhoud', // not used anymore
     'maintenances' => 'Onderhoudsbeurten',
+    'create' => 'Object onderhoud aanmaken',
     'edit' => 'Activaonderhoud bewerken',
     'delete' => 'Activaonderhoud verwijderen',
     'view' => 'Details activaonderhoud tonen',

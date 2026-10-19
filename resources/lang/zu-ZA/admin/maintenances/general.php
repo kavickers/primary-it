@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Ama-Maintenances aseMpahla', // not used anymore
     'maintenances' => 'Maintenances',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Hlela Ukugcinwa Kwempahla',
     'delete' => 'Susa Ukugcinwa Kwempahla',
     'view' => 'Buka Imininingwane Yokugcinwa Kwempahla',

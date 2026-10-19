@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Pemeliharaan Aset', // not used anymore
     'maintenances' => 'Pemeliharaan',
+    'create' => 'Membuat Pemeliharan Aset',
     'edit' => 'Merubah Pemeliharaan Aset',
     'delete' => 'Menghapus Pemeliharan Aset',
     'view' => 'Rincian Pemeliharaan Aset',

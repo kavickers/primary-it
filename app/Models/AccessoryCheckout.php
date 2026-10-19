@@ -2,20 +2,25 @@
 
 namespace App\Models;
 
+use App\Models\Builders\AccessoryCheckoutQueryBuilder;
+use App\Models\Traits\CompanyableChildTrait;
 use App\Models\Traits\Searchable;
 use App\Presenters\AccessoryPresenter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
 /**
  * Model for Accessories.
  *
  * @version v1.0
+ * @mixin IdeHelperAccessoryCheckout
  */
 class AccessoryCheckout extends Model
 {
+    use CompanyableChildTrait;
     use HasFactory;
     use Searchable;
 
@@ -25,6 +30,19 @@ class AccessoryCheckout extends Model
         'assigned_type',
         'note',
     ];
+
+    /**
+     * CompanyableChildScope walks these relation names at query time
+     * and inner-joins against the parent, applying CompanyableScope on
+     * the parent so pivot rows pointing to accessories in another FMCS
+     * tenant drop out of every Eloquent query against this model.
+     *
+     * @return array<int, string>
+     */
+    public function getCompanyableParents()
+    {
+        return ['accessory'];
+    }
 
     protected $presenter = AccessoryPresenter::class;
 
@@ -44,7 +62,7 @@ class AccessoryCheckout extends Model
         return $this->belongsTo(Accessory::class);
     }
 
-    public function accessories()
+    public function accessories(): HasMany
     {
         return $this->hasMany(Accessory::class, 'id', 'accessory_id');
     }
@@ -116,19 +134,9 @@ class AccessoryCheckout extends Model
         return $this->assigned_type == Asset::class;
     }
 
-    public function scopeUserAssigned(Builder $query): void
+    public function newEloquentBuilder($query): AccessoryCheckoutQueryBuilder
     {
-        $query->where('assigned_type', '=', User::class);
-    }
-
-    public function scopeLocationAssigned(Builder $query): void
-    {
-        $query->where('assigned_type', '=', Location::class);
-    }
-
-    public function scopeAssetsAssigned(Builder $query): void
-    {
-        $query->where('assigned_type', '=', Asset::class);
+        return new AccessoryCheckoutQueryBuilder($query);
     }
 
     /**

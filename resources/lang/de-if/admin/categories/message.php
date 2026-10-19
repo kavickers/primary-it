@@ -21,8 +21,15 @@ return [
         'confirm' => 'Bist Du sicher, dass du diese Kategorie löschen willst?',
         'error' => 'Beim löschen der Kategorie ist ein Problem aufgetreten. Bitte versuche es erneut.',
         'success' => 'Kategorie erfolgreich gelöscht.',
-        'bulk_success' => 'Kategorien erfolgreich gelöscht.',
+        'bulk_success' => 'Kategorie erfolgreich gelöscht.|:count Kategorien wurden erfolgreich gelöscht.',
         'partial_success' => 'Kategorie erfolgreich gelöscht. Sehe weitere Informationen weiter unten.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'Sie sind dabei, die Eigenschaften der folgenden Kategorie zu aktualisieren:| Sie sind dabei, die Eigenschaften der folgenden :count Kategorien zu bearbeiten:',
+        'no_selection' => 'Sie müssen mindestens eine Kategorie aus der Liste auswählen.',
+        'no_changes' => 'Es wurden keine Felder geändert, somit wurde auch nichts aktualisiert.',
+        'success' => 'Kategorie erfolgreich aktualisiert. |:count Kategorien erfolgreich aktualisiert.',
     ],
 
 ];

@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\FileStorage;
 use App\Http\Traits\UniqueUndeletedTrait;
+use App\Models\Builders\SupplierQueryBuilder;
 use App\Models\Traits\HasUploads;
 use App\Models\Traits\Loggable;
 use App\Models\Traits\Searchable;
@@ -12,8 +14,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Watson\Validating\ValidatingTrait;
 
+/**
+ * @mixin IdeHelperSupplier
+ */
 class Supplier extends SnipeModel
 {
     use HasFactory;
@@ -72,20 +79,66 @@ class Supplier extends SnipeModel
     /**
      * The attributes that are mass assignable.
      *
-     * @var array
+     * @var list<string>
      */
     protected $fillable = ['name', 'address', 'address2', 'city', 'state', 'country', 'zip', 'phone', 'fax', 'email', 'contact', 'url', 'tag_color', 'notes'];
 
     public function isDeletable()
     {
+        // accessories / consumables / components no longer block delete:
+        // their `default_supplier_id` reference is a soft template that
+        // the deleting hook below nulls out on delete. assets, licenses,
+        // and maintenances still use a per-record `supplier_id` column
+        // (out of scope for the Orders refactor) — those remain hard
+        // blockers to avoid stranding acquisition records mid-lifecycle.
         return Gate::allows('delete', $this)
             && (($this->assets_count ?? $this->assets()->count()) === 0)
             && (($this->licenses_count ?? $this->licenses()->count()) === 0)
-            && (($this->consumables_count ?? $this->consumables()->count()) === 0)
-            && (($this->accessories_count ?? $this->accessories()->count()) === 0)
-            && (($this->components_count ?? $this->components()->count()) === 0)
             && (($this->maintenances_count ?? $this->maintenances()->count()) === 0)
             && ($this->deleted_at == '');
+    }
+
+    /**
+     * On delete (soft or force), null out the `default_supplier_id`
+     * pointers on any accessory / consumable / component that used this
+     * supplier as its "typical supplier" template. Historical Orders
+     * keep their `supplier_id` untouched — that's an acquisition record
+     * of what actually happened, and the belongsTo relation returns null
+     * transparently when the referenced Supplier is soft-deleted anyway.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (self $supplier) {
+            Accessory::where('default_supplier_id', $supplier->id)->update(['default_supplier_id' => null]);
+            Consumable::where('default_supplier_id', $supplier->id)->update(['default_supplier_id' => null]);
+            Component::where('default_supplier_id', $supplier->id)->update(['default_supplier_id' => null]);
+        });
+
+        // On hard-delete, wipe the image file and Files-tab attachments.
+        // Soft-delete leaves everything alone so a restore comes back
+        // with the image + files intact. The attachment action_log rows
+        // get soft-deleted (not hard-deleted) so the audit trail of what
+        // was attached-and-when survives even after the parent is gone.
+        static::forceDeleted(function (self $supplier) {
+            if ($supplier->image) {
+                try {
+                    Storage::disk('public')->delete(FileStorage::Suppliers->publicPath().$supplier->image);
+                } catch (\Exception $e) {
+                    Log::info($e->getMessage());
+                }
+            }
+
+            foreach ($supplier->uploads as $upload) {
+                if (($path = $upload->uploads_file_path()) !== null) {
+                    try {
+                        Storage::delete($path);
+                    } catch (\Exception $e) {
+                        Log::info($e->getMessage());
+                    }
+                }
+                $upload->delete();
+            }
+        });
     }
 
     /**
@@ -120,45 +173,33 @@ class Supplier extends SnipeModel
     }
 
     /**
-     * Establishes the supplier -> accessories relationship
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  [v1.0]
-     *
-     * @return Relation
+     * Accessories that use this supplier as their default template.
+     * Post-Orders, "supplier of an accessory" is a per-transaction fact
+     * (on Order.supplier_id); this relation reads the parent-level
+     * `default_supplier_id` template instead — the field the show page
+     * "N items from this supplier" counts and tabs actually reflect.
      */
     public function accessories()
     {
-        return $this->hasMany(Accessory::class, 'supplier_id');
+        return $this->hasMany(Accessory::class, 'default_supplier_id');
     }
 
     /**
-     * Establishes the supplier -> component relationship
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  [v6.1.1]
-     *
-     * @return Relation
+     * Components that use this supplier as their default template.
+     * See accessories() for rationale.
      */
     public function components()
     {
-        return $this->hasMany(Component::class, 'supplier_id');
+        return $this->hasMany(Component::class, 'default_supplier_id');
     }
 
     /**
-     * Establishes the supplier -> component relationship
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  [v6.1.1]
-     *
-     * @return Relation
+     * Consumables that use this supplier as their default template.
+     * See accessories() for rationale.
      */
     public function consumables()
     {
-        return $this->hasMany(Consumable::class, 'supplier_id');
+        return $this->hasMany(Consumable::class, 'default_supplier_id');
     }
 
     /**
@@ -251,11 +292,8 @@ class Supplier extends SnipeModel
         return $url;
     }
 
-    /**
-     * Query builder scope to order on the user that created it
-     */
-    public function scopeOrderByCreatedByName($query, $order)
+    public function newEloquentBuilder($query): SupplierQueryBuilder
     {
-        return $query->leftJoin('users as admin_sort', 'suppliers.created_by', '=', 'admin_sort.id')->select('suppliers.*')->orderBy('admin_sort.first_name', $order)->orderBy('admin_sort.last_name', $order);
+        return new SupplierQueryBuilder($query);
     }
 }

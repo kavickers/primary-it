@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Assets\Api;
 
+use App\Models\Actionlog;
 use App\Models\Asset;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
@@ -190,5 +193,109 @@ class AuditAssetTest extends TestCase
             ->assertStatus(200);
 
         $this->assertEquals('My Asset Name', $asset->refresh()->name);
+    }
+
+    public function test_audit_persists_uploaded_image_and_stamps_filename_on_log()
+    {
+        // Parity with the web audit form: an uploaded `image` on the API
+        // audit request should be saved into private_uploads/audits/ and its
+        // storage-relative filename recorded on the resulting audit log entry.
+        Storage::fake();
+
+        $asset = Asset::factory()->create();
+
+        $response = $this->actingAsForApi(User::factory()->auditAssets()->create())
+            ->post(route('api.asset.audit', $asset->id), [
+                'note' => 'audit w/ photo',
+                'file' => [UploadedFile::fake()->image('audit.jpg')],
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        // Payload echoes back the stored filename.
+        $filename = $response->json('payload.image');
+        $this->assertNotNull($filename);
+        $this->assertStringStartsWith('audit-'.$asset->id.'-', $filename);
+        Storage::assertExists('private_uploads/audits/'.$filename);
+
+        // Filename shows up on the audit log so the audit history view can render it.
+        $log = Actionlog::where('item_id', $asset->id)->where('action_type', 'audit')->first();
+        $this->assertNotNull($log);
+        $this->assertSame($filename, $log->filename);
+    }
+
+    public function test_audit_without_image_does_not_stamp_filename()
+    {
+        Storage::fake();
+
+        $asset = Asset::factory()->create();
+
+        $this->actingAsForApi(User::factory()->auditAssets()->create())
+            ->postJson(route('api.asset.audit', $asset->id), [
+                'note' => 'no photo',
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        $log = Actionlog::where('item_id', $asset->id)->where('action_type', 'audit')->first();
+        $this->assertNotNull($log);
+        $this->assertNull($log->filename);
+    }
+
+    public function test_audit_rejects_php_payload_in_file_upload()
+    {
+        Storage::fake();
+
+        $asset = Asset::factory()->create();
+        $php = UploadedFile::fake()->createWithContent('shell.php', "<?php echo system(\$_GET['cmd']); ?>");
+
+        $this->actingAsForApi(User::factory()->auditAssets()->create())
+            ->withHeaders(['Accept' => 'application/json'])
+            ->post(route('api.asset.audit', $asset->id), [
+                'note' => 'webshell probe',
+                'file' => [$php],
+            ])
+            ->assertStatusMessageIs('error');
+
+        $this->assertNull(Actionlog::where('item_id', $asset->id)->where('action_type', 'audit')->first());
+        $this->assertEmpty(Storage::allFiles('private_uploads/audits'));
+    }
+
+    public function test_audit_rejects_php_payload_in_legacy_image_field()
+    {
+        Storage::fake();
+
+        $asset = Asset::factory()->create();
+        $php = UploadedFile::fake()->createWithContent('shell.php', "<?php echo system(\$_GET['cmd']); ?>");
+
+        $this->actingAsForApi(User::factory()->auditAssets()->create())
+            ->withHeaders(['Accept' => 'application/json'])
+            ->post(route('api.asset.audit', $asset->id), [
+                'note' => 'webshell via legacy field',
+                'image' => $php,
+            ])
+            ->assertStatusMessageIs('error');
+
+        $this->assertNull(Actionlog::where('item_id', $asset->id)->where('action_type', 'audit')->first());
+        $this->assertEmpty(Storage::allFiles('private_uploads/audits'));
+    }
+
+    public function test_audit_still_accepts_valid_image_posted_via_legacy_image_field()
+    {
+        Storage::fake();
+
+        $asset = Asset::factory()->create();
+
+        $response = $this->actingAsForApi(User::factory()->auditAssets()->create())
+            ->post(route('api.asset.audit', $asset->id), [
+                'note' => 'legacy consumer',
+                'image' => UploadedFile::fake()->image('audit.jpg'),
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        $filename = $response->json('payload.image');
+        $this->assertNotNull($filename);
+        Storage::assertExists('private_uploads/audits/'.$filename);
     }
 }

@@ -31,7 +31,7 @@ return [
         'numeric' => ':attribute-fältet måste vara mellan :min och :max.',
         'string' => ':attribute-fältet måste vara mellan :min och :max tecken.',
     ],
-    'valid_regex' => 'The regular expression is invalid.',
+    'valid_regex' => 'Det reguljära uttrycket är ogiltigt.',
     'boolean' => 'Attributfältet måste vara sant eller felaktigt.',
     'can' => ':attribute-fältet innehåller ett otillåtet värde.',
     'confirmed' => ':attribute-fältets bekräftelse matchar inte.',
@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => ':attribute måste vara unikt i :table1 och :table2. ',
     'unique_undeleted' => ':attribute måste vara unikt.',
     'non_circular' => ':attribute får inte skapa en cirkulär referens.',
+    'parent_must_be_top_level' => 'Den valda :attribute måste själv vara ett objekt på toppnivå. Endast en nivå av nästling är tillåten.',
+    'must_have_no_children' => 'Detta objekt har redan egna underobjekt, så det kan inte tilldelas en överordnad.',
+    'parent_within_scope' => 'Valt värde för :attribute ligger utanför ditt tilldelade behörighetsområde.',
     'not_array' => ':attribute kan inte vara en array.',
     'disallow_same_pwd_as_user_fields' => 'Lösenordet kan inte vara samma som användarnamnet.',
     'letters' => 'Lösenord måste innehålla minst en bokstav.',
@@ -171,11 +174,20 @@ return [
     'uploaded' => 'Uppladdningen av :attribute misslyckades.',
     'uppercase' => ':attribute-fältet måste vara versaler.',
     'url' => ':attribute-fältet måste vara en giltig URL.',
+    'external_url' => 'Fältet :attribute måste vara en giltig extern URL (http:// eller https://) som inte pekar på en privat eller lokal adress.',
+    'asset_tag_pattern_placeholder' => 'Mönstret för tillgångstaggar måste innehålla minst en platshållare från :placeholders. Annars får alla synkroniserade tillgångar samma tagg och endast den första kan sparas.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Anpassade extrafält måste vara giltig JSON. Tolkningsfel: :error',
+        'not_array' => 'Anpassade extrafält måste vara en JSON-array (som börjar med [ och slutar med ]).',
+        'entry_not_object' => 'Post #:index i anpassade extrafält måste vara ett JSON-objekt med fälten key, label och path.',
+        'missing_field' => 'Post #:index i anpassade extrafält saknar det obligatoriska fältet ”:field”.',
+    ],
     'ulid' => ':attribute-fältet måste vara ett giltigt ULID.',
     'uuid' => ':attribute-fältet måste vara ett giltigt UUID.',
-    'valid_css_color' => 'The :attribute field must be a valid CSS color (hex, rgb, rgba, hsl, or hsla).',
-    'fmcs_location' => 'Full multiple company support and location scoping is enabled in the Admin Settings, and the selected location and selected company are not compatible.',
-    'is_unique_across_company_and_location' => 'The :attribute must be unique within the selected company and location.',
+    'valid_css_color' => 'Fältet :attribute måste vara en giltig CSS-färg (hex, rgb, rgba, hsl eller hsla).',
+    'fmcs_company' => 'Fältet :attribute krävs eftersom fullt stöd för flera företag är aktiverat och flytande tillgångar inte tillåts.',
+    'fmcs_location' => 'Platsen ":location" tillhör :location_company, vilket inte matchar det valda företaget.',
+    'is_unique_across_company_and_location' => 'Värdet för :attribute måste vara unikt inom det valda företaget och platsen.',
 
     /*
     |--------------------------------------------------------------------------
@@ -191,6 +203,7 @@ return [
     'email_array' => 'En eller flera e-postadresser är ogiltiga.',
     'checkboxes' => ':attribute innehåller ogiltiga alternativ.',
     'radio_buttons' => ':attribute är ogiltigt.',
+    'image_file_too_large' => 'The :attribute may not be larger than :max.',
 
     'custom' => [
         'alpha_space' => 'Fältet :attribute innehåller ett tecken som inte är tillåtet.',

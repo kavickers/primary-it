@@ -19,6 +19,8 @@ return [
         'confirm' => 'Amortisman sınıfını silmek istediğinize emin misiniz?',
         'error' => 'Amortisman sınıfını silerken bir hata oluştu. Lütfen tekrar deneyin.',
         'success' => 'Amortisman sınıfı silindi.',
+        'bulk_success' => 'Amortisman sınıfı başarıyla silindi.|:count amortisman sınıfı başarıyla silindi.',
+        'partial_success' => 'Amortisman sınıfı başarıyla silindi. Aşağıda ek bilgiler verilmiştir.|:count amortisman sınıfı başarıyla silindi. Aşağıda ek bilgiler verilmiştir.',
     ],
 
 ];

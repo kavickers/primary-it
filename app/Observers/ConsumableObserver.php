@@ -2,7 +2,9 @@
 
 namespace App\Observers;
 
+use App\Enums\FileStorage;
 use App\Models\Actionlog;
+use App\Models\CheckoutAcceptance;
 use App\Models\Consumable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -46,15 +48,7 @@ class ConsumableObserver
      */
     public function created(Consumable $consumable)
     {
-        $logAction = new Actionlog;
-        $logAction->item_type = Consumable::class;
-        $logAction->item_id = $consumable->id;
-        $logAction->created_at = date('Y-m-d H:i:s');
-        $logAction->created_by = auth()->id();
-        if ($consumable->imported) {
-            $logAction->setActionSource('importer');
-        }
-        $logAction->logaction('create');
+        $consumable->writeInitialInventoryCreate();
     }
 
     /**
@@ -66,25 +60,25 @@ class ConsumableObserver
     {
 
         $consumable->users()->detach();
+
+        CheckoutAcceptance::pending()
+            ->where('checkoutable_type', Consumable::class)
+            ->where('checkoutable_id', $consumable->id)
+            ->delete();
+
         $uploads = $consumable->uploads;
 
         foreach ($uploads as $file) {
             try {
-                Storage::delete('private_uploads/consumables/'.$file->filename);
+                Storage::delete(FileStorage::Consumables->privateStorageKey().$file->filename);
                 $file->delete();
             } catch (\Exception $e) {
                 Log::info($e);
             }
         }
 
-        try {
-            Storage::disk('public')->delete('consumables/'.$consumable->image);
-        } catch (\Exception $e) {
-            Log::info($e);
-        }
-
-        $consumable->image = null;
-        $consumable->save();
+        // Image file cleanup lives on the Consumable model's forceDeleted
+        // hook so soft-delete + restore preserves the image reference.
 
         $logAction = new Actionlog;
         $logAction->item_type = Consumable::class;

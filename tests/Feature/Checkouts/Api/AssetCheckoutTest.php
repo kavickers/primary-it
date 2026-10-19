@@ -12,10 +12,13 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
 use Notification;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\MakesWatsonValidationLoud;
 use Tests\TestCase;
 
 class AssetCheckoutTest extends TestCase
 {
+    use MakesWatsonValidationLoud;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -37,7 +40,12 @@ class AssetCheckoutTest extends TestCase
             ->post(route('api.assets.requests.store', $nonRequestable->id))
             ->assertStatusMessageIs('error');
 
-        $this->assertHasTheseActionLogs($requestable, ['create', 'requested', 'update']); // FIXME - is this right?!
+        // The counter increment on requests_counter used to fire a
+        // redundant `update` log alongside `requested`; the
+        // AssetObserver's same_requests_counter gate now suppresses
+        // it (matching how it already suppresses the sibling
+        // `update` log on checkout/checkin counter bumps).
+        $this->assertHasTheseActionLogs($requestable, ['create', 'requested']);
 
     }
 
@@ -94,15 +102,84 @@ class AssetCheckoutTest extends TestCase
         Event::assertNotDispatched(CheckoutableCheckedOut::class);
     }
 
+    public function test_asset_checkout_infers_user_target_when_checkout_to_type_omitted()
+    {
+        $asset = Asset::factory()->create();
+        $user = User::factory()->create();
+
+        $this->actingAsForApi(User::factory()->checkoutAssets()->create())
+            ->postJson(route('api.asset.checkout', $asset), [
+                'assigned_user' => $user->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        $asset->refresh();
+        $this->assertTrue($asset->assignedTo()->is($user));
+    }
+
+    public function test_asset_checkout_infers_asset_target_when_checkout_to_type_omitted()
+    {
+        $asset = Asset::factory()->create();
+        $target = Asset::factory()->create();
+
+        $this->actingAsForApi(User::factory()->checkoutAssets()->create())
+            ->postJson(route('api.asset.checkout', $asset), [
+                'assigned_asset' => $target->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        $asset->refresh();
+        $this->assertTrue($asset->assignedTo()->is($target));
+    }
+
+    public function test_asset_checkout_infers_location_target_when_checkout_to_type_omitted()
+    {
+        $asset = Asset::factory()->create();
+        $location = Location::factory()->create();
+
+        $this->actingAsForApi(User::factory()->checkoutAssets()->create())
+            ->postJson(route('api.asset.checkout', $asset), [
+                'assigned_location' => $location->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        $asset->refresh();
+        $this->assertTrue($asset->assignedTo()->is($location));
+    }
+
+    public function test_asset_checkout_rejects_multiple_target_fields()
+    {
+        $asset = Asset::factory()->create();
+        $user = User::factory()->create();
+        $location = Location::factory()->create();
+
+        $response = $this->actingAsForApi(User::factory()->checkoutAssets()->create())
+            ->postJson(route('api.asset.checkout', $asset), [
+                'assigned_user' => $user->id,
+                'assigned_location' => $location->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('error');
+
+        $this->assertArrayHasKey('assigned_user', $response->json('messages'));
+
+        $asset->refresh();
+        $this->assertNull($asset->assigned_to);
+        $this->assertNull($asset->assigned_type);
+    }
+
     public function test_cannot_checkout_across_companies_when_full_company_support_enabled()
     {
         $this->settings->enableMultipleFullCompanySupport();
 
         [$companyA, $companyB] = Company::factory()->count(2)->create();
 
-        $actorInCompanyA = User::factory()->checkoutAssets()->for($companyA)->create();
+        $actorInCompanyA = User::factory()->checkoutAssets()->forCompany($companyA)->create();
         $assetInCompanyA = Asset::factory()->for($companyA)->create();
-        $userInCompanyB = User::factory()->for($companyB)->create();
+        $userInCompanyB = User::factory()->forCompany($companyB)->create();
 
         $this->actingAsForApi($actorInCompanyA)
             ->postJson(route('api.asset.checkout', $assetInCompanyA), [
@@ -135,9 +212,9 @@ class AssetCheckoutTest extends TestCase
 
         [$companyA, $companyB] = Company::factory()->count(2)->create();
 
-        $actorInCompanyA = User::factory()->checkoutAssets()->for($companyA)->create();
+        $actorInCompanyA = User::factory()->checkoutAssets()->forCompany($companyA)->create();
         $assetInCompanyA = Asset::factory()->for($companyA)->create();
-        $userInCompanyB = User::factory()->for($companyB)->create();
+        $userInCompanyB = User::factory()->forCompany($companyB)->create();
 
         $this->actingAsForApi($actorInCompanyA)
             ->postJson(route('api.assets.checkout.bytag', $assetInCompanyA->asset_tag), [
@@ -287,11 +364,11 @@ class AssetCheckoutTest extends TestCase
         [$companyA, $companyB, $companyC] = Company::factory()->count(3)->create();
 
         // Actor is in companyC (same as the asset) so FMCS scoping lets them see and checkout it.
-        $actor = User::factory()->checkoutAssets()->for($companyC)->create();
+        $actor = User::factory()->checkoutAssets()->forCompany($companyC)->create();
         $assetInCompanyC = Asset::factory()->for($companyC)->create();
 
         // Target user's primary company is A, but they also belong to C via pivot.
-        $target = User::factory()->for($companyA)->create();
+        $target = User::factory()->forCompany($companyA)->create();
         $target->companies()->sync([$companyA->id, $companyB->id, $companyC->id]);
 
         $this->actingAsForApi($actor)
@@ -313,11 +390,11 @@ class AssetCheckoutTest extends TestCase
         [$companyA, $companyB, $companyC] = Company::factory()->count(3)->create();
 
         // Actor is in companyC (same as the asset).
-        $actor = User::factory()->checkoutAssets()->for($companyC)->create();
+        $actor = User::factory()->checkoutAssets()->forCompany($companyC)->create();
         $assetInCompanyC = Asset::factory()->for($companyC)->create();
 
         // Target belongs to A and B — not C. Checkout to them should be blocked.
-        $target = User::factory()->for($companyA)->create();
+        $target = User::factory()->forCompany($companyA)->create();
         $target->companies()->sync([$companyA->id, $companyB->id]);
 
         $this->actingAsForApi($actor)
@@ -340,10 +417,10 @@ class AssetCheckoutTest extends TestCase
 
         $company = Company::factory()->create();
         // Actor is in the same company as the asset.
-        $actor = User::factory()->checkoutAssets()->for($company)->create();
+        $actor = User::factory()->checkoutAssets()->forCompany($company)->create();
         $assetInCompany = Asset::factory()->for($company)->create();
 
-        $target = User::factory()->create(['company_id' => null]);
+        $target = User::factory()->withoutCompany()->create();
         $target->companies()->sync([]);
 
         $this->actingAsForApi($actor)
@@ -417,7 +494,7 @@ class AssetCheckoutTest extends TestCase
         $company = Company::factory()->create();
         $actor = User::factory()->superuser()->create();
         $nullCompanyAsset = Asset::factory()->create(['company_id' => null]);
-        $companiedUser = User::factory()->for($company)->create();
+        $companiedUser = User::factory()->forCompany($company)->create();
 
         $this->actingAsForApi($actor)
             ->postJson(route('api.asset.checkout', $nullCompanyAsset), [
@@ -438,7 +515,7 @@ class AssetCheckoutTest extends TestCase
         $company = Company::factory()->create();
         $actor = User::factory()->superuser()->create();
         $nullCompanyAsset = Asset::factory()->create(['company_id' => null]);
-        $companiedUser = User::factory()->for($company)->create();
+        $companiedUser = User::factory()->forCompany($company)->create();
 
         $this->actingAsForApi($actor)
             ->postJson(route('api.asset.checkout', $nullCompanyAsset), [
@@ -449,5 +526,93 @@ class AssetCheckoutTest extends TestCase
             ->assertStatusMessageIs('success');
 
         $this->assertEquals($companiedUser->id, $nullCompanyAsset->fresh()->assigned_to);
+    }
+
+    /**
+     * GHSA-6hxf-hqrc-wfrp regression coverage: the reporter's PoC
+     * exactly. An empty-pivot ("null tenant") actor holding assets.checkout
+     * would previously succeed at checking out a null-company asset to a
+     * companied user in any other company under strict FMCS, because
+     * CompanyableTrait::canCheckoutTo used $target->companies()->count()
+     * to detect an uncompanied target. That subquery re-applied the actor's
+     * Company::CompanyableScope, which for an empty-pivot actor degenerates
+     * to whereNull('companies.id') and matches zero rows, making every
+     * target look pivot-less. The fix delegates to
+     * User::canReceiveFromCompany(null), which reads company_user directly
+     * via DB::table and correctly rejects a companied target under strict
+     * mode.
+     */
+    public function test_empty_pivot_actor_cannot_check_out_null_company_asset_to_companied_user_under_strict_fmcs()
+    {
+        $this->settings->enableMultipleFullCompanySupport();
+        $this->settings->disableFloaterMode();
+
+        $company = Company::factory()->create();
+        $nullCompanyAsset = Asset::factory()->create(['company_id' => null]);
+        $companiedTarget = $company->users()->save(User::factory()->create());
+        $emptyPivotActor = User::factory()->checkoutAssets()->create();
+        $emptyPivotActor->companies()->sync([]);
+
+        $this->actingAsForApi($emptyPivotActor)
+            ->postJson(route('api.asset.checkout', $nullCompanyAsset), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $companiedTarget->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('error');
+
+        $this->assertNull(
+            $nullCompanyAsset->fresh()->assigned_to,
+            'Strict FMCS must reject a null-company asset being checked out to a companied user by an empty-pivot actor.'
+        );
+
+        Event::assertNotDispatched(CheckoutableCheckedOut::class);
+    }
+
+    public function test_empty_pivot_actor_can_check_out_null_company_asset_to_empty_pivot_user_under_strict_fmcs()
+    {
+        // Positive control for the fix. The "both pivot-less" case is the
+        // null pseudo-company namespace and stays legitimately allowed.
+        $this->settings->enableMultipleFullCompanySupport();
+        $this->settings->disableFloaterMode();
+
+        $nullCompanyAsset = Asset::factory()->create(['company_id' => null]);
+        $emptyPivotTarget = User::factory()->create();
+        $emptyPivotTarget->companies()->sync([]);
+        $emptyPivotActor = User::factory()->checkoutAssets()->create();
+        $emptyPivotActor->companies()->sync([]);
+
+        $this->actingAsForApi($emptyPivotActor)
+            ->postJson(route('api.asset.checkout', $nullCompanyAsset), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $emptyPivotTarget->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        $this->assertEquals($emptyPivotTarget->id, $nullCompanyAsset->fresh()->assigned_to);
+    }
+
+    public function test_empty_pivot_actor_can_check_out_null_company_asset_to_companied_user_under_floater_mode()
+    {
+        // Floater mode is the setting that legitimately opens null-company
+        // items to companied users. The fix must not accidentally block this.
+        $this->settings->enableFloaterMode();
+
+        $company = Company::factory()->create();
+        $nullCompanyAsset = Asset::factory()->create(['company_id' => null]);
+        $companiedTarget = $company->users()->save(User::factory()->create());
+        $emptyPivotActor = User::factory()->checkoutAssets()->create();
+        $emptyPivotActor->companies()->sync([]);
+
+        $this->actingAsForApi($emptyPivotActor)
+            ->postJson(route('api.asset.checkout', $nullCompanyAsset), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $companiedTarget->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        $this->assertEquals($companiedTarget->id, $nullCompanyAsset->fresh()->assigned_to);
     }
 }

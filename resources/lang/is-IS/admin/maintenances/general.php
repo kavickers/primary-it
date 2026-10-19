@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Viðhaldssaga eignar', // not used anymore
     'maintenances' => 'Viðhald',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Breyta viðhaldsskráningu',
     'delete' => 'Eyða viðhaldsskráningu',
     'view' => 'Sjá nánari upplýsingar um viðhald eignar',

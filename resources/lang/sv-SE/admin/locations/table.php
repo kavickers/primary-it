@@ -12,8 +12,8 @@ return [
     'create' => 'Skapa plats',
     'update' => 'Uppdatera plats',
     'print_assigned' => 'Skriv ut tilldelade',
-    'print_inventory' => 'Print Inventory',
-    'print_all_assigned' => 'Print Inventory and Assigned',
+    'print_inventory' => 'Skriv ut inventering',
+    'print_all_assigned' => 'Skriv ut inventering och tilldelade',
     'name' => 'Platsnamn',
     'address' => 'Adress',
     'address2' => 'Adressrad 2',
@@ -40,5 +40,5 @@ return [
     'signed_by_finance_auditor' => 'Undertecknad av (Revisor):',
     'signed_by_location_manager' => 'Undertecknad av (Platschef):',
     'signed_by' => 'Undertecknad av:',
-    'clone' => 'Clone Location',
+    'clone' => 'Klonera plats',
 ];

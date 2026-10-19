@@ -8,7 +8,7 @@ return [
     'example_manufacturer' => 'Test Manufacturing Inc.',
     'example_model' => 'Test Model',
     'example_supplier' => 'Test Company Limited',
-    'labels_per_page' => 'Labels',
+    'labels_per_page' => 'Oznake',
     'support_fields' => 'Polja',
     'support_asset_tag' => 'Označiti',
     'support_1d_barcode' => '1D',

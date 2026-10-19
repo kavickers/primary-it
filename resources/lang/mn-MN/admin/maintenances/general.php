@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Хөрөнгийн бирж', // not used anymore
     'maintenances' => 'Засвар үйлчилгээ',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Засвар үйлчилгээний мэдээлэл засах',
     'delete' => 'Засвар үйлчилгээний мэдээлэл устгах',
     'view' => 'Засвар үйлчилгээний дэлгэрэнгүй',

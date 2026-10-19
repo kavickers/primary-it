@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Aktīvu uzturēšana', // not used anymore
     'maintenances' => 'Apkope',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Rediģēt aktīvu uzturēšanu',
     'delete' => 'Dzēst īpašuma uzturēšanu',
     'view' => 'Skatīt aktīvu uzturēšanas informāciju',

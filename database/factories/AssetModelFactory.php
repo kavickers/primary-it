@@ -16,7 +16,7 @@ class AssetModelFactory extends Factory
     /**
      * The name of the factory's corresponding model.
      *
-     * @var string
+     * @var class-string<AssetModel>
      */
     protected $model = AssetModel::class;
 
@@ -322,6 +322,9 @@ class AssetModelFactory extends Factory
                     return Depreciation::where('name', 'Computer Depreciation')->first() ?? Depreciation::factory()->computer();
                 },
                 'image' => 'ipad.jpg',
+                'fieldset_id' => function () {
+                    return CustomFieldset::where('name', 'Mobile Devices')->first() ?? CustomFieldset::factory()->mobile();
+                },
             ];
         });
     }
@@ -342,6 +345,9 @@ class AssetModelFactory extends Factory
                     return Depreciation::where('name', 'Computer Depreciation')->first() ?? Depreciation::factory()->computer();
                 },
                 'image' => 'tab3.png',
+                'fieldset_id' => function () {
+                    return CustomFieldset::where('name', 'Mobile Devices')->first() ?? CustomFieldset::factory()->mobile();
+                },
             ];
         });
     }

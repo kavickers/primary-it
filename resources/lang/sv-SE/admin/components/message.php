@@ -18,7 +18,7 @@ return [
         'confirm' => 'Är du säker på att du vill radera den här komponenten?',
         'error' => 'Kunde inte ta bort komponenten. Vänligen försök igen.',
         'success' => 'Komponent raderad.',
-        'error_qty' => 'Some components of this type are still checked out. Please check them in and try again.',
+        'error_qty' => 'Vissa komponenter av denna typ är fortfarande utcheckade. Vänligen checka in dem och försök igen.',
     ],
 
     'checkout' => [

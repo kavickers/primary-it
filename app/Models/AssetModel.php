@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\FileStorage;
 use App\Http\Traits\TwoColumnUniqueUndeletedTrait;
+use App\Models\Builders\AssetModelQueryBuilder;
+use App\Models\Traits\HasImageUpload;
 use App\Models\Traits\HasUploads;
 use App\Models\Traits\Loggable;
 use App\Models\Traits\Requestable;
@@ -12,8 +15,8 @@ use App\Presenters\Presentable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Watson\Validating\ValidatingTrait;
 
@@ -22,14 +25,22 @@ use Watson\Validating\ValidatingTrait;
  * attributes that are common among the same type of asset.
  *
  * @version v1.0
+ *
+ * @mixin IdeHelperAssetModel
  */
 class AssetModel extends SnipeModel
 {
     use HasFactory;
+    use HasImageUpload;
     use HasUploads;
     use Loggable, Presentable, Requestable;
     use SoftDeletes;
     use TwoColumnUniqueUndeletedTrait;
+
+    public static function fileStorage(): FileStorage
+    {
+        return FileStorage::Models;
+    }
 
     /**
      * Whether the model should inject its identifier to the unique
@@ -60,7 +71,7 @@ class AssetModel extends SnipeModel
     /**
      * The attributes that are mass assignable.
      *
-     * @var array
+     * @var list<string>
      */
     protected $fillable = [
         'category_id',
@@ -122,6 +133,30 @@ class AssetModel extends SnipeModel
     {
         static::forceDeleted(function (AssetModel $assetModel) {
             $assetModel->requests()->forceDelete();
+
+            // Image + Files-tab attachments wipe on hard-delete only, so
+            // a restored soft-deleted model keeps its image and files.
+            // Attachment action_log rows get soft-deleted (not
+            // hard-deleted) so the audit trail of what was attached-
+            // and-when survives even after the parent is gone.
+            if ($assetModel->image) {
+                try {
+                    Storage::disk('public')->delete(FileStorage::Models->publicPath().$assetModel->image);
+                } catch (\Exception $e) {
+                    Log::info($e->getMessage());
+                }
+            }
+
+            foreach ($assetModel->uploads as $upload) {
+                if (($path = $upload->uploads_file_path()) !== null) {
+                    try {
+                        Storage::delete($path);
+                    } catch (\Exception $e) {
+                        Log::info($e->getMessage());
+                    }
+                }
+                $upload->delete();
+            }
         });
 
         static::softDeleted(function (AssetModel $assetModel) {
@@ -148,9 +183,41 @@ class AssetModel extends SnipeModel
         return $this->hasMany(Asset::class, 'model_id')->RTD();
     }
 
+    /**
+     * Bulk-fulfillment eligibility hook. Overrides the Requestable
+     * trait's default (which probes numRemaining) since AssetModel
+     * fulfills by handing out concrete assets of the model rather
+     * than a qty count. Returns true when at least one available
+     * (RTD) asset of this model exists.
+     */
+    protected function hasStockForBulkFulfillment(): bool
+    {
+        return $this->availableAssets()->exists();
+    }
+
     public function assignedAssets()
     {
         return $this->hasMany(Asset::class, 'model_id')->Deployed();
+    }
+
+    /**
+     * How many distinct Orders this asset model has appeared on across
+     * all of its Asset instances. Since each Asset is 1:1 with a
+     * transaction via AssetObserver::created, this is the count of
+     * distinct order_ids on order_items linked to any of this model's
+     * assets. Useful for the info-panel "how many times has this model
+     * been ordered" hint.
+     */
+    public function ordersCount(): int
+    {
+        // Purchases only (positive qty) — see HasOrders::ordersCount for
+        // the rationale on filtering out corrections/consumption events.
+        return (int) OrderItem::query()
+            ->where('item_type', Asset::class)
+            ->whereIn('item_id', $this->assets()->select('id'))
+            ->where('qty', '>', 0)
+            ->distinct()
+            ->count('order_id');
     }
 
     public function archivedAssets()
@@ -160,11 +227,36 @@ class AssetModel extends SnipeModel
 
     public function percentRemaining()
     {
-        if ($this->availableAssets()->count() == 0) {
+        // Prefer the pre-loaded withCount attributes — Api\AssetModelsController
+        // ::index already eager-loads these as `remaining` (available count)
+        // and `assets_count` (total) via correlated subqueries on the parent
+        // models SELECT. Reading them here avoids re-running the same counts
+        // as N+1 queries per model in the transformer loop. Read straight off
+        // getAttributes() rather than via __get so we don't accidentally
+        // trigger a relation load when the attribute isn't there.
+        // Cast to int at read time: PDO with MySQL default emulated prepares
+        // returns COUNT() values as string, and Eloquent doesn't auto-cast
+        // withCount aliases (no $casts entry for `remaining` / `assets_count`).
+        // A string "0" then slips past a strict === 0 guard AND — because PHP
+        // 8's arithmetic operators auto-convert numeric strings — still hits
+        // DivisionByZeroError at the ratio below.
+        $raw = $this->getAttributes();
+        $available = (int) ($raw['remaining'] ?? $this->availableAssets()->count());
+        if ($available === 0) {
             return 0;
         }
 
-        return $this->availableAssets()->count() / $this->assets()->count() * 100;
+        // Also guard the divisor. In principle available > 0 implies
+        // total > 0 (available is a subset of total via the RTD scope), but
+        // a data anomaly — an asset counted by availableAssets but not by
+        // assets, or a race between the two correlated withCount subqueries
+        // — has been observed in production. Return 0 rather than throw.
+        $total = (int) ($raw['assets_count'] ?? $this->assets()->count());
+        if ($total === 0) {
+            return 0;
+        }
+
+        return $available / $total * 100;
     }
 
     /**
@@ -179,6 +271,11 @@ class AssetModel extends SnipeModel
     public function category()
     {
         return $this->belongsTo(Category::class, 'category_id');
+    }
+
+    public function requireAcceptance(): bool
+    {
+        return (bool) ($this->category?->require_acceptance ?? false);
     }
 
     /**
@@ -256,7 +353,7 @@ class AssetModel extends SnipeModel
     public function getImageUrl($path = null)
     {
         if ($this->image) {
-            return Storage::disk('public')->url(app('models_upload_path').$this->image);
+            return Storage::disk('public')->url(FileStorage::Models->publicPath().$this->image);
         }
 
         return false;
@@ -274,113 +371,12 @@ class AssetModel extends SnipeModel
     public function isDeletable()
     {
         return Gate::allows('delete', $this)
-            && (($this->assets_count ?? $this->assets()->count()) === 0)
+            && ((int) ($this->assets_count ?? $this->assets()->count()) === 0)
             && ($this->deleted_at == '');
     }
 
-    /**
-     * -----------------------------------------------
-     * BEGIN QUERY SCOPES
-     * -----------------------------------------------
-     **/
-
-    /**
-     * scopeInCategory
-     * Get all models that are in the array of category ids
-     *
-     *
-     * @return mixed
-     *
-     * @author  Vincent Sposato <vincent.sposato@gmail.com>
-     *
-     * @version v1.0
-     */
-    public function scopeInCategory($query, array $categoryIdListing)
+    public function newEloquentBuilder($query): AssetModelQueryBuilder
     {
-        return $query->whereIn('category_id', $categoryIdListing);
-    }
-
-    /**
-     * scopeRequestable
-     * Get all models that are requestable by a user.
-     *
-     *
-     * @return $query
-     *
-     * @author  Daniel Meltzer <dmeltzer.devel@gmail.com>
-     *
-     * @version v3.5
-     */
-    public function scopeRequestableModels($query)
-    {
-        return $query->where('requestable', '1');
-    }
-
-    /**
-     * Query builder scope to search on text, including catgeory and manufacturer name
-     *
-     * @param  Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $search  Search term
-     * @return Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeSearchByManufacturerOrCat($query, $search)
-    {
-        return $query->where('models.name', 'LIKE', "%$search%")
-            ->orWhere('model_number', 'LIKE', "%$search%")
-            ->orWhere(
-                function ($query) use ($search) {
-                    $query->whereHas(
-                        'category', function ($query) use ($search) {
-                            $query->where('categories.name', 'LIKE', '%'.$search.'%');
-                        }
-                    );
-                }
-            )
-            ->orWhere(
-                function ($query) use ($search) {
-                    $query->whereHas(
-                        'manufacturer', function ($query) use ($search) {
-                            $query->where('manufacturers.name', 'LIKE', '%'.$search.'%');
-                        }
-                    );
-                }
-            );
-    }
-
-    /**
-     * Query builder scope to order on manufacturer
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderManufacturer($query, $order)
-    {
-        return $query->leftJoin('manufacturers', 'models.manufacturer_id', '=', 'manufacturers.id')->orderBy('manufacturers.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on category name
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderCategory($query, $order)
-    {
-        return $query->leftJoin('categories', 'models.category_id', '=', 'categories.id')->orderBy('categories.name', $order);
-    }
-
-    public function scopeOrderFieldset($query, $order)
-    {
-        return $query->leftJoin('custom_fieldsets', 'models.fieldset_id', '=', 'custom_fieldsets.id')->orderBy('custom_fieldsets.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on created_by name
-     */
-    public function scopeOrderByCreatedByName($query, $order)
-    {
-        return $query->leftJoin('users as admin_sort', 'models.created_by', '=', 'admin_sort.id')->select('models.*')->orderBy('admin_sort.first_name', $order)->orderBy('admin_sort.last_name', $order);
+        return new AssetModelQueryBuilder($query);
     }
 }

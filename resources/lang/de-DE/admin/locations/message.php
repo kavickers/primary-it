@@ -31,4 +31,15 @@ return [
         'success' => 'Der Standort wurde erfolgreich gelöscht.',
     ],
 
+    'bulkedit' => [
+        'error' => 'Es wurden keine Felder geändert, daher wurde nichts aktualisiert.',
+        'success' => 'Standort erfolgreich aktualisiert. |:location_count Standorte erfolgreich aktualisiert.',
+        'warn' => 'Bearbeiten Sie die Felder unten, um diesen Standort zu aktualisieren. Die Felder, die Sie leer lassen, werden sich am Standort nicht ändern. Bearbeiten Sie die Felder unten, um alle :count ausgewählten Orte zu aktualisieren. Die Felder, die Sie leer lassen, werden sich bei keinem von ihnen ändern.',
+        'show_selected' => '1 ausgewählter Standort|:count ausgewählte Standorte',
+        'company_scope_mismatch_partial' => 'Das Unternehmen wurde an einem Standort nicht geändert, da Elemente oder Benutzer an diesem Standort zu verschiedenen Unternehmen gehören. Aktualisieren oder verschieben Sie diese zuerst. Das Unternehmen wurde an :count Standorten nicht geändert, da Elemente oder Benutzer an diesen Standorten zu verschiedenen Unternehmen gehören. Aktualisieren oder verschieben Sie diese zuerst.',
+        'company_scope_mismatch_all' => 'Es wurden keine Standorte neu zugewiesen. Die angeforderte Firma stimmt nicht mit Artikeln oder Benutzern am gewählten Standort überein. Es wurden keine Standorte neu zugewiesen. Die angeforderte Firma stimmt nicht mit Artikeln oder Benutzern an irgendeinem der :count ausgewählten Standorte überein.',
+        'parent_company_mismatch_partial' => 'Das Mutter- oder Unternehmen wurde an einem Standort nicht geändert, da es den Standort in einem anderen Unternehmen als seinem Elternteil verlassen würde. An :count Standorten wurde die Muttergesellschaft oder das Unternehmen nicht geändert, da sie diese Standorte in einem anderen Unternehmen als ihrem Elternteil belassen würde.',
+        'parent_company_mismatch_all' => 'Es wurden keine Änderungen gespeichert. Der angeforderte Elternteil oder das Unternehmen würde den Standort in einem anderen Unternehmen als seinem Elternteil verlassen.|Es wurden keine Änderungen gespeichert. Die gewünschte Muttergesellschaft oder Firma würde jeden der :count ausgewählten Standorte in einem anderen Unternehmen als ihrem Elternteil belassen.',
+    ],
+
 ];

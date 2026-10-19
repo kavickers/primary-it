@@ -20,6 +20,8 @@ return [
         'confirm' => 'Sind Sie sicher, dass Sie diese Statusbezeichnung löschen wollen?',
         'error' => 'Es trat ein Fehler beim Löschen der Statusbezeichnung auf. Bitte versuchen Sie es erneut.',
         'success' => 'Die Statusbezeichnung wurde erfolgreich gelöscht.',
+        'bulk_success' => 'Statusbezeichnung erfolgreich gelöscht.|:count Statusbezeichnungen wurden erfolgreich gelöscht.',
+        'partial_success' => 'Statusbezeichnung wurde erfolgreich gelöscht. Siehe weitere Informationen unten. | :count Statusbezeichnungen wurden erfolgreich gelöscht. Siehe weitere Informationen unten.',
     ],
 
     'help' => [

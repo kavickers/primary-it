@@ -9,4 +9,7 @@ return [
     'total' => 'Totaal',
     'update' => 'Wijzig verbruiksartikel',
     'inventory_warning' => 'De inventaris van dit verbruiksartikel is lager dan het minimum aantal van :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

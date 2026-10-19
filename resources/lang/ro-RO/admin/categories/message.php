@@ -21,8 +21,15 @@ return [
         'confirm' => 'Sunteti sigur ca vreti sa stergeti aceasta categorie?',
         'error' => 'A aparut o problema la stergerea categoriei. Va rugam incercati iar.',
         'success' => 'Category was deleted successfully.',
-        'bulk_success' => 'Categories were deleted successfully.',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Category deleted successfully. See additional information below. | :count categories were deleted successfully. See additional information below.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Nu au fost modificate câmpuri, deci nimic nu a fost actualizat.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

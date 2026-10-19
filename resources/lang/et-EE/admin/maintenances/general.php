@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Vara säilimine', // not used anymore
     'maintenances' => 'Hooldus',
+    'create' => 'Loo uus varahooldus',
     'edit' => 'Varade hoolduse muutmine',
     'delete' => 'Kustuta vara hooldus',
     'view' => 'Vaadake varahalduse üksikasju',

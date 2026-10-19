@@ -32,8 +32,8 @@ return [
         ],
 
         'checkin_selected' => [
-            'success' => ':count seat checked in successfully. | :count seats checked in successfully.',
-            'no_seats_selected' => 'No seats were selected.',
+            'success' => ':count ліцензійне місце успішно повернено.|:count ліцензійних місць успішно повернено.',
+            'no_seats_selected' => 'Не вибрано жодного ліцензійного місця.',
         ],
 
         'checkout_all' => [
@@ -47,6 +47,11 @@ return [
             'warn_no_avail_users' => 'Нічого робити. Немає користувачів, які не мають цієї ліцензії, призначеної для них.',
             'log_msg' => 'Перевірено через масову ліцензію з GUI',
 
+        ],
+
+        'delete_with_checkin' => [
+            'label' => 'Повернути ліцензійні місця та видалити',
+            'log_msg' => 'Повернено під час масового видалення з поверненням у списку ліцензій',
         ],
     ],
 

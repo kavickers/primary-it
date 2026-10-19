@@ -8,15 +8,27 @@ namespace App\Presenters;
 class ComponentPresenter extends Presenter
 {
     /**
-     * Json Column Layout for bootstrap table
+     * JSON column layout for bootstrap-table.
      *
+     * @param  bool  $showDeletedAt  Make the deleted_at column visible
+     *                               by default. Passed from the Deleted-index view so admins
+     *                               see when each row was deleted. Still switchable elsewhere.
      * @return string
      */
-    public static function dataTableLayout()
+    public static function dataTableLayout(bool $showDeletedAt = false)
     {
         $layout = [
             [
+                'field' => 'checkbox',
+                'scope' => 'col',
+                'checkbox' => true,
+                'formatter' => 'checkboxEnabledFormatter',
+                'titleTooltip' => trans('general.select_all_none'),
+                'printIgnore' => true,
+                'class' => 'hidden-print',
+            ], [
                 'field' => 'id',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -24,6 +36,7 @@ class ComponentPresenter extends Presenter
                 'visible' => false,
             ], [
                 'field' => 'name',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.name'),
@@ -32,6 +45,7 @@ class ComponentPresenter extends Presenter
             ],
             [
                 'field' => 'company',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -41,6 +55,7 @@ class ComponentPresenter extends Presenter
             ],
             [
                 'field' => 'image',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -49,18 +64,21 @@ class ComponentPresenter extends Presenter
                 'formatter' => 'imageFormatter',
             ], [
                 'field' => 'serial',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/form.serial'),
                 'formatter' => 'componentsLinkFormatter',
             ], [
                 'field' => 'category',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.category'),
                 'formatter' => 'categoriesLinkObjFormatter',
             ], [
                 'field' => 'supplier',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -69,11 +87,13 @@ class ComponentPresenter extends Presenter
                 'formatter' => 'suppliersLinkObjFormatter',
             ], [
                 'field' => 'model_number',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/models/table.modelnumber'),
             ], [
                 'field' => 'manufacturer',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -82,25 +102,25 @@ class ComponentPresenter extends Presenter
                 'formatter' => 'manufacturersLinkObjFormatter',
             ], [
                 'field' => 'location',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.location'),
                 'formatter' => 'locationsLinkObjFormatter',
             ], [
-                'field' => 'order_number',
-                'searchable' => true,
-                'sortable' => true,
-                'title' => trans('general.order_number'),
-                'visible' => true,
-            ], [
+                // "Last" prefix — see AccessoryPresenter for the
+                // rationale on why the index page can't show a single
+                // Purchase Date once Orders can carry many per item.
                 'field' => 'purchase_date',
-                'searchable' => true,
+                'scope' => 'col',
+                'searchable' => false,
                 'sortable' => true,
-                'title' => trans('general.purchase_date'),
+                'title' => trans('general.last_purchase_date'),
                 'visible' => true,
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'min_amt',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'title' => trans('general.min_amt'),
@@ -109,6 +129,7 @@ class ComponentPresenter extends Presenter
                 'formatter' => 'minAmtFormatter',
             ], [
                 'field' => 'qty',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'title' => trans('admin/components/general.total'),
@@ -117,30 +138,44 @@ class ComponentPresenter extends Presenter
                 'footerFormatter' => 'qtySumFormatter',
             ], [
                 'field' => 'remaining',
+                'scope' => 'col',
                 'searchable' => false,
-                'sortable' => false,
+                'sortable' => true,
                 'title' => trans('admin/components/general.remaining'),
                 'visible' => true,
                 'class' => 'text-right text-padding-number-cell',
                 'footerFormatter' => 'qtySumFormatter',
             ], [
                 'field' => 'percent_remaining',
+                'scope' => 'col',
                 'searchable' => false,
-                'sortable' => false,
+                'sortable' => true,
                 'switchable' => true,
                 'title' => '% '.trans('general.remaining'),
                 'visible' => true,
                 'formatter' => 'progressBarFormatter',
             ], [
                 'field' => 'purchase_cost',
-                'searchable' => true,
+                'scope' => 'col',
+                'searchable' => false,
                 'sortable' => true,
-                'title' => trans('general.unit_cost'),
+                'title' => trans('general.last_unit_cost'),
                 'visible' => true,
                 'class' => 'text-right',
                 'footerFormatter' => 'sumFormatter',
             ], [
+                // Field name matches transformer key + HasOrders relation).
+                'field' => 'orders',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => false,
+                'switchable' => true,
+                'visible' => true,
+                'title' => trans('general.order_number'),
+                'formatter' => 'ordersSummaryFormatter',
+            ], [
                 'field' => 'total_cost',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'title' => trans('general.total_cost'),
@@ -148,13 +183,33 @@ class ComponentPresenter extends Presenter
                 'class' => 'text-right text-padding-number-cell',
             ], [
                 'field' => 'notes',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => false,
                 'title' => trans('general.notes'),
                 'formatter' => 'notesFormatter',
             ], [
+                'field' => 'requestable',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => true,
+                'switchable' => true,
+                'visible' => false,
+                'title' => trans('admin/hardware/general.requestable'),
+                'formatter' => 'trueFalseFormatter',
+            ], [
+                'field' => 'archived',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => true,
+                'switchable' => true,
+                'visible' => false,
+                'title' => trans('general.archived'),
+                'formatter' => 'trueFalseFormatter',
+            ], [
                 'field' => 'created_by',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'title' => trans('general.created_by'),
@@ -162,6 +217,7 @@ class ComponentPresenter extends Presenter
                 'formatter' => 'usersLinkObjFormatter',
             ], [
                 'field' => 'created_at',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -169,16 +225,27 @@ class ComponentPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'updated_at',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
                 'title' => trans('general.updated_at'),
+                'formatter' => 'dateDisplayFormatter',
+            ], [
+                'field' => 'deleted_at',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => true,
+                'switchable' => true,
+                'visible' => $showDeletedAt,
+                'title' => trans('general.deleted_at'),
                 'formatter' => 'dateDisplayFormatter',
             ],
         ];
 
         $layout[] = [
             'field' => 'checkincheckout',
+            'scope' => 'col',
             'searchable' => false,
             'sortable' => false,
             'switchable' => false,
@@ -190,6 +257,7 @@ class ComponentPresenter extends Presenter
 
         $layout[] = [
             'field' => 'actions',
+            'scope' => 'col',
             'searchable' => false,
             'sortable' => false,
             'switchable' => false,
@@ -205,9 +273,18 @@ class ComponentPresenter extends Presenter
     public static function checkedOut()
     {
         $layout = [
-
+            [
+                'field' => 'checkbox',
+                'scope' => 'col',
+                'checkbox' => true,
+                'formatter' => 'checkboxEnabledFormatter',
+                'titleTooltip' => trans('general.select_all_none'),
+                'printIgnore' => true,
+                'class' => 'hidden-print',
+            ],
             [
                 'field' => 'name',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.name'),
@@ -216,6 +293,7 @@ class ComponentPresenter extends Presenter
             ],
             [
                 'field' => 'assigned_qty',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -225,6 +303,7 @@ class ComponentPresenter extends Presenter
             ],
             [
                 'field' => 'note',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => true,
@@ -232,6 +311,7 @@ class ComponentPresenter extends Presenter
                 'formatter' => 'notesFormatter',
             ], [
                 'field' => 'created_at',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -240,6 +320,7 @@ class ComponentPresenter extends Presenter
             ],
             [
                 'field' => 'created_by',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'title' => trans('general.created_by'),
@@ -248,6 +329,7 @@ class ComponentPresenter extends Presenter
             ],
             [
                 'field' => 'available_actions',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => false,
@@ -285,5 +367,66 @@ class ComponentPresenter extends Presenter
     public function viewUrl()
     {
         return route('components.show', $this->id);
+    }
+
+    /**
+     * Column layout for the components tab on /account/requestable.
+     * Same shape as AccessoryPresenter::dataTableLayoutRequestable;
+     * paired with api.components.requestable + ComponentsTransformer.
+     */
+    public static function dataTableLayoutRequestable(): string
+    {
+        return json_encode([
+            [
+                'field' => 'image',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'title' => trans('general.image'),
+                'formatter' => 'imageFormatter',
+            ], [
+                'field' => 'name',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'title' => trans('general.name'),
+                'formatter' => 'componentRequestableNameFormatter',
+            ], [
+                'field' => 'category',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => false,
+                'title' => trans('general.category'),
+                'formatter' => 'categoriesLinkObjFormatter',
+            ], [
+                'field' => 'company.name',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => false,
+                'title' => trans('general.company'),
+            ], [
+                'field' => 'location.name',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => false,
+                'title' => trans('admin/hardware/table.location'),
+            ], [
+                'field' => 'remaining',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'title' => trans('admin/components/general.remaining'),
+            ], [
+                'field' => 'actions',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => false,
+                'title' => trans('table.actions'),
+                'formatter' => 'componentRequestableActionsFormatter',
+                'printIgnore' => true,
+                'class' => 'hidden-print',
+            ],
+        ]);
     }
 }

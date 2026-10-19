@@ -10,7 +10,9 @@ use App\Http\Middleware\CheckLocale;
 use App\Http\Middleware\CheckPermissions;
 use App\Http\Middleware\CheckUserIsActivated;
 use App\Http\Middleware\EncryptCookies;
+use App\Http\Middleware\EnforceApiTwoFactorEnrollment;
 use App\Http\Middleware\EnforceApiUserAgent;
+use App\Http\Middleware\IssueFreshApiTokenIfTwoFactorComplete;
 use App\Http\Middleware\LogAuthedUserHeader;
 use App\Http\Middleware\NoSessionStore;
 use App\Http\Middleware\PreventBackHistory;
@@ -27,6 +29,7 @@ use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 use Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull;
+use Illuminate\Foundation\Http\Middleware\InvokeDeferredCallbacks;
 use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
 use Illuminate\Http\Middleware\HandleCors;
 use Illuminate\Routing\Middleware\SubstituteBindings;
@@ -34,7 +37,6 @@ use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Laravel\Passport\Http\Middleware\CreateFreshApiToken;
 
 class Kernel extends HttpKernel
 {
@@ -43,7 +45,7 @@ class Kernel extends HttpKernel
      *
      * These middleware are run during every request to your application.
      *
-     * @var array
+     * @var array<int, string>
      */
     protected $middleware = [
         TrustProxies::class,
@@ -58,13 +60,14 @@ class Kernel extends HttpKernel
         SecurityHeaders::class,
         PreventBackHistory::class,
         HandleCors::class,
+        InvokeDeferredCallbacks::class,
 
     ];
 
     /**
      * The application's route middleware groups.
      *
-     * @var array
+     * @var array<string, array<int, string>>
      */
     protected $middlewareGroups = [
         'web' => [
@@ -74,14 +77,20 @@ class Kernel extends HttpKernel
             CheckLocale::class,
             CheckUserIsActivated::class,
             CheckForTwoFactor::class,
-            CreateFreshApiToken::class,
+            IssueFreshApiTokenIfTwoFactorComplete::class,
             CheckColorSettings::class,
             AuthenticateSession::class,
             SubstituteBindings::class,
         ],
 
         'api' => [
-            'auth:api',
+            // oidc first: Passport's TokenGuard clears the Authorization header
+            // when it fails, so it must run AFTER the OIDC guard (which never
+            // clears it) -- otherwise an OIDC bearer would be wiped before the
+            // oidc guard sees it. A Passport token falls through cleanly.
+            'auth:oidc,api',
+            CheckUserIsActivated::class,
+            EnforceApiTwoFactorEnrollment::class,
             EnforceApiUserAgent::class,
             CheckLocale::class,
             LogAuthedUserHeader::class,

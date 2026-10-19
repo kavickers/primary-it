@@ -31,4 +31,15 @@ return [
         'success' => 'crwdns658:0crwdne658:0',
     ],
 
+    'bulkedit' => [
+        'error' => 'crwdns16291:0crwdne16291:0',
+        'success' => 'crwdns16293:0crwdne16293:0',
+        'warn' => 'crwdns16295:0crwdne16295:0',
+        'show_selected' => 'crwdns16297:0crwdne16297:0',
+        'company_scope_mismatch_partial' => 'crwdns16299:0crwdne16299:0',
+        'company_scope_mismatch_all' => 'crwdns16301:0crwdne16301:0',
+        'parent_company_mismatch_partial' => 'crwdns16303:0crwdne16303:0',
+        'parent_company_mismatch_all' => 'crwdns16305:0crwdne16305:0',
+    ],
+
 ];

@@ -4,14 +4,18 @@ return [
 
     'accepted' => 'Du hast den Gegenstand erfolgreich angenommen.',
     'declined' => 'Du hast diesen Gegenstand erfolgreich abgelehnt.',
+    'accept_signature_write_failed' => 'Ihre Annahmesignatur konnte nicht gespeichert werden. Annahme wurde nicht aufgezeichnet. Bitte kontaktieren Sie Ihren Administrator.',
+    'accept_pdf_write_failed' => 'Die Annahme PDF konnte nicht gespeichert werden. Annahme wurde nicht gespeichert. Bitte kontaktieren Sie Ihren Administrator.',
     'bulk_manager_warn' => 'Deine Benutzer wurden erfolgreich aktualisiert, aber dein Manager-Eintrag wurde nicht gespeichert, da der Manager, den du ausgewählt hast, auch in der zu bearbeitenden Liste war, und Benutzer dürfen nicht ihr eigener Manager sein. Bitte wähle deine Benutzer erneut aus, ohne diesen Manager.',
     'user_exists' => 'Benutzer existiert bereits!',
     'cannot_delete' => 'Benutzer existiert nicht oder du hast nicht die Berechtigung zum Löschen.',
     'user_not_found' => 'Benutzer existiert nicht oder Sie haben keine Berechtigung, sie anzusehen.',
     'user_login_required' => 'Das Loginfeld ist erforderlich',
     'user_has_no_assets_assigned' => 'Derzeit sind keine Assets dem Benutzer zugewiesen.',
+    'nothing_currently_assigned' => 'Derzeit ist nichts zugewiesen.',
     'user_password_required' => 'Das Passswortfeld ist erforderlich.',
     'insufficient_permissions' => 'Unzureichende Berechtigungen.',
+    'auth_fields_denied' => 'Sie haben keine Berechtigung, Anmeldeinformationen oder Aktivierungsfelder für diesen Benutzer zu ändern. Angeforderte Felder wurden nicht aktualisiert: :fields',
     'user_deleted_warning' => 'Dieser Benutzer wurde gelöscht. Du musst ihn wiederherstellen, um ihn zu bearbeiten, oder neue Assets zuzuweisen.',
     'ldap_not_configured' => 'LDAP Integration wurde für diese Installation nicht konfiguriert.',
     'password_resets_sent' => 'Den ausgewählten Benutzern, die aktiviert sind und eine gültige E-Mail-Adresse haben, wurde ein Link zum Zurücksetzen des Passworts gesendet.',
@@ -19,6 +23,15 @@ return [
     'password_reset_sent' => 'Der Link zum Zurücksetzen des Passworts wurde an :email gesendet!',
     'user_has_no_email' => 'Dieser Benutzer hat keine E-Mail-Adresse in seinem Profil.',
     'log_record_not_found' => 'Ein passender Logeintrag für diesen Benutzer konnte nicht gefunden werden.',
+
+    'impersonate' => [
+        'started' => 'Sie sind jetzt als :name eingeloggt.',
+        'stopped' => 'Sie sind zurück zu Ihrem eigenen Konto.',
+        'cannot_impersonate_self' => 'Sie können sich nicht als sich selbst anmelden.',
+        'cannot_impersonate_superuser' => 'Sie können sich nicht als ein anderer Superuser anmelden.',
+        'target_not_active' => 'Der Benutzer ist deaktiviert oder gelöscht und kann nicht zum Identitätswechsel benutzt werden.',
+        'impersonator_missing' => 'Das ursprüngliche Konto für diesen Identitätswechsel existiert nicht mehr. Bitte melden Sie sich erneut an.',
+    ],
 
     'success' => [
         'create' => 'Benutzer wurde erfolgreich erstellt.',
@@ -31,7 +44,7 @@ return [
         'unsuspend' => 'Der Benutzer wurde erfolgreich reaktiviert.',
         'restored' => 'Benutzer wurde erfolgreich wiederhergestellt.',
         'import' => 'Benutzer erfolgreich Importiert.',
-        'acceptance_reminder_sent' => 'Acceptance reminder sent for :count pending item.|Acceptance reminder sent for :count pending items.',
+        'acceptance_reminder_sent' => 'Annahme-Erinnerung für :count ausstehendes Element gesendet.|Annahme-Erinnerung gesendet für :count ausstehende Elemente.',
     ],
 
     'error' => [
@@ -57,6 +70,7 @@ return [
         'password_ldap' => 'Das Passwort für diesen Account wird vom LDAP/Active Directory verwaltet. Bitte kontaktiere Deine IT-Abteilung, um Dein Passwort zu ändern. ',
         'multi_company_items_assigned' => 'Diesem Benutzer sind Dinge zugewiesen, die zu einer anderen Firma gehören. Bitte checke sie ein oder bearbeite deine Firma.',
         'no_pending_acceptances' => 'Dieser Benutzer hat keine ausstehenden Übernahmen, an die er erinnert werden könnte.',
+        'company_not_permitted' => 'Eine oder mehrere beantragte Unternehmenszuweisungen liegen außerhalb Ihres zulässigen Unternehmensbereichs.',
     ],
 
     'deletefile' => [

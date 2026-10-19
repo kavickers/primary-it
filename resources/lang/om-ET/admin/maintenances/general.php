@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Dhammajjuu Qabeenya', // not used anymore
     'maintenances' => 'Dammamoo',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Edit Asset Maintenance',
     'delete' => 'Delete Asset Maintenance',
     'view' => 'View Asset Maintenance Details',

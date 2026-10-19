@@ -94,17 +94,32 @@ abstract class SnipePermissionsPolicy
 
     public function history(User $user, $item = null)
     {
-        return Gate::allows('view', $item) || $user->hasAccess('activity.view');
+        return Gate::allows('view', $item) || Gate::allows('activity.view');
     }
 
     public function journal(User $user, $item = null)
     {
-        return Gate::allows('view', $item) || $user->hasAccess('activity.view');
+        return Gate::allows('view', $item) || Gate::allows('activity.view');
     }
 
     public function files(User $user, $item = null)
     {
         return $user->hasAccess($this->columnName().'.files');
+    }
+
+    /**
+     * Determine whether the user can upload or delete files on the resource.
+     * Callers should use this for write actions (POST/DELETE on the files
+     * endpoint) and `files()` for read actions (index/show). Defaults to the
+     * same check as `files()` so most resources need no override. Subclasses
+     * override this when the read ability is deliberately broader than the
+     * write ability, e.g. AssetModelPolicy where asset viewers can see model
+     * files inline but must not be able to upload or delete them without the
+     * dedicated `models.files` grant.
+     */
+    public function manageFiles(User $user, $item = null)
+    {
+        return $this->files($user, $item);
     }
 
     /**
@@ -115,6 +130,18 @@ abstract class SnipePermissionsPolicy
     public function create(User $user)
     {
         return $user->hasAccess($this->columnName().'.create');
+    }
+
+    /**
+     * Determine whether the user can clone the given instance to a new
+     * record. Composes view + create so a user can only pre-populate the
+     * create form from a source they already have read access to. Not a
+     * standalone permission, so admins configure it via the existing
+     * view + create toggles on each role.
+     */
+    public function clone(User $user, $item = null)
+    {
+        return $this->view($user, $item) && $this->create($user);
     }
 
     /**

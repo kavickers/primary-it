@@ -9,4 +9,7 @@ return [
     'total' => 'Celkom',
     'update' => 'Upraviť spotrebný materiál',
     'inventory_warning' => 'Zostatok stavu tohto spotrebného materiálu je pod minimálnym množstvom :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

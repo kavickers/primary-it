@@ -48,6 +48,11 @@ return [
             'log_msg' => 'Zaduženo grupnim razduživanjem u ekranu licenci',
 
         ],
+
+        'delete_with_checkin' => [
+            'label' => 'Razduži sedišta i obriši',
+            'log_msg' => 'Razduženo sa masovnim brisanje-sa-razduživanje u indeksu licence',
+        ],
     ],
 
     'below_threshold' => 'Ostalo je samo :remaining_count slobodnih mesta za ovu licencu sa minimalnom količinom :min_amt. Možda bi ste želeli da razmotrite nabavku nove količine.',

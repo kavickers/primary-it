@@ -9,4 +9,7 @@ return [
     'total' => 'Skupaj',
     'update' => 'Posodobi potrošni material',
     'inventory_warning' => 'Zaloga tega potrošnega materiala je pod minimalno količino :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

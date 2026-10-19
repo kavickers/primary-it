@@ -21,8 +21,15 @@ return [
         'confirm' => 'Êtes-vous sûr·e de vouloir supprimer cette catégorie ?',
         'error' => 'Il y a eu un problème lors de la suppression de cette catégorie. Merci de réessayer.',
         'success' => 'Catégorie supprimée avec succès.',
-        'bulk_success' => 'Catégories supprimées avec succès.',
-        'partial_success' => 'Category deleted successfully. See additional information below. | :count categories were deleted successfully. See additional information below.',
+        'bulk_success' => 'Catégorie supprimée avec succès.|Les catégories :count ont été supprimées avec succès.',
+        'partial_success' => 'Catégorie supprimée avec succès. Voir les informations supplémentaires ci-dessous. | :count catégories ont été supprimées avec succès. Voir plus d\'informations ci-dessous.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'Vous êtes sur le point de mettre à jour les propriétés du modèle suivant :|Vous êtes sur le point de modifier les propriétés des modèles :model_count suivants :',
+        'no_selection' => 'Vous devez sélectionner au moins une catégorie à modifier',
+        'no_changes' => 'Aucun champ n\'a été changé, donc rien n\'a été mis à jour.',
+        'success' => 'Catégorie mise à jour avec succès.|:count catégories à jours.',
     ],
 
 ];

@@ -13,9 +13,14 @@ return [
         'file_not_found' => 'Šio atsarginės kopijos failo serveryje rasti nepavyko.',
         'restore_warning' => 'Taip, atkurti. Suprantu, kad tai perrašys visus šiuo metu duomenų bazėje esančius duomenis. Taip pat, kad bus atjungti visi esami naudotojai (įskaitant mane).',
         'restore_confirm' => 'Ar tikrai norite atkurti savo duomenų bazę iš :filename?',
+        'delete_disabled_help' => 'Atsarginių kopijų ištrynimas yra išjungtas. Jei norite įjungti atsarginių kopijų ištrynimą, kreipkitės į administratorių.',
     ],
     'restore' => [
         'success' => 'Jūsų sistemos atsarginė kopija buvo atkurta. Prisijunkite iš naujo.',
+        'archive_invalid' => 'Pasirinktas atsarginės kopijos failas (:filename) nėra tinkamas ZIP archyvas. Atkūrimas nutrauktas dar nepradėjus dirbti su duomenų baze.',
+        'zip_extension_missing' => 'PHP ZIP plėtinys nėra įdiegtas šiame serveryje. Nepavyko patvirtinti atsarginės kopijos archyvo, todėl atkūrimas buvo nutrauktas siekiant išvengti duomenų praradimo. Paprašykite serverio administratoriaus įdiegti „ext-zip“.',
+        'pre_backup_failed' => 'Nepavyko sukurti atsarginės kopijos, skirtos apsaugai prieš atkūrimą. Atkūrimas nutrauktas, kad esama duomenų bazė nebūtų sunaikinta be galimybės ją atkurti.',
+        'failed_with_backup' => 'Atkūrimas nepavyko. Bandant atkurti duomenis, esama duomenų bazė buvo ištrinta, tačiau prieš atkūrimą sukurta atsarginė kopija buvo išsaugota kataloge :backup ir ją galima naudoti duomenims atkurti.',
     ],
     'purge' => [
         'error' => 'Valymo metu įvyko klaida. ',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Transformers;
 
+use App\Enums\FileStorage;
 use App\Helpers\Helper;
 use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Collection;
@@ -26,7 +27,7 @@ class SuppliersTransformer
             $array = [
                 'id' => (int) $supplier->id,
                 'name' => e($supplier->name),
-                'image' => ($supplier->image) ? Storage::disk('public')->url('suppliers/'.e($supplier->image)) : null,
+                'image' => ($supplier->image) ? Storage::disk('public')->url(FileStorage::Suppliers->publicPath().e($supplier->image)) : null,
                 'url' => e($supplier->url),
                 'address' => e($supplier->address),
                 'address2' => e($supplier->address2),
@@ -55,10 +56,10 @@ class SuppliersTransformer
             ];
 
             $permissions_array['available_actions'] = [
-                'update' => Gate::allows('update', Supplier::class),
-                'delete' => (Gate::allows('delete', Supplier::class) && ($supplier->isDeletable())),
+                'update' => Gate::allows('update', $supplier),
+                'delete' => (Gate::allows('delete', $supplier) && ($supplier->isDeletable())),
                 'bulk_selectable' => [
-                    'delete' => (Gate::allows('delete', Supplier::class) && ($supplier->isDeletable())),
+                    'delete' => (Gate::allows('delete', $supplier) && ($supplier->isDeletable())),
                 ],
             ];
 

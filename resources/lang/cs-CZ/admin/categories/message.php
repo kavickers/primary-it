@@ -21,8 +21,15 @@ return [
         'confirm' => 'Opravdu chcete smazat tuto kategorii na trvalo?',
         'error' => 'Vyskytl se problém při mazání kategorie. Zkuste to znovu prosím.',
         'success' => 'Kategorie byla úspěšně smazána.',
-        'bulk_success' => 'Kategorie byly úspěšně smazány.',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Kategorie byla úspěšně smazána. Viz doplňující informace níže. | :count kategorií bylo úspěšně smazáno. Viz doplňující informace níže.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Žádné pole nebyly změněny, takže nic nebylo aktualizováno.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

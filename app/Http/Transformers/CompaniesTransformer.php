@@ -2,6 +2,7 @@
 
 namespace App\Http\Transformers;
 
+use App\Enums\FileStorage;
 use App\Helpers\Helper;
 use App\Models\Company;
 use Illuminate\Database\Eloquent\Collection;
@@ -29,8 +30,13 @@ class CompaniesTransformer
                 'phone' => ($company->phone != '') ? e($company->phone) : null,
                 'fax' => ($company->fax != '') ? e($company->fax) : null,
                 'email' => ($company->email != '') ? e($company->email) : null,
-                'image' => ($company->image) ? Storage::disk('public')->url('companies/'.e($company->image)) : null,
+                'image' => ($company->image) ? Storage::disk('public')->url(FileStorage::Companies->publicPath().e($company->image)) : null,
                 'qr_code_url' => route('qr_code/common', ['object_type' => 'companies', 'id' => $company->id]),
+                'parent' => ($company->parent) ? [
+                    'id' => (int) $company->parent->id,
+                    'name' => e($company->parent->name),
+                ] : null,
+                'children_count' => (int) ($company->children_count ?? $company->children()->count()),
                 'assets_count' => (int) $company->assets_count,
                 'licenses_count' => (int) $company->licenses_count,
                 'accessories_count' => (int) $company->accessories_count,
@@ -43,13 +49,18 @@ class CompaniesTransformer
                 ] : null,
                 'tag_color' => ($company->tag_color != '') ? e($company->tag_color) : null,
                 'notes' => Helper::parseEscapedMarkedownInline($company->notes),
+                'webhook_selected' => $company->webhook_selected,
                 'created_at' => Helper::getFormattedDateObject($company->created_at, 'datetime'),
                 'updated_at' => Helper::getFormattedDateObject($company->updated_at, 'datetime'),
             ];
 
             $permissions_array['available_actions'] = [
-                'update' => Gate::allows('update', Company::class),
+                'view' => Gate::allows('view', $company),
+                'update' => Gate::allows('update', $company),
                 'delete' => $company->isDeletable(),
+                'bulk_selectable' => [
+                    'delete' => $company->isDeletable(),
+                ],
             ];
 
             $array += $permissions_array;

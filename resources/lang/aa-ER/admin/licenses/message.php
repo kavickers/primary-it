@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => 'crwdns14797:0crwdne14797:0',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => 'crwdns15539:0crwdne15539:0',
+        'partial_success' => 'crwdns15541:0crwdne15541:0',
+    ],
+
     'checkout' => [
         'error' => 'crwdns946:0crwdne946:0',
         'success' => 'crwdns947:0crwdne947:0',
@@ -55,6 +60,10 @@ return [
         'error' => 'crwdns948:0crwdne948:0',
         'not_reassignable' => 'crwdns13778:0crwdne13778:0',
         'success' => 'crwdns949:0crwdne949:0',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'crwdns15619:0crwdne15619:0',
     ],
 
 ];

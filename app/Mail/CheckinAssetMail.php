@@ -31,7 +31,7 @@ class CheckinAssetMail extends BaseMailable
         $this->expected_checkin = '';
 
         if ($this->item->expected_checkin) {
-            $this->expected_checkin = Helper::getFormattedDateObject($this->item->expected_checkin, 'date',
+            $this->expected_checkin = Helper::getFormattedDateObject($this->item->expected_checkin, 'datetime',
                 false);
         }
     }
@@ -51,8 +51,6 @@ class CheckinAssetMail extends BaseMailable
 
     /**
      * Get the mail representation of the notification.
-     *
-     * @param  mixed  $notifiable
      */
     public function content(): Content
     {

@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => 'crwdns11892:0crwdne11892:0',
     'unique_undeleted' => 'crwdns1964:0crwdne1964:0',
     'non_circular' => 'crwdns6070:0crwdne6070:0',
+    'parent_must_be_top_level' => 'crwdns15025:0crwdne15025:0',
+    'must_have_no_children' => 'crwdns15027:0crwdne15027:0',
+    'parent_within_scope' => 'crwdns16337:0crwdne16337:0',
     'not_array' => 'crwdns12056:0crwdne12056:0',
     'disallow_same_pwd_as_user_fields' => 'crwdns10498:0crwdne10498:0',
     'letters' => 'crwdns10500:0crwdne10500:0',
@@ -171,10 +174,19 @@ return [
     'uploaded' => 'crwdns1943:0crwdne1943:0',
     'uppercase' => 'crwdns12548:0crwdne12548:0',
     'url' => 'crwdns12550:0crwdne12550:0',
+    'external_url' => 'crwdns14995:0crwdne14995:0',
+    'asset_tag_pattern_placeholder' => 'crwdns17015:0crwdne17015:0',
+    'custom_http_extras_json' => [
+        'not_json' => 'crwdns17017:0crwdne17017:0',
+        'not_array' => 'crwdns17019:0crwdne17019:0',
+        'entry_not_object' => 'crwdns17021:0crwdne17021:0',
+        'missing_field' => 'crwdns17023:0crwdne17023:0',
+    ],
     'ulid' => 'crwdns12552:0crwdne12552:0',
     'uuid' => 'crwdns12554:0crwdne12554:0',
     'valid_css_color' => 'crwdns14917:0crwdne14917:0',
-    'fmcs_location' => 'crwdns13232:0crwdne13232:0',
+    'fmcs_company' => 'crwdns15215:0crwdne15215:0',
+    'fmcs_location' => 'crwdns14949:0crwdne14949:0',
     'is_unique_across_company_and_location' => 'crwdns14272:0crwdne14272:0',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => 'crwdns13164:0crwdne13164:0',
     'checkboxes' => 'crwdns13166:0crwdne13166:0',
     'radio_buttons' => 'crwdns13168:0crwdne13168:0',
+    'image_file_too_large' => 'crwdns17567:0crwdne17567:0',
 
     'custom' => [
         'alpha_space' => 'crwdns1944:0crwdne1944:0',

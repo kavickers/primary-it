@@ -21,8 +21,15 @@ return [
         'confirm' => 'Oletko varma että haluat poistaa tämän kategorian?',
         'error' => 'Kategorian poistossa tapahtui virhe. Yritä uudelleen.',
         'success' => 'Kategoria poistettiin onnistuneesti.',
-        'bulk_success' => 'Kategoriat poistettiin onnistuneesti.',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Kategoria poistettiin onnistuneesti. Katso lisätietoja alapuolelta. | :count kategoriaa poistettiin onnistuneesti. Katso lisätietoja alapuolelta.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Mitään kentistä ei ollut muutettu, joten mitään ei päivitetty.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

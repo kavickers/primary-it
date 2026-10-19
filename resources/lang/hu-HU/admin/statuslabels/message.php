@@ -20,6 +20,8 @@ return [
         'confirm' => 'Biztos benne, hogy törölni szeretné ezt az állapotjelzőt?',
         'error' => 'Hiba történt az Állapotjelző törlésével. Kérlek próbáld újra.',
         'success' => 'Az Állapotjelző sikeresen törölve lett.',
+        'bulk_success' => 'Az állapotcímke sikeresen törölve.|:count állapotcímke sikeresen törölve.',
+        'partial_success' => 'Az állapotcímke sikeresen törölve. További információt alább talál.|:count állapotcímke sikeresen törölve. További információt alább talál.',
     ],
 
     'help' => [

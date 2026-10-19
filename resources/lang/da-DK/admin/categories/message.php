@@ -21,8 +21,15 @@ return [
         'confirm' => 'Er du sikker på at du vil slette denne kategori?',
         'error' => 'Der opstod et problem under sletning af kategorien. Prøv igen.',
         'success' => 'Kategori er slettet.',
-        'bulk_success' => 'Kategorier er slettet.',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Kategori er slettet. Se yderligere information nedenfor. | :count kategorier er slettet. Se yderligere information nedenfor.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Ingen felter blev ændret, så intet er blevet opdateret.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

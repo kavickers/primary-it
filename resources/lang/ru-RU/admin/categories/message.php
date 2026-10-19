@@ -21,8 +21,15 @@ return [
         'confirm' => 'Вы уверены, что хотите удалить категорию?',
         'error' => 'При удалении категории возникла проблема. Попробуйте снова.',
         'success' => 'Аксессуар был успешно удалён.',
-        'bulk_success' => 'Категория удалена.',
+        'bulk_success' => 'Категория успешно удалена.|:count категорий удалена.',
         'partial_success' => 'Категория успешно удалена. Смотрите дополнительную информацию ниже. | :count категории были успешно удалены. Смотрите дополнительную информацию ниже.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Никаких изменений нет, поэтому ничего не обновлено.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

@@ -20,6 +20,8 @@ return [
         'confirm' => 'Sind Sie sicher, dass Sie dieses Zubehör löschen möchten?',
         'error' => 'Beim Löschen dieses Zubehörs ist ein Problem aufgetreten. Bitte versuchen Sie es erneut.',
         'success' => 'Das Zubehör wurde erfolgreich gelöscht.',
+        'bulk_success' => 'Zubehör erfolgreich gelöscht.|:count Zubehöre wurden erfolgreich gelöscht.',
+        'partial_success' => ':count Zubehör wurde erfolgreich gelöscht, aber andere konnten nicht gelöscht werden. Weitere Details finden Sie weiter unten.|:count Zubehöre wurden erfolgreich gelöscht, aber andere konnten nicht gelöscht werden. Weitere Details finden Sie weiter unten.',
     ],
 
     'checkout' => [

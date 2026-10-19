@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Categories\DestroyCategoryAction;
+use App\Enums\FileStorage;
+use App\Exceptions\Handler;
 use App\Exceptions\ItemStillHasChildren;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
@@ -51,19 +53,19 @@ class CategoriesController extends Controller
         ];
 
         $categories = Category::select([
-            'category_type',
-            'checkin_email',
-            'created_at',
-            'created_by',
-            'eula_text',
-            'id',
-            'image',
-            'name',
-            'notes',
-            'require_acceptance',
-            'tag_color',
-            'updated_at',
-            'use_default_eula',
+            'categories.category_type',
+            'categories.checkin_email',
+            'categories.created_at',
+            'categories.created_by',
+            'categories.eula_text',
+            'categories.id',
+            'categories.image',
+            'categories.name',
+            'categories.notes',
+            'categories.require_acceptance',
+            'categories.tag_color',
+            'categories.updated_at',
+            'categories.use_default_eula',
         ])
             ->with('adminuser')
             ->withCount('accessories as accessories_count', 'consumables as consumables_count', 'components as components_count', 'licenses as licenses_count', 'models as models_count');
@@ -119,7 +121,8 @@ class CategoriesController extends Controller
         }
 
         // Make sure the offset and limit are actually integers and do not exceed system limits
-        $offset = ($request->input('offset') > $categories->count()) ? $categories->count() : app('api_offset_value');
+        $total = $categories->count();
+        $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
         $limit = app('api_limit_value');
         $order = $request->input('order') === 'asc' ? 'asc' : 'desc';
         $sort_override = $request->input('sort');
@@ -139,7 +142,6 @@ class CategoriesController extends Controller
                 break;
         }
 
-        $total = $categories->count();
         $categories = $categories->skip($offset)->take($limit)->get();
 
         return (new CategoriesTransformer)->transformCategories($categories, $total);
@@ -228,7 +230,6 @@ class CategoriesController extends Controller
      *
      * @since [v4.0]
      *
-     * @param  int  $id
      * @return Response
      */
     public function destroy(Category $category): JsonResponse
@@ -240,8 +241,8 @@ class CategoriesController extends Controller
             return response()->json(
                 Helper::formatStandardApiResponse('error', null, trans('general.bulk_delete_associations.general_assoc_warning', ['asset_type' => $category->category_type]))
             );
-        } catch (\Exception $e) {
-            report($e);
+        } catch (\Throwable $e) {
+            Handler::reportOrRethrow($e);
 
             return response()->json(
                 Helper::formatStandardApiResponse('error', null, trans('general.something_went_wrong'))
@@ -278,7 +279,7 @@ class CategoriesController extends Controller
         // This lets us have more flexibility in special cases like assets, where
         // they may not have a ->name value but we want to display something anyway
         foreach ($categories as $category) {
-            $category->use_image = ($category->image) ? Storage::disk('public')->url('categories/'.$category->image, $category->image) : null;
+            $category->use_image = ($category->image) ? Storage::disk('public')->url(FileStorage::Categories->publicPath().$category->image, $category->image) : null;
         }
 
         return (new SelectlistTransformer)->transformSelectlist($categories);

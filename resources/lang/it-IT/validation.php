@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => ':attribute deve essere univoco tra :table1 e :table2 . ',
     'unique_undeleted' => ':attribute deve essere unico.',
     'non_circular' => ':attribute non deve creare un riferimento circolare.',
+    'parent_must_be_top_level' => 'Il :attribute selezionato deve essere un elemento di primo livello. Consentito solo un livello di nidificazione.',
+    'must_have_no_children' => 'Questo elemento ha già elementi figli propri, quindi non può essere assegnato un elemento genitore.',
+    'parent_within_scope' => 'L\'attributo :attribute selezionato è al di fuori del tuo ambito.',
     'not_array' => ':attribute non può essere un array.',
     'disallow_same_pwd_as_user_fields' => 'La password non può essere uguale al nome utente.',
     'letters' => 'La password deve contenere almeno una lettera.',
@@ -171,10 +174,19 @@ return [
     'uploaded' => 'Non è stato possibile caricare :attribute.',
     'uppercase' => 'Il campo :attribute deve essere maiuscolo.',
     'url' => 'Il campo :attribute deve essere un URL valido.',
+    'external_url' => 'Il campo :attribute deve essere un URL esterno valido (http:// o https://) che non punti a un indirizzo privato o locale.',
+    'asset_tag_pattern_placeholder' => 'The asset tag pattern must include at least one placeholder from :placeholders, otherwise every synced asset would receive the same tag and only the first would save.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Custom Extras must be valid JSON. Parser error: :error',
+        'not_array' => 'Custom Extras must be a JSON array (starting with [ and ending with ]).',
+        'entry_not_object' => 'Custom Extras entry #:index must be a JSON object with key, label, and path fields.',
+        'missing_field' => 'Custom Extras entry #:index is missing the required ":field" field.',
+    ],
     'ulid' => 'Il campo :attribute deve essere un ULID valido.',
     'uuid' => 'Il campo :attribute deve essere un UUID valido.',
     'valid_css_color' => 'Il campo :attribute deve essere un colore CSS valido (hex, rgb, rgba, hsl o hsla).',
-    'fmcs_location' => 'Nelle Impostazioni Admin è abilitato il supporto completo multi aziendale con restrizione per le Sedi, e la Sede selezionata non è compatibile con l\'Azienda scelta.',
+    'fmcs_company' => 'Il campo :attribute è obbligatorio perché è attivato il supporto completo per aziende multiple e gli elementi "fluttuanti" non sono ammessi.',
+    'fmcs_location' => 'La sede ":location" appartiene a :location_company, che non corrisponde all\'azienda selezionata.',
     'is_unique_across_company_and_location' => 'L\' :attributo deve essere univoco all\'interno dell\'azienda e della sede selezionata.',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => 'Una o più email sono invalidi.',
     'checkboxes' => ':attribute contiene opzioni non valide.',
     'radio_buttons' => ':attribute non è valido.',
+    'image_file_too_large' => 'The :attribute may not be larger than :max.',
 
     'custom' => [
         'alpha_space' => 'Il campo :attribute contiene un carattere non consentito.',

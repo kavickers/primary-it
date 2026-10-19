@@ -22,12 +22,12 @@
     <div class="col-md-1 col-sm-1 text-left">
         @can('create', \App\Models\Location::class)
             @if ((!isset($hide_new)) || ($hide_new!='true'))
-            <a href='{{ route('modal.show', 'location') }}' data-toggle="modal"  data-target="#createModal" data-select='{{ $fieldname }}_location_select' class="btn btn-sm btn-theme">{{ trans('button.new') }}</a>
+            <x-button.modal-add type="location" :target="$fieldname.'_location_select'"/>
             @endif
         @endcan
     </div>
 
-    {!! $errors->first($fieldname, '<div class="col-md-8 col-md-offset-3"><span class="alert-msg" aria-hidden="true"><i class="fas fa-times" aria-hidden="true"></i> :message</span></div>') !!}
+    <div class="col-md-8 col-md-offset-3"><x-form.error :name="$fieldname" /></div>
 
     @if ($snipeSettings->full_multiple_companies_support == '1' && $snipeSettings->scope_locations_fmcs == '1')
         @cannot('superadmin')

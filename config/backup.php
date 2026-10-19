@@ -80,7 +80,9 @@ return [
                 'ignore_unreadable_directories' => false,
             ],
 
-            'databases' => [
+            // spatie/db-dumper has no SQL Server dumper, so on SQL Server only
+            // files are backed up; back the database up with BACKUP DATABASE.
+            'databases' => env('DB_CONNECTION', 'mysql') === 'sqlsrv' ? [] : [
                 env('DB_CONNECTION', 'mysql'),
             ],
         ],
@@ -252,5 +254,16 @@ return [
     ],
 
     'sanitize_by_default' => env('DB_SANITIZE_BY_DEFAULT', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Backup execution time limit
+    |--------------------------------------------------------------------------
+    | Seconds passed to ini_set('max_execution_time') at the top of the
+    | snipeit:backup console command so a large-database dump doesn't get
+    | killed by PHP's shorter default. Default 600 (10 minutes).
+    */
+
+    'time_limit' => env('BACKUP_TIME_LIMIT', 600),
 
 ];

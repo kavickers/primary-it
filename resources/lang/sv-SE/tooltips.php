@@ -3,22 +3,22 @@
 return [
 
     'disabled_assoc' => [
-        'accessory' => 'This accessory cannot be deleted because it still has items, users, or locations associated with it',
-        'asset' => 'This asset cannot be deleted because it still has items associated with it',
-        'category' => 'This category cannot be deleted because it still has items associated with it',
-        'company' => 'This company cannot be deleted because it still has items or users associated with it',
-        'component' => 'This component cannot be deleted because it still has items associated with it',
-        'custom_field' => 'This custom field cannot be deleted because it is still associated with at least one fieldset',
-        'department' => 'This department cannot be deleted because it still has users associated with it',
-        'location' => 'This location cannot be deleted because it still has items or users associated with it',
-        'manufacturer' => 'This manufacturer cannot be deleted because it still has items associated with it',
-        'supplier' => 'This supplier cannot be deleted because it still has items associated with it',
-        'user' => 'This user cannot be deleted because it still has items associated with it',
-        'user_self' => 'You cannot delete yourself',
+        'accessory' => 'Detta tillbehör kan inte tas bort eftersom det fortfarande har objekt, användare eller platser kopplade till sig',
+        'asset' => 'Denna tillgång kan inte tas bort eftersom den fortfarande har objekt kopplade till sig',
+        'category' => 'Denna kategori kan inte tas bort eftersom den fortfarande har objekt kopplade till sig',
+        'company' => 'Detta företag kan inte tas bort eftersom det fortfarande har objekt eller användare kopplade till sig',
+        'component' => 'Denna komponent kan inte tas bort eftersom den fortfarande har objekt kopplade till sig',
+        'custom_field' => 'Detta anpassade fält kan inte raderas eftersom det fortfarande är kopplat till minst ett fältset',
+        'department' => 'Den här avdelningen kan inte raderas eftersom den fortfarande har användare kopplade till sig',
+        'location' => 'Denna plats kan inte raderas eftersom den fortfarande har föremål eller användare kopplade till sig',
+        'manufacturer' => 'Tillverkaren kan inte raderas eftersom det fortfarande finns föremål kopplade till den',
+        'supplier' => 'Leverantören kan inte raderas eftersom det fortfarande finns föremål kopplade till den',
+        'user' => 'Användaren kan inte raderas eftersom det fortfarande finns föremål kopplade till användaren',
+        'user_self' => 'Du kan inte radera dig själv',
     ],
 
     'checkin_all' => [
-        'user' => 'Checkin all items for this user and optionally delete them. You will be able to confirm this on the next page.',
+        'user' => 'Checka in alla föremål för den här användaren och ta bort dem efter behov. Du får bekräfta detta på nästa sida.',
     ],
 
 ];

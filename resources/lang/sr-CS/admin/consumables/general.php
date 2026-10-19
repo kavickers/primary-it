@@ -9,4 +9,7 @@ return [
     'total' => 'Ukupno',
     'update' => 'Ažuriraj potrošni materijal',
     'inventory_warning' => 'Stanje ove potrošne robe je ispod minimalne količine od :min_count',
+    'exclude_deleted' => 'Izuzmi obrisanu potrošnu opremu',
+    'include_deleted' => 'Uvrsti obrisanu potrošnu opremu',
+    'only_deleted' => 'Samo obrisana potrošna oprema',
 ];

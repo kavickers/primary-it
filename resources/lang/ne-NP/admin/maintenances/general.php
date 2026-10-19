@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'सम्पत्ति मर्मतसम्भारहरू', // not used anymore
     'maintenances' => 'मर्मतसम्भार',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Edit Asset Maintenance',
     'delete' => 'Delete Asset Maintenance',
     'view' => 'View Asset Maintenance Details',

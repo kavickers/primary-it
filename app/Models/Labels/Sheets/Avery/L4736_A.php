@@ -22,6 +22,46 @@ class L4736_A extends L4736
 
     private const FIELD_MARGIN = 0.20;
 
+    public function getBarcodeMargin()
+    {
+        return self::BARCODE_MARGIN;
+    }
+
+    public function getTagSize()
+    {
+        return self::TAG_SIZE;
+    }
+
+    public function getTitleSize()
+    {
+        return self::TITLE_SIZE;
+    }
+
+    public function getTitleMargin()
+    {
+        return self::TITLE_MARGIN;
+    }
+
+    public function getLabelSize()
+    {
+        return self::LABEL_SIZE;
+    }
+
+    public function getLabelMargin()
+    {
+        return self::LABEL_MARGIN;
+    }
+
+    public function getFieldSize()
+    {
+        return self::FIELD_SIZE;
+    }
+
+    public function getFieldMargin()
+    {
+        return self::FIELD_MARGIN;
+    }
+
     public function getUnit()
     {
         return 'mm';
@@ -49,7 +89,7 @@ class L4736_A extends L4736
 
     public function getSupportAssetTag()
     {
-        return true;
+        return false;
     }
 
     public function getSupport1DBarcode()
@@ -77,7 +117,34 @@ class L4736_A extends L4736
         return true;
     }
 
-    public function preparePDF($pdf) {}
+    protected function getContentEditorConfig(): array
+    {
+        return [
+            'barcode_margin' => $this->getBarcodeMargin(),
+            'barcode_2d_size' => 15,
+            'tag_font_size' => $this->getTagSize(),
+            'title_font_size' => $this->getTitleSize(),
+            'title_margin' => $this->getTitleMargin(),
+            'title_position' => 'top',
+            'title_offset_x' => 7,
+            'field_label_font_size' => 1.8,
+            'field_label_margin' => 1.5,
+            'field_value_font_size' => 2.8,
+            'field_value_margin' => $this->getFieldMargin(),
+        ];
+    }
+
+    protected function getSupportsEditorConfig(): array
+    {
+        return [
+            'asset_tag' => $this->getSupportAssetTag(),
+            'barcode_1d' => $this->getSupport1DBarcode(),
+            'barcode_2d' => $this->getSupport2DBarcode(),
+            'fields' => $this->getSupportFields(),
+            'logo' => $this->getSupportLogo(),
+            'title' => $this->getSupportTitle(),
+        ];
+    }
 
     public function write($pdf, $record)
     {

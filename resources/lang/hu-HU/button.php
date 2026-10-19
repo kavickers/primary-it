@@ -3,6 +3,7 @@
 return [
     'actions' => 'Műveletek',
     'add' => 'Új hozzáadása',
+    'back' => 'Vissza',
     'cancel' => 'Vissza',
     'checkin_and_delete' => 'Összes visszavétele és a felhasználó törlése',
     'delete' => 'Törlés',
@@ -13,8 +14,8 @@ return [
     'request' => 'Kérelem',
     'submit' => 'Küldés',
     'upload' => 'Feltöltés',
-    'select_file' => 'Válaszd ki a fájlt...',
-    'select_files' => 'Fájl kiválasztása...',
+    'select_file' => 'Fájl kiválasztása...',
+    'select_files' => 'Fájlok kiválasztása...',
     'generate_labels' => '{1} Címke generálása|[2,*] Címkék generálása',
     'send_password_link' => 'Jelszó visszaállítási link küldése',
     'go' => 'Indítás',
@@ -22,7 +23,7 @@ return [
     'add_maintenance' => 'Karbantartás hozzáadása',
     'append' => 'Hozzáillesztés',
     'new' => 'Új',
-    'show_hide_info' => 'Show/Hide More Information',
+    'show_hide_info' => 'További információk mutatása/elrejtése',
     'var' => [
         'clone' => 'Klón :item_type',
         'edit' => ':item_type szerkesztése',

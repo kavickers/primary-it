@@ -2,11 +2,14 @@
 
 namespace App\Presenters;
 
+use App\Enums\FileStorage;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Storage;
 
 /**
  * Class UserPresenter
+ *
+ * @property \App\Models\User $model
  */
 class UserPresenter extends Presenter
 {
@@ -20,6 +23,7 @@ class UserPresenter extends Presenter
         $layout = [
             [
                 'field' => 'checkbox',
+                'scope' => 'col',
                 'checkbox' => true,
                 'titleTooltip' => trans('general.select_all_none'),
                 'printIgnore' => true,
@@ -27,6 +31,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'id',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -35,6 +40,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'username',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => false,
@@ -44,6 +50,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'avatar',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => true,
@@ -53,6 +60,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'name',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/users/table.name'),
@@ -60,6 +68,7 @@ class UserPresenter extends Presenter
                 'formatter' => 'usersLinkFormatter',
             ], [
                 'field' => 'first_name',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.first_name'),
@@ -67,6 +76,7 @@ class UserPresenter extends Presenter
                 'formatter' => 'usersLinkFormatter',
             ], [
                 'field' => 'last_name',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.last_name'),
@@ -75,6 +85,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'display_name',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -84,6 +95,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'companies',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => false,
                 'switchable' => true,
@@ -93,6 +105,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'employee_num',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -101,6 +114,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'jobtitle',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -110,6 +124,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'vip',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -119,6 +134,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'remote',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -128,6 +144,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'email',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -137,6 +154,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'phone',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -146,6 +164,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'mobile',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -155,6 +174,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'website',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -164,6 +184,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'address',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -172,6 +193,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'city',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -180,6 +202,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'state',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -188,6 +211,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'country',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -196,6 +220,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'zip',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -205,6 +230,7 @@ class UserPresenter extends Presenter
 
             [
                 'field' => 'locale',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -213,6 +239,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'department',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -222,6 +249,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'department_manager',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -231,6 +259,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'location',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -240,6 +269,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'manager',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/users/table.manager'),
@@ -248,6 +278,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'assets_count',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -259,6 +290,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'licenses_count',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -269,6 +301,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'consumables_count',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -279,6 +312,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'accessories_count',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -289,6 +323,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'manages_users_count',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -299,6 +334,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'manages_locations_count',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -308,7 +344,19 @@ class UserPresenter extends Presenter
                 'formatter' => 'linkNumberToUserManagedLocationsFormatter',
             ],
             [
+                'field' => 'assigned_maintenances_count',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => true,
+                'switchable' => true,
+                'class' => 'css-maintenances',
+                'title' => trans('general.maintenances'),
+                'visible' => false,
+                'formatter' => 'linkNumberToUserAssignedMaintenancesFormatter',
+            ],
+            [
                 'field' => 'notes',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -317,6 +365,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'groups',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => true,
@@ -326,6 +375,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'ldap_import',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -335,6 +385,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'two_factor_enrolled',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -344,6 +395,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'two_factor_optin',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -353,6 +405,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'activated',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -362,6 +415,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'autoassign_licenses',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -371,6 +425,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'created_by',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'title' => trans('general.created_by'),
@@ -379,6 +434,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'created_at',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -387,6 +443,7 @@ class UserPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'updated_at',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -396,6 +453,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'start_date',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -405,6 +463,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'end_date',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -414,6 +473,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'last_login',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -423,6 +483,7 @@ class UserPresenter extends Presenter
             ],
             [
                 'field' => 'actions',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => false,
@@ -487,7 +548,7 @@ class UserPresenter extends Presenter
             }
 
             // Otherwise assume it's an uploaded image
-            return Storage::disk('public')->url('avatars/'.e($this->avatar));
+            return Storage::disk('public')->url(FileStorage::Avatars->publicPath().e($this->avatar));
         }
 
         // If the default is system default
@@ -497,7 +558,7 @@ class UserPresenter extends Presenter
 
         // If there is a custom default avatar
         if (Setting::getSettings()->default_avatar != '') {
-            return Storage::disk('public')->url('avatars/'.e(Setting::getSettings()->default_avatar));
+            return Storage::disk('public')->url(FileStorage::Avatars->publicPath().e(Setting::getSettings()->default_avatar));
         }
 
         // If there is no default and no custom avatar, check for gravatar
@@ -556,5 +617,210 @@ class UserPresenter extends Presenter
         }
 
         return '<span class="'.(($this->deleted_at != '') ? 'deleted' : '').'">'.e($this->display_name).'</span>';
+    }
+
+    public function calendarUrl(): ?string
+    {
+        return route('users.show', $this->model->id);
+    }
+
+    public function calendarColor(): ?string
+    {
+        return $this->model->department?->tag_color
+            ?? $this->model->company?->color;
+    }
+
+    public static function consumablesDataTableLayout(): string
+    {
+        $layout = [
+            [
+                'field' => 'consumable',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'switchable' => false,
+                'title' => trans('general.name'),
+                'visible' => true,
+                'formatter' => 'consumablesLinkObjFormatter',
+            ],
+            [
+                'field' => 'qty',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('general.qty'),
+                'visible' => true,
+                'footerFormatter' => 'sumFormatter',
+                'class' => 'text-right',
+            ],
+            [
+                'field' => 'purchase_cost',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('general.unit_cost'),
+                'visible' => true,
+                'footerFormatter' => 'sumFormatter',
+                'class' => 'text-right',
+            ],
+            [
+                'field' => 'created_at',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => true,
+                'switchable' => true,
+                'title' => trans('general.date'),
+                'visible' => true,
+                'formatter' => 'dateDisplayFormatter',
+            ],
+            [
+                'field' => 'note',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('general.notes'),
+                'visible' => true,
+            ],
+        ];
+
+        return json_encode($layout);
+    }
+
+    public static function accessoriesDataTableLayout(): string
+    {
+        $layout = [
+            [
+                'field' => 'accessory',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'switchable' => false,
+                'title' => trans('general.name'),
+                'visible' => true,
+                'formatter' => 'accessoriesLinkObjFormatter',
+            ],
+            [
+                'field' => 'created_at',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => true,
+                'switchable' => true,
+                'title' => trans('general.date'),
+                'visible' => true,
+                'formatter' => 'dateDisplayFormatter',
+            ],
+            [
+                'field' => 'note',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('general.notes'),
+                'visible' => true,
+            ],
+            [
+                'field' => 'purchase_cost',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('general.unit_cost'),
+                'visible' => true,
+                'footerFormatter' => 'sumFormatter',
+                'class' => 'text-right',
+            ],
+            [
+                'field' => 'actions',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => false,
+                'title' => trans('table.actions'),
+                'visible' => true,
+                'formatter' => 'accessoriesInOutFormatter',
+                'class' => 'hidden-print',
+            ],
+        ];
+
+        return json_encode($layout);
+    }
+
+    public static function licensesDataTableLayout(): string
+    {
+        $layout = [
+            [
+                'field' => 'checkbox',
+                'scope' => 'col',
+                'checkbox' => true,
+                'titleTooltip' => trans('general.select_all_none'),
+                'printIgnore' => true,
+                'class' => 'hidden-print',
+            ],
+            [
+                'field' => 'license',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'switchable' => false,
+                'title' => trans('general.name'),
+                'visible' => true,
+                'formatter' => 'licensesLinkObjFormatter',
+            ],
+            [
+                'field' => 'serial',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('admin/licenses/form.license_key'),
+                'visible' => true,
+                'formatter' => 'licenseKeyFormatter',
+            ],
+            [
+                'field' => 'purchase_cost',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('general.purchase_cost'),
+                'visible' => true,
+                'footerFormatter' => 'sumFormatter',
+                'class' => 'text-right',
+            ],
+            [
+                'field' => 'purchase_order',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('admin/licenses/form.purchase_order'),
+                'visible' => true,
+            ],
+            [
+                'field' => 'order_number',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('general.order_number'),
+                'visible' => true,
+            ],
+            [
+                'field' => 'actions',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => false,
+                'title' => trans('table.actions'),
+                'visible' => true,
+                'formatter' => 'licenseSeatInOutFormatter',
+                'class' => 'hidden-print',
+            ],
+        ];
+
+        return json_encode($layout);
     }
 }

@@ -16,5 +16,7 @@ return [
         'confirm' => 'Bist du sicher, dass du diese Firma löschen willst?',
         'error' => 'Es gab ein Problem beim Löschen der Firma. Bitte versuche es erneut.',
         'success' => 'Die Firma wurde erfolgreich gelöscht.',
+        'bulk_success' => 'Firma erfolgreich gelöscht.|:count Firmen wurden erfolgreich gelöscht.',
+        'partial_success' => 'Firma wurde erfolgreich gelöscht. Siehe weitere Informationen unten. | :count Firmen wurden erfolgreich gelöscht. Siehe weitere Informationen unten.',
     ],
 ];

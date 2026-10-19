@@ -9,7 +9,9 @@
     <div class="row">
         <div class="col-md-12">
             @if (isset($table_header))
-            <h3 class="box-title{{ (!isset($bulkactions)) ? ' pull-left' : '' }}">
+            <h3
+                @if ($name) id="{{ $name }}-title" @endif
+                class="box-title{{ (!isset($bulkactions)) ? ' pull-left' : '' }}">
                 {{ $table_header }}
             </h3>
         @endif
@@ -20,13 +22,16 @@
             </div>
         @endif
 
-        @if ((isset($content)) && (!$content->isEmpty()))
+        {{-- Render slots unconditionally — ComponentSlot::isEmpty()
+             materializes the slot to inspect it, doubling every DB call
+             inside (asset/model counts, presenter dataTableLayout, etc.).
+             `isset($content)` is fine because it's a named slot check that
+             doesn't render anything. --}}
+        @isset($content)
             {{ $content }}
-        @endif
+        @endisset
 
-        @if (($slot) && (!$slot->isEmpty()))
-            {{ $slot }}
-        @endif
+        {{ $slot }}
         </div>
     </div>
 

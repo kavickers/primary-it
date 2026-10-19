@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => ':attribute :table1 ve :table2 genelinde benzersiz olmalıdır. ',
     'unique_undeleted' => ':attribute benzersiz olmalıdır.',
     'non_circular' => ':attribute döngüsel bir başvuru oluşturmamalıdır.',
+    'parent_must_be_top_level' => 'Seçilen :attribute alanı üst düzey bir öğe olmalıdır. Yalnızca bir düzey iç içe yerleşime izin verilir.',
+    'must_have_no_children' => 'Bu öğenin zaten kendi alt öğeleri var; bu nedenle ona bir üst öğe atanamaz.',
+    'parent_within_scope' => 'Seçilen :attribute, size atanmış kapsamın dışında.',
     'not_array' => ':attribute bir dizi olamaz.',
     'disallow_same_pwd_as_user_fields' => 'Şifre kullanıcı adı ile aynı olamaz.',
     'letters' => 'Şifre en az bir harf içermelidir.',
@@ -171,10 +174,19 @@ return [
     'uploaded' => ': Özniteliği yüklenemedi.',
     'uppercase' => ':attribute alanı büyük harflerle olmalıdır.',
     'url' => ':attribute alanı geçerli bir URL olmalıdır.',
+    'external_url' => ':attribute alanı, özel veya yerel bir adrese işaret etmeyen geçerli bir harici URL (http:// veya https://) olmalıdır.',
+    'asset_tag_pattern_placeholder' => ':placeholders yer tutucularından en az birini varlık etiketi kalıbına ekleyin. Aksi durumda eşitlenen tüm varlıklara aynı etiket verilir ve yalnızca ilki kaydedilir.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Özel Ekler geçerli JSON olmalıdır. Ayrıştırıcı hatası: :error',
+        'not_array' => 'Özel Ekler, [ ile başlayan ve ] ile biten geçerli bir JSON dizisi olmalıdır.',
+        'entry_not_object' => 'Özel Ekler girdisi #:index; key, label ve path alanlarına sahip bir JSON nesnesi olmalıdır.',
+        'missing_field' => 'Özel Ekler girdisi #:index için zorunlu ":field" alanı eksik.',
+    ],
     'ulid' => ':attribute alanı geçerli bir ULID olmalıdır.',
     'uuid' => ':attribute alanı geçerli bir UUID olmalıdır.',
     'valid_css_color' => ':attribute alanı geçerli bir CSS rengi olmalıdır (hex, rgb, rgba, hsl veya hsla).',
-    'fmcs_location' => 'Tam çoklu şirket desteği ve konum kapsamı Yönetici Ayarları’nda etkinleştirilmiştir ve seçilen konum ile seçilen şirket birbiriyle uyumlu değildir.',
+    'fmcs_company' => 'Birden fazla şirket için tam destek etkin ve geçici atamalara izin verilmiyor; bu nedenle :attribute alanı zorunludur.',
+    'fmcs_location' => '":location" konumu, seçilen şirketle eşleşmeyen :location_company şirketine ait.',
     'is_unique_across_company_and_location' => ':attribute, seçilen şirket ve konum içinde benzersiz olmalıdır.',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => 'Bir veya daha fazla e-posta adresi geçersiz.',
     'checkboxes' => ':attribute geçersiz seçenekler içeriyor.',
     'radio_buttons' => ':attribute geçersiz.',
+    'image_file_too_large' => 'The :attribute may not be larger than :max.',
 
     'custom' => [
         'alpha_space' => ': Attribute alanı, izin verilmeyen bir karakter içeriyor.',

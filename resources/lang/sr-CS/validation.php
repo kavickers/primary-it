@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => ':attribute mora biti jedinstven kako u :table1 tako i u :table2. ',
     'unique_undeleted' => ':attribute mora biti jedinstven.',
     'non_circular' => ':attribute ne sme da kreira cirkularnu referencu.',
+    'parent_must_be_top_level' => 'Izabrani :attribute mora sam biti vrhovna stavka. Dozvoljen je samo jedan nivo gneždenja.',
+    'must_have_no_children' => 'Ova stavka već ima svoje naslednike, pa joj se ne može dodeliti roditelj.',
+    'parent_within_scope' => 'The selected :attribute is outside your assigned scope.',
     'not_array' => ':attribute ne može biti niz.',
     'disallow_same_pwd_as_user_fields' => 'Lozinka ne može biti ista kao korisničko ime.',
     'letters' => 'Lozinka mora da sadrži barem jedno slovo.',
@@ -171,10 +174,19 @@ return [
     'uploaded' => ':attribute nije prenet.',
     'uppercase' => 'Polje :attribute mora da sadrži sve velika slova.',
     'url' => 'Polje :attribute mora biti ispravna URL adresa.',
+    'external_url' => 'Polje :attribute mora biti ispravna eksterna adresa (http:// ili https://) koja ne upućuje na privatnu ili lokalnu adresu.',
+    'asset_tag_pattern_placeholder' => 'The asset tag pattern must include at least one placeholder from :placeholders, otherwise every synced asset would receive the same tag and only the first would save.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Custom Extras must be valid JSON. Parser error: :error',
+        'not_array' => 'Custom Extras must be a JSON array (starting with [ and ending with ]).',
+        'entry_not_object' => 'Custom Extras entry #:index must be a JSON object with key, label, and path fields.',
+        'missing_field' => 'Custom Extras entry #:index is missing the required ":field" field.',
+    ],
     'ulid' => 'Polje :attribute mora biti ispravan ULID.',
     'uuid' => 'Polje :attribute mora biti ispravan UUID.',
     'valid_css_color' => ':attribute polje mora biti ispravna CSS boja (hex, rgb, rgba, hsl, ili hsla).',
-    'fmcs_location' => 'Puna podrška za višestruko kompanija i opsezi lokacija je omogućeno u administratorskim podešavanjima, a izabrana lokacija i kompanija nisu kompatibilne.',
+    'fmcs_company' => ':attribute polje je obavezno jer je omogućena puna podrška za višestruko kompanija i šetajući nisu dozvoljeni.',
+    'fmcs_location' => 'Lokacija ":location" pripada :location_company, koja se ne poklapa sa izabranom kompanijom.',
     'is_unique_across_company_and_location' => ':attribute mora biti jedinstven u okviru izabrane kompanije i lokacije.',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => 'Jedna ili više adresa e-pošte nisu ispravne.',
     'checkboxes' => ':attribute sadrži neispravne opcije.',
     'radio_buttons' => ':attribute je neispravan.',
+    'image_file_too_large' => 'The :attribute may not be larger than :max.',
 
     'custom' => [
         'alpha_space' => ':attribute polje sadrži znak koji nije dozvoljen.',

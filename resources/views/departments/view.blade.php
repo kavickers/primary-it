@@ -26,7 +26,7 @@
                 <x-slot:tabpanes>
                     <!-- start users tab pane -->
                     <x-tabs.pane name="users">
-                        <x-table.users name="users" :route="route('api.users.index', ['department_id' => $department->id])"/>
+                        <x-table.users name="departmentUsers" :route="route('api.users.index', ['department_id' => $department->id])"/>
                     </x-tabs.pane>
                     <!-- end users tab pane -->
 
@@ -59,7 +59,7 @@
 
 @section('moar_scripts')
     @can('files', $department)
-        @include ('modals.upload-file', ['item_type' => 'departments', 'item_id' => $department->id])
+        <x-modals.upload-file item-type="departments" :item-id="$department->id" />
     @endcan
 
     @include ('partials.bootstrap-table', ['exportFile' => 'department-' . $department->name . '-export', 'search' => false])

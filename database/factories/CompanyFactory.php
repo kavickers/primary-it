@@ -10,7 +10,7 @@ class CompanyFactory extends Factory
     /**
      * The name of the factory's corresponding model.
      *
-     * @var string
+     * @var class-string<Company>
      */
     protected $model = Company::class;
 
@@ -27,5 +27,10 @@ class CompanyFactory extends Factory
             'notes' => 'Created by DB seeder',
             'tag_color' => $this->faker->hexColor(),
         ];
+    }
+
+    public function childOf(Company $parent): static
+    {
+        return $this->state(['parent_id' => $parent->id]);
     }
 }

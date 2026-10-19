@@ -30,8 +30,8 @@ return [
     'days_without_acceptance' => 'روز بدون پذیرش',
     'monthly_depreciation' => 'استهلاک ماهانه
 ',
-    'requesting_user' => 'کاربر درخواست کننده
-',
+    'requesting_user' => 'Requested By',
+    'pending_requesters' => 'Also Requested By',
     'requested_date' => 'تاریخ درخواست',
     'changed' => 'تغییر انجام شد',
     'icon' => 'آیکون',

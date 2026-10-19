@@ -1,22 +1,24 @@
 <?php
 
 return [
-    'not_found' => 'Maintenance type not found.',
+    'not_found' => 'Underhållstyp hittades inte.',
     'create' => [
-        'error' => 'Maintenance type was not created, please try again.',
-        'success' => 'Maintenance type created successfully.',
+        'error' => 'Underhållstypen kunde inte skapas, försök igen.',
+        'success' => 'Underhållstypen har skapats.',
     ],
     'update' => [
-        'error' => 'Maintenance type was not updated, please try again.',
-        'success' => 'Maintenance type updated successfully.',
+        'error' => 'Underhållstypen kunde inte uppdateras, försök igen.',
+        'success' => 'Underhållstypen har uppdaterats.',
     ],
     'delete' => [
-        'confirm' => 'Are you sure you wish to delete this maintenance type?',
-        'error' => 'There was an issue deleting this maintenance type. Please try again.',
-        'success' => 'The maintenance type was deleted successfully.',
+        'confirm' => 'Är du säker på att du vill ta bort denna underhållstyp?',
+        'error' => 'Ett fel uppstod vid radering av underhållstypen. Försök igen.',
+        'success' => 'Underhållstypen har tagits bort.',
+        'bulk_success' => 'Underhållstypen har tagits bort.|:count underhållstyper har tagits bort.',
+        'partial_success' => 'Underhållstypen har tagits bort. Se ytterligare information nedan. |:count underhållstyper har tagits bort. Se ytterligare information nedan.',
     ],
     'complete' => [
-        'success' => 'Maintenance marked as complete.',
-        'error' => 'There was an issue marking this maintenance as complete. Please try again.',
+        'success' => 'Underhållet har markerats som klart.',
+        'error' => 'Ett fel uppstod vid markering av underhållet som klart. Försök igen.',
     ],
 ];

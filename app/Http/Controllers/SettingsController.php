@@ -16,6 +16,7 @@ use App\Models\Actionlog;
 use App\Models\Asset;
 use App\Models\CustomField;
 use App\Models\Group;
+use App\Models\Labels\CustomUserLabel;
 use App\Models\Setting;
 use App\Models\User;
 use App\Notifications\MailTest;
@@ -33,7 +34,10 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use League\Csv\EscapeFormula;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 /**
  * This controller handles all actions related to Settings for
@@ -54,7 +58,26 @@ class SettingsController extends Controller
     {
         $settings = Setting::getSettings();
 
-        return view('settings/index', compact('settings'));
+        $impersonationUsernames = (array) config('app.user_impersonation_usernames');
+        if (empty($impersonationUsernames)) {
+            $impersonators = collect();
+            $missingImpersonationUsernames = [];
+        } else {
+            $impersonators = User::withTrashed()
+                ->whereIn(DB::raw('LOWER(username)'), array_map('mb_strtolower', $impersonationUsernames))
+                ->orderBy('username')
+                ->get();
+            $foundLower = $impersonators->map(fn ($u) => mb_strtolower((string) $u->username))->all();
+            $missingImpersonationUsernames = array_values(array_filter(
+                $impersonationUsernames,
+                fn ($name) => ! in_array(mb_strtolower($name), $foundLower, true)
+            ));
+        }
+
+        // Grab the adapters list so we can populate the hidden keywords for the settings search box
+        $adapterKeywords = implode(' ', \App\SyncAdapters\SyncAdapter::typeLabels());
+
+        return view('settings/index', compact('settings', 'impersonators', 'missingImpersonationUsernames', 'adapterKeywords'));
     }
 
     /**
@@ -144,6 +167,51 @@ class SettingsController extends Controller
         }
 
         return redirect()->back()->withInput()->withErrors($setting->getErrors());
+    }
+
+    /**
+     * Stream a CSV of every location-scoping FMCS mismatch.
+     *
+     * This endpoint runs the full walk (artisan=true) and streams
+     * the same table columns the CLI command prints, as CSV.
+     */
+    public function downloadLocationScopingReport(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $mismatched = Helper::test_locations_fmcs(true);
+
+        $filename = 'location-scoping-mismatches-'.date('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($mismatched) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, [
+                'Type',
+                'ID',
+                'Name',
+                'Checkout Type',
+                'Company IDs',
+                'Item Companies',
+                'Item Location',
+                'Location Company',
+                'Location Company ID',
+            ]);
+
+            // Formula-escape data rows using the same helper + setting as
+            // ReportsController's exports. Row values include user-editable
+            // free text (item name, item companies, item location, location
+            // company) which a low-privilege user could set to a spreadsheet
+            // formula. Without escaping, the payload evaluates when a
+            // superuser opens the downloaded CSV in Excel / LibreOffice /
+            // Google Sheets. Same backtick prefix ReportsController uses.
+            $formatter = new EscapeFormula('`');
+            foreach ($mismatched as $row) {
+                if (config('app.escape_formulas') === false) {
+                    fputcsv($out, $row);
+                } else {
+                    fputcsv($out, $formatter->escapeRecord($row));
+                }
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     /**
@@ -464,11 +532,11 @@ class SettingsController extends Controller
      *
      * @since [v1.0]
      */
-    public function getSlack(): View
+    public function getIntegrations(): View
     {
         $setting = Setting::getSettings();
 
-        return view('settings.slack', compact('setting'));
+        return view('settings.integrations', compact('setting'));
     }
 
     /**
@@ -538,9 +606,17 @@ class SettingsController extends Controller
     public function getLabels(): View
     {
         $is_gd_installed = extension_loaded('gd');
+        $setting = Setting::getSettings();
+
+        if (str_starts_with($setting->label2_template, 'custom:')) {
+            $customLabelId = (int) str_replace('custom:', '', $setting->label2_template);
+
+            $setting->label2_template_name = CustomUserLabel::find($customLabelId)?->name
+                ?? $setting->label2_template;
+        }
 
         return view('settings.labels')
-            ->with('setting', Setting::getSettings())
+            ->with('setting', $setting)
             ->with('is_gd_installed', $is_gd_installed)
             ->with('customFields', CustomField::where('field_encrypted', '=', 0)->get());
     }
@@ -557,6 +633,7 @@ class SettingsController extends Controller
         if (is_null($setting = Setting::getSettings())) {
             return redirect()->to('admin')->with('error', trans('admin/settings/message.update.error'));
         }
+        $wasLabel2Enabled = $setting->label2_enable;
         $setting->label2_enable = $request->input('label2_enable');
         $setting->label2_template = $request->input('label2_template');
         $setting->label2_title = $request->input('label2_title');
@@ -567,58 +644,74 @@ class SettingsController extends Controller
         $setting->label2_2d_target = $request->input('label2_2d_target');
         $setting->label2_fields = $request->input('label2_fields');
         $setting->label2_empty_row_count = $request->input('label2_empty_row_count');
-        $setting->labels_per_page = $request->input('labels_per_page');
-        $setting->labels_width = $request->input('labels_width');
-        $setting->labels_height = $request->input('labels_height');
-        $setting->labels_pmargin_left = $request->input('labels_pmargin_left');
-        $setting->labels_pmargin_right = $request->input('labels_pmargin_right');
-        $setting->labels_pmargin_top = $request->input('labels_pmargin_top');
-        $setting->labels_pmargin_bottom = $request->input('labels_pmargin_bottom');
-        $setting->labels_display_bgutter = $request->input('labels_display_bgutter');
-        $setting->labels_display_sgutter = $request->input('labels_display_sgutter');
-        $setting->labels_fontsize = $request->input('labels_fontsize');
-        $setting->labels_pagewidth = $request->input('labels_pagewidth');
-        $setting->labels_pageheight = $request->input('labels_pageheight');
-        $setting->labels_display_company_name = $request->input('labels_display_company_name', '0');
+        if (! $wasLabel2Enabled && ! $request->boolean('label2_enable')) {
+            $setting->labels_per_page = $request->input('labels_per_page');
+            $setting->labels_width = $request->input('labels_width');
+            $setting->labels_height = $request->input('labels_height');
+            $setting->labels_pmargin_left = $request->input('labels_pmargin_left');
+            $setting->labels_pmargin_right = $request->input('labels_pmargin_right');
+            $setting->labels_pmargin_top = $request->input('labels_pmargin_top');
+            $setting->labels_pmargin_bottom = $request->input('labels_pmargin_bottom');
+            $setting->labels_display_bgutter = $request->input('labels_display_bgutter');
+            $setting->labels_display_sgutter = $request->input('labels_display_sgutter');
+            $setting->labels_fontsize = $request->input('labels_fontsize');
+            $setting->labels_pagewidth = $request->input('labels_pagewidth');
+            $setting->labels_pageheight = $request->input('labels_pageheight');
+            $setting->labels_display_company_name = $request->input('labels_display_company_name', '0');
+            // Barcodes
+            $setting->qr_code = $request->input('qr_code', '0');
+            // 1D-Barcode
+            $setting->alt_barcode_enabled = $request->input('alt_barcode_enabled', '0');
+            // QR-Code
+            $setting->qr_text = $request->input('qr_text');
 
-        // Barcodes
-        $setting->qr_code = $request->input('qr_code', '0');
-        // 1D-Barcode
-        $setting->alt_barcode_enabled = $request->input('alt_barcode_enabled', '0');
-        // QR-Code
-        $setting->qr_text = $request->input('qr_text');
+            if ($request->filled('labels_display_name')) {
+                $setting->labels_display_name = 1;
+            } else {
+                $setting->labels_display_name = 0;
+            }
 
-        if ($request->filled('labels_display_name')) {
-            $setting->labels_display_name = 1;
-        } else {
-            $setting->labels_display_name = 0;
+            if ($request->filled('labels_display_serial')) {
+                $setting->labels_display_serial = 1;
+            } else {
+                $setting->labels_display_serial = 0;
+            }
+
+            if ($request->filled('labels_display_tag')) {
+                $setting->labels_display_tag = 1;
+            } else {
+                $setting->labels_display_tag = 0;
+            }
+
+            if ($request->filled('labels_display_tag')) {
+                $setting->labels_display_tag = 1;
+            } else {
+                $setting->labels_display_tag = 0;
+            }
+
+            if ($request->filled('labels_display_model')) {
+                $setting->labels_display_model = 1;
+            } else {
+                $setting->labels_display_model = 0;
+            }
         }
 
-        if ($request->filled('labels_display_serial')) {
-            $setting->labels_display_serial = 1;
-        } else {
-            $setting->labels_display_serial = 0;
-        }
-
-        if ($request->filled('labels_display_tag')) {
-            $setting->labels_display_tag = 1;
-        } else {
-            $setting->labels_display_tag = 0;
-        }
-
-        if ($request->filled('labels_display_tag')) {
-            $setting->labels_display_tag = 1;
-        } else {
-            $setting->labels_display_tag = 0;
-        }
-
-        if ($request->filled('labels_display_model')) {
-            $setting->labels_display_model = 1;
-        } else {
-            $setting->labels_display_model = 0;
+        if (! $wasLabel2Enabled && $request->boolean('label2_enable')) {
+            $setting->label2_title = $setting->qr_text;
         }
 
         if ($setting->save()) {
+            $selectedTemplate = $setting->label2_template;
+
+            CustomUserLabel::where('is_default', true)->update(['is_default' => false]);
+
+            if (str_starts_with($selectedTemplate, 'custom:')) {
+                $customLabelId = (int) str_replace('custom:', '', $selectedTemplate);
+
+                CustomUserLabel::whereKey($customLabelId)->update([
+                    'is_default' => true,
+                ]);
+            }
 
             return redirect()->route('settings.labels.index')
                 ->with('success', trans('admin/settings/message.update.success'));
@@ -817,33 +910,28 @@ class SettingsController extends Controller
     public function getBackups(): View
     {
         $settings = Setting::getSettings();
-        $path = 'app/backups';
-        $backup_files = Storage::files($path);
+        $backupName = config('backup.backup.name', 'backups');
+        $disk = Storage::disk('backup');
         $files_raw = [];
 
-        if (count($backup_files) > 0) {
-            for ($f = 0; $f < count($backup_files); $f++) {
-
-                // Skip dotfiles like .gitignore and .DS_STORE
-                if ((substr(basename($backup_files[$f]), 0, 1) != '.')) {
-                    // $lastmodified = Carbon::parse(Storage::lastModified($backup_files[$f]))->toDatetimeString();
-                    $file_timestamp = Storage::lastModified($backup_files[$f]);
-
-                    $files_raw[] = [
-                        'filename' => basename($backup_files[$f]),
-                        'filesize' => Setting::fileSizeConvert(Storage::size($backup_files[$f])),
-                        'modified_value' => $file_timestamp,
-                        'modified_display' => date($settings->date_display_format.' '.$settings->time_display_format, $file_timestamp),
-
-                    ];
-                }
+        foreach ($disk->files($backupName) as $file) {
+            // Skip dotfiles like .gitignore and .DS_STORE
+            if (substr(basename($file), 0, 1) === '.') {
+                continue;
             }
+            $file_timestamp = $disk->lastModified($file);
+            $files_raw[] = [
+                'filename' => basename($file),
+                'filesize' => Setting::fileSizeConvert($disk->size($file)),
+                'modified_value' => $file_timestamp,
+                'modified_display' => date($settings->date_display_format.' '.$settings->time_display_format, $file_timestamp),
+            ];
         }
 
         // Reverse the array so it lists oldest first
         $files = array_reverse($files_raw);
 
-        return view('settings/backups', compact('path', 'files'));
+        return view('settings/backups', compact('files'));
     }
 
     /**
@@ -885,9 +973,15 @@ class SettingsController extends Controller
      *
      * @since [v1.8]
      */
-    public function downloadFile($filename = null): RedirectResponse|BinaryFileResponse
+    public function downloadFile($filename = null): RedirectResponse|BinaryFileResponse|StreamedResponse
     {
-        $path = 'app/backups';
+        // Path inside the backup disk mirrors getBackups(): spatie writes
+        // to <disk root>/<backup.backup.name>/*.zip, and BinFile.name
+        // defaults to 'backups'. StorageHelper::downloader('backup')
+        // dispatches to response()->download on the local driver and to
+        // Storage::disk('backup')->download on the s3 driver, so this
+        // works for both destinations without a driver switch here.
+        $backupName = config('backup.backup.name', 'backups');
         $filename = basename((string) $filename);
 
         if ($this->hasInvalidBackupFilename($filename)) {
@@ -895,10 +989,11 @@ class SettingsController extends Controller
         }
 
         if (! config('app.lock_passwords')) {
-            if (Storage::exists($path.'/'.$filename)) {
+            $path = $backupName.'/'.$filename;
+            if (Storage::disk('backup')->exists($path)) {
                 Log::warning('User '.auth()->user()->username.' is attempting to download backup file: '.$filename);
 
-                return StorageHelper::downloader($path.'/'.$filename);
+                return StorageHelper::downloader($path, 'backup');
             } else {
                 // Redirect to the backup page
                 return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.backup.file_not_found'));
@@ -927,13 +1022,15 @@ class SettingsController extends Controller
         if (config('app.allow_backup_delete') == 'true') {
 
             if (! config('app.lock_passwords')) {
-                $path = 'app/backups';
+                // Same disk + path so S3-destination backup is deletable from the UI.
+                $disk = Storage::disk('backup');
+                $path = config('backup.backup.name', 'backups').'/'.$filename;
 
-                if (Storage::exists($path.'/'.$filename)) {
+                if ($disk->exists($path)) {
 
                     try {
                         Log::warning('User '.auth()->user()->username.' is attempting to delete backup file: '.$filename);
-                        Storage::delete($path.'/'.$filename);
+                        $disk->delete($path);
 
                         return redirect()->route('settings.backups.index')->with('success', trans('admin/settings/message.backup.file_deleted'));
                     } catch (\Exception $e) {
@@ -1004,77 +1101,192 @@ class SettingsController extends Controller
             return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.backup.file_not_found'));
         }
 
-        if (! config('app.lock_passwords')) {
-            $path = 'app/backups';
-
-            if (Storage::exists($path.'/'.$filename)) {
-
-                // grab the user's info so we can make sure they exist in the system
-                $user = User::find(auth()->id());
-
-                // TODO: run a backup
-
-                Artisan::call('db:wipe', [
-                    '--force' => true,
-                ]);
-
-                Log::warning('User '.auth()->user()->username.' is attempting to restore from: '.storage_path($path).'/'.$filename);
-
-                $restore_params = [
-                    '--force' => true,
-                    '--no-progress' => true,
-                    'filename' => storage_path($path).'/'.$filename,
-                ];
-
-                if ($request->input('clean')) {
-                    Log::debug("Attempting 'clean' - first, guessing prefix...");
-                    Artisan::call('snipeit:restore', [
-                        '--sanitize-guess-prefix' => true,
-                        'filename' => storage_path($path).'/'.$filename,
-                    ]);
-                    $guess_prefix_output = Artisan::output();
-                    Log::debug("Sanitize output is: $guess_prefix_output");
-                    [$prefix, $_output] = explode("\n", $guess_prefix_output);
-                    Log::debug("prefix is: '$prefix'");
-                    $restore_params['--sanitize-with-prefix'] = $prefix;
-                }
-
-                // run the restore command
-                Artisan::call('snipeit:restore',
-                    $restore_params
-                );
-
-                // If it's greater than 300, it probably worked
-                $output = Artisan::output();
-
-                /* Run migrations */
-                Log::debug('Migrating database...');
-                Artisan::call('migrate', ['--force' => true]);
-                $migrate_output = Artisan::output();
-                Log::debug($migrate_output);
-
-                $find_user = DB::table('users')->where('username', $user->username)->exists();
-
-                if (! $find_user) {
-                    Log::warning('Attempting to restore user: '.$user->username);
-                    $new_user = $user->replicate();
-                    $new_user->push();
-                } else {
-                    Log::debug('User: '.$user->username.' already exists.');
-                }
-
-                Log::debug('Logging all users out..');
-                Artisan::call('snipeit:global-logout', ['--force' => true]);
-
-                DB::table('users')->update(['remember_token' => null]);
-                Auth::logout();
-
-                return redirect()->route('login')->with('success', trans('admin/settings/message.restore.success'));
-            } else {
-                return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.backup.file_not_found'));
-            }
-        } else {
+        if (config('app.lock_passwords')) {
             return redirect()->route('settings.backups.index')->with('error', trans('general.feature_disabled'));
+        }
+
+        // Path inside the backup disk mirrors getBackups / downloadFile /
+        // deleteFile. spatie writes to <disk root>/<backup.backup.name>/
+        // and the name defaults to 'backups'.
+        $backupDisk = Storage::disk('backup');
+        $backupName = config('backup.backup.name', 'backups');
+        $diskPath = $backupName.'/'.$filename;
+
+        if (! $backupDisk->exists($diskPath)) {
+            return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.backup.file_not_found'));
+        }
+
+        // ZipArchive and snipeit:restore both need a local filesystem path.
+        // On the local driver, resolve directly to the disk's on-disk path
+        // and let the restore CLI read it in place. On any remote driver
+        // (s3), stream the archive down to a temp file so downstream code
+        // that expects a real path still works. The finally block below
+        // unlinks the temp file on every exit path so a bail-out doesn't
+        // leave hundreds of megabytes stranded in storage/app/restore-temp.
+        $localTempPath = null;
+        try {
+            if (config('filesystems.disks.backup.driver') === 'local') {
+                $absolutePath = $backupDisk->path($diskPath);
+            } else {
+                $tempDir = storage_path('app/restore-temp');
+                if (! is_dir($tempDir) && ! mkdir($tempDir, 0755, true) && ! is_dir($tempDir)) {
+                    Log::error('Restore aborted: could not create temp directory '.$tempDir);
+
+                    return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.restore.archive_invalid', ['filename' => $filename]));
+                }
+                $localTempPath = $tempDir.'/'.$filename;
+                // readStream returns null on failure, fopen returns false.
+                $srcStream = $backupDisk->readStream($diskPath);
+                $dstStream = fopen($localTempPath, 'w');
+                if ($srcStream === null || $dstStream === false) {
+                    if (is_resource($srcStream)) {
+                        fclose($srcStream);
+                    }
+                    if (is_resource($dstStream)) {
+                        fclose($dstStream);
+                    }
+                    Log::error('Restore aborted: failed to open streams for temp copy of '.$diskPath);
+
+                    return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.restore.archive_invalid', ['filename' => $filename]));
+                }
+                stream_copy_to_stream($srcStream, $dstStream);
+                fclose($srcStream);
+                fclose($dstStream);
+                $absolutePath = $localTempPath;
+            }
+
+            // Verify the archive is actually a zip and can be opened, BEFORE we
+            // do anything destructive. Prior behavior wiped the database first
+            // and only then tried to open the archive. An invalid or corrupted
+            // upload therefore destroyed the existing database and left the
+            // install with an empty migrated schema, while the flow still
+            // reported success because snipeit:restore returns exit 0 on
+            // internal errors (see RestoreFromBackup::handle).
+            //
+            // Refuse to proceed if the PHP zip extension is not loaded. The
+            // downstream snipeit:restore command needs ZipArchive too, so
+            // running it without ext-zip would fail after the wipe.
+            if (! class_exists(ZipArchive::class)) {
+                Log::error('Restore aborted: PHP zip extension is not loaded, cannot validate archive before wiping database.');
+
+                return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.restore.zip_extension_missing'));
+            }
+
+            $zip = new ZipArchive;
+            $openResult = $zip->open($absolutePath);
+            if ($openResult !== true) {
+                Log::warning('Restore aborted: archive at '.$absolutePath.' failed zip open with code '.$openResult);
+
+                return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.restore.archive_invalid', ['filename' => $filename]));
+            }
+            $zip->close();
+
+            // grab the user's info so we can make sure they exist in the system
+            $user = User::find(auth()->id());
+
+            // Take a fresh pre-restore backup so we can point the operator at
+            // it if the restore fails after we wipe. This is the mitigation
+            // the pre-existing
+            $requestedBackupFilename = 'pre-restore-'.date('Y-m-d-H-i-s').'.zip';
+            // spatie prepends filename_prefix to the filename provided so this is the actual name on disk:
+            $preRestoreBackupFilename = config('backup.backup.destination.filename_prefix').$requestedBackupFilename;
+            $preRestoreDiskPath = $backupName.'/'.$preRestoreBackupFilename;
+            $preBackupHint = config('filesystems.disks.backup.driver') === 'local'
+                ? $backupDisk->path($preRestoreDiskPath)
+                : 'backup disk ('.$preRestoreDiskPath.')';
+
+            Log::debug('Running pre-restore backup: '.$preRestoreBackupFilename);
+            $preBackupExit = Artisan::call('snipeit:backup', [
+                '--filename' => $requestedBackupFilename,
+                '--force' => true,
+            ]);
+
+            if ($preBackupExit !== 0 || ! $backupDisk->exists($preRestoreDiskPath)) {
+                Log::warning('Pre-restore backup failed (exit '.$preBackupExit.'); aborting restore to protect existing data.');
+
+                return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.restore.pre_backup_failed'));
+            }
+
+            Log::warning('User '.auth()->user()->username.' is attempting to restore from: '.$absolutePath.' (pre-restore backup at '.$preBackupHint.')');
+
+            $restore_params = [
+                '--force' => true,
+                '--no-progress' => true,
+                'filename' => $absolutePath,
+            ];
+
+            if ($request->input('clean')) {
+                Log::debug("Attempting 'clean' - first, guessing prefix...");
+                Artisan::call('snipeit:restore', [
+                    '--sanitize-guess-prefix' => true,
+                    'filename' => $absolutePath,
+                ]);
+                $guess_prefix_output = Artisan::output();
+                Log::debug("Sanitize output is: $guess_prefix_output");
+                [$prefix, $_output] = explode("\n", $guess_prefix_output);
+                Log::debug("prefix is: '$prefix'");
+                $restore_params['--sanitize-with-prefix'] = $prefix;
+            }
+
+            Artisan::call('db:wipe', ['--force' => true]);
+
+            // run the restore command
+            $restoreExit = Artisan::call('snipeit:restore', $restore_params);
+            $restoreOutput = Artisan::output();
+            Log::debug('snipeit:restore output: '.$restoreOutput);
+
+            // snipeit:restore returns 0 even on some internal errors, so we also
+            // scan its output for its own "Could not access file" / "DB_CONNECTION
+            // must be MySQL" style error strings.
+            $restoreLooksFailed = $restoreExit !== 0 || str_contains(strtolower($restoreOutput), 'could not access file') || str_contains(strtolower($restoreOutput), 'db_connection must be mysql');
+
+            if ($restoreLooksFailed) {
+                Log::error('Restore failed after db:wipe. Pre-restore backup available at '.$preBackupHint);
+
+                return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.restore.failed_with_backup', [
+                    'backup' => $preRestoreBackupFilename,
+                ]));
+            }
+
+            /* Run migrations */
+            Log::debug('Migrating database...');
+            $migrateExit = Artisan::call('migrate', ['--force' => true]);
+            $migrate_output = Artisan::output();
+            Log::debug($migrate_output);
+
+            if ($migrateExit !== 0) {
+                Log::error('Migrate failed after restore. Pre-restore backup available at '.$preBackupHint);
+
+                return redirect()->route('settings.backups.index')->with('error', trans('admin/settings/message.restore.failed_with_backup', [
+                    'backup' => $preRestoreBackupFilename,
+                ]));
+            }
+
+            $find_user = DB::table('users')->where('username', $user->username)->exists();
+
+            if (! $find_user) {
+                Log::warning('Attempting to restore user: '.$user->username);
+                $new_user = $user->replicate();
+                $new_user->push();
+            } else {
+                Log::debug('User: '.$user->username.' already exists.');
+            }
+
+            Log::debug('Logging all users out..');
+            Artisan::call('snipeit:global-logout', ['--force' => true]);
+
+            DB::table('users')->update(['remember_token' => null]);
+            Auth::logout();
+
+            return redirect()->route('login')->with('success', trans('admin/settings/message.restore.success'));
+        } finally {
+            // Temp copy only exists when we downloaded from a remote
+            // driver. On the local driver $localTempPath stays null and
+            // we skip the unlink entirely, so we don't accidentally
+            // reach into the backup disk's own storage.
+            if ($localTempPath !== null && file_exists($localTempPath)) {
+                @unlink($localTempPath);
+            }
         }
     }
 

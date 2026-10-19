@@ -9,4 +9,7 @@ return [
     'total' => 'Gesamt',
     'update' => 'Verbrauchsmaterial bearbeiten',
     'inventory_warning' => 'Der Bestand dieses Verbrauchsmaterials liegt unter der Mindestmenge von :min_count',
+    'exclude_deleted' => 'Gelöschte Verbrauchsmaterialien ausschließen',
+    'include_deleted' => 'Gelöschte Verbrauchsmaterialien einbeziehen',
+    'only_deleted' => 'Nur gelöschte Verbrauchsmaterialien',
 ];

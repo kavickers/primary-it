@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Exceptions\SyncAdapterVendorException;
 use App\Models\Accessory;
 use App\Models\Asset;
 use App\Models\AssetModel;
@@ -23,7 +24,11 @@ use App\Observers\LocationObserver;
 use App\Observers\MaintenanceObserver;
 use App\Observers\SettingObserver;
 use App\Observers\UserObserver;
+use App\Services\SqlServer\SqlServerConnection;
+use App\View\Composers\ImpersonationBannerComposer;
 use App\View\Composers\SidebarComposer;
+use Illuminate\Database\Connection;
+use Illuminate\Http\Client\Response as HttpClientResponse;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Routing\UrlGenerator;
 use Illuminate\Support\Facades\Log;
@@ -61,12 +66,11 @@ class AppServiceProvider extends ServiceProvider
          *
          * We'll force the https scheme if the APP_URL starts with https://, or if APP_FORCE_TLS is set to true.
          */
-        if ((strpos(env('APP_URL'), 'https://') === 0) || (env('APP_FORCE_TLS'))) {
+        if ((str_starts_with(config('app.url'), 'https://')) || config('app.force_tls')) {
             $url->forceScheme('https');
         }
 
-        // TODO - isn't it somehow 'gauche' to check the environment directly; shouldn't we be using config() somehow?
-        if (! env('APP_ALLOW_INSECURE_HOSTS')) {  // unless you set APP_ALLOW_INSECURE_HOSTS, you should PROHIBIT forging domain parts of URL via Host: headers
+        if (! config('app.allow_insecure_hosts')) {  // unless you set APP_ALLOW_INSECURE_HOSTS, you should PROHIBIT forging domain parts of URL via Host: headers
             $url_parts = parse_url(config('app.url'));
             if ($url_parts && array_key_exists('scheme', $url_parts) && array_key_exists('host', $url_parts)) { // check for the *required* parts of a bare-minimum URL
                 URL::forceRootUrl(config('app.url'));
@@ -78,6 +82,7 @@ class AppServiceProvider extends ServiceProvider
         Paginator::useBootstrap();
 
         View::composer('layouts.default', SidebarComposer::class);
+        View::composer('partials.impersonation-banner', ImpersonationBannerComposer::class);
 
         Schema::defaultStringLength(191);
         Accessory::observe(AccessoryObserver::class);
@@ -90,6 +95,27 @@ class AppServiceProvider extends ServiceProvider
         Maintenance::observe(MaintenanceObserver::class);
         Setting::observe(SettingObserver::class);
         User::observe(UserObserver::class);
+
+        // Defense against sync-adapter base URLs pointing at the vendor's
+        // web console instead of their API. A wrong URL commonly returns
+        // 200 OK with an SPA shell (text/html), which slips past
+        // ->throw() and decodes to an empty array in adapter clients,
+        // producing a silent "Sync complete. 0 hosts, 0 errors" flash
+        // instead of a visible failure. Adapter clients chain this
+        // after ->throw() before ->json() so a wrong-URL response
+        // surfaces as a real error the admin can act on.
+        HttpClientResponse::macro('throwIfNotJson', function () {
+            /** @var HttpClientResponse $this */
+            $contentType = $this->header('Content-Type');
+            if (! str_contains(strtolower($contentType), 'json')) {
+                $received = $contentType !== '' ? '"'.$contentType.'"' : 'a response with no Content-Type header';
+                throw new SyncAdapterVendorException(
+                    "Expected a JSON response, got {$received}. Verify the adapter Base URL points at the vendor API, not their web console or dashboard."
+                );
+            }
+
+            return $this;
+        });
     }
 
     /**
@@ -111,6 +137,12 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->app->singleton('ArieTimmerman\Laravel\SCIMServer\SCIMConfig', SnipeSCIMConfig::class); // this overrides the default SCIM configuration with our own
+
+        // SQL Server connections use a grammar that smooths over MySQL-tolerated
+        // query shapes SQL Server rejects (see SqlServerQueryGrammar).
+        Connection::resolverFor('sqlsrv', function ($connection, $database, $prefix, $config) {
+            return new SqlServerConnection($connection, $database, $prefix, $config);
+        });
 
     }
 }

@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => '資產維護', // not used anymore
     'maintenances' => '維護',
+    'create' => '建立資產維護',
     'edit' => '編輯資產維護',
     'delete' => '刪除資產維護',
     'view' => '檢視資產維護詳細資料',

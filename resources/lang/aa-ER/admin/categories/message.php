@@ -21,8 +21,15 @@ return [
         'confirm' => 'crwdns631:0crwdne631:0',
         'error' => 'crwdns632:0crwdne632:0',
         'success' => 'crwdns13884:0crwdne13884:0',
-        'bulk_success' => 'crwdns13886:0crwdne13886:0',
+        'bulk_success' => 'crwdns15041:0crwdne15041:0',
         'partial_success' => 'crwdns13888:0crwdne13888:0',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'crwdns17177:0crwdne17177:0',
+        'no_selection' => 'crwdns17179:0crwdne17179:0',
+        'no_changes' => 'crwdns17181:0crwdne17181:0',
+        'success' => 'crwdns17183:0crwdne17183:0',
     ],
 
 ];

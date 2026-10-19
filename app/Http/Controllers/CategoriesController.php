@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Categories\DestroyCategoryAction;
+use App\Exceptions\Handler;
 use App\Exceptions\ItemStillHasChildren;
 use App\Helpers\Helper;
 use App\Http\Requests\ImageUploadRequest;
@@ -91,9 +92,6 @@ class CategoriesController extends Controller
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
      * @see CategoriesController::postEdit() method saves the data
-     *
-     * @param  int  $categoryId
-     *
      * @since [v1.0]
      */
     public function edit(Category $category): RedirectResponse|View
@@ -110,9 +108,6 @@ class CategoriesController extends Controller
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
      * @see CategoriesController::getEdit() method that makes the form.
-     *
-     * @param  int  $categoryId
-     *
      * @since [v1.0]
      */
     public function update(ImageUploadRequest $request, Category $category): RedirectResponse
@@ -154,8 +149,6 @@ class CategoriesController extends Controller
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
      * @since [v1.0]
-     *
-     * @param  int  $categoryId
      */
     public function destroy(Category $category): RedirectResponse
     {
@@ -164,8 +157,8 @@ class CategoriesController extends Controller
             DestroyCategoryAction::run($category);
         } catch (ItemStillHasChildren $e) {
             return redirect()->route('categories.index')->with('error', trans('general.bulk_delete_associations.general_assoc_warning', ['item' => trans('general.category')]));
-        } catch (\Exception $e) {
-            report($e);
+        } catch (\Throwable $e) {
+            Handler::reportOrRethrow($e);
 
             return redirect()->route('categories.index')->with('error', trans('admin/categories/message.delete.error'));
         }

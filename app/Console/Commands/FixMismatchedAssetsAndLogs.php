@@ -64,6 +64,7 @@ class FixMismatchedAssetsAndLogs extends Command
             // get the last checkout of the asset
             if ($checkout_log = Actionlog::where('target_type', '=', User::class)
                 ->where('action_type', '=', 'checkout')
+                ->where('item_type', '=', Asset::class)
                 ->where('item_id', '=', $asset->id)
                 ->orderBy('created_at', 'DESC')
                 ->first()) {
@@ -71,6 +72,7 @@ class FixMismatchedAssetsAndLogs extends Command
                 // Now check for a subsequent checkin log - we want to ignore those
                 if (! $checkin_log = Actionlog::where('target_type', '=', User::class)
                     ->where('action_type', '=', 'checkin from')
+                    ->where('item_type', '=', Asset::class)
                     ->where('item_id', '=', $asset->id)
                     ->whereDate('created_at', '>', $checkout_log->created_at)
                     ->orderBy('created_at', 'DESC')

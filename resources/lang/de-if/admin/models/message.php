@@ -40,8 +40,19 @@ return [
 
     'bulkdelete' => [
         'error' => 'Es wurden keine Modelle ausgewählt. Somit wurde auch nichts gelöscht.',
+        'nothing_deletable' => 'Keines der ausgewählten Modelle kann gelöscht werden, da ihnen noch Assets zugeordnet sind.',
         'success' => 'Modell gelöscht!|:success_count Modelle gelöscht!',
         'success_partial' => ':success_count Modell(e) wurden gelöscht. Jedoch konnten :fail_count nicht gelöscht werden, da ihnen noch Assets zugeordnet sind.',
+    ],
+
+    'merge' => [
+        'min_two' => 'Wählen Sie mindestens zwei Modelle zum Zusammenführen aus.',
+        'no_target' => 'Wählen Sie vor dem Zusammenführen das zu haltende Modell aus.',
+        'not_found' => 'Ein oder mehrere der ausgewählten Modelle konnten nicht geladen werden. Aktualisieren Sie die Modellliste und versuchen Sie es erneut.',
+        'information' => 'Sie sind dabei :count Modelle zusammenzuführen. Wählen Sie das Modell, das Sie behalten möchten. Jedes Asset, das an die anderen Modelle angehängt wird, wird dem von Ihnen gewählten Modell zugewiesen, dann werden die Ursprungsmodelle gelöscht.',
+        'warning' => 'Dies kann nicht rückgängig gemacht werden. Wieder zugewiesene Assets erben die Kategorie, Feldsatz und Abschreibung des überlebenden Modells.',
+        'pick_target' => 'Welches Modell möchten Sie beibehalten?',
+        'success' => ':source_count Model(s) in ":target" zusammengefasst. :asset_count Asset(s) wurden neu zugewiesen.',
     ],
 
 ];

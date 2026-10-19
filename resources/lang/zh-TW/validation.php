@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => ':attribute 在 :table1 和 :table2 中必須是唯一的。',
     'unique_undeleted' => ':attribute 必須是唯一值',
     'non_circular' => ':attribule 屬性不能建立一個循環參考',
+    'parent_must_be_top_level' => 'The selected :attribute must itself be a top-level item. Only one level of nesting is allowed.',
+    'must_have_no_children' => 'This item already has children of its own, so it cannot be assigned a parent.',
+    'parent_within_scope' => 'The selected :attribute is outside your assigned scope.',
     'not_array' => ':attribute 不能是陣列。',
     'disallow_same_pwd_as_user_fields' => '密碼不可以和使用者名稱相同',
     'letters' => '密碼至少必須包含 1 個字母。',
@@ -171,10 +174,19 @@ return [
     'uploaded' => ':attribute 上傳失敗',
     'uppercase' => ':attribute 欄位必須為大寫。',
     'url' => ':attribute 欄位必須是有效的 URL。',
+    'external_url' => ':attribute 欄位必須為有效的外部 URL（http:// 或 https://），且不得指向私有或本機位址。',
+    'asset_tag_pattern_placeholder' => 'The asset tag pattern must include at least one placeholder from :placeholders, otherwise every synced asset would receive the same tag and only the first would save.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Custom Extras must be valid JSON. Parser error: :error',
+        'not_array' => 'Custom Extras must be a JSON array (starting with [ and ending with ]).',
+        'entry_not_object' => 'Custom Extras entry #:index must be a JSON object with key, label, and path fields.',
+        'missing_field' => 'Custom Extras entry #:index is missing the required ":field" field.',
+    ],
     'ulid' => ':attribute 欄位必須是有效的 ULID。',
     'uuid' => ':attribute 欄位必須是有效的 UUID。',
     'valid_css_color' => ':attribute 欄位必須是有效的 CSS 顏色 (hex、rgb、rgba、hsl 或 hsla)。',
-    'fmcs_location' => '管理員設定中已啟用完整多公司支援和位置範圍限定，所選位置與所選公司不相容。',
+    'fmcs_company' => 'The :attribute field is required because full multiple companies support is enabled and floaters are not allowed.',
+    'fmcs_location' => '位置「:location」屬於 :location_company，與所選公司不符。',
     'is_unique_across_company_and_location' => ':attribute 在所選公司和位置中必須是唯一的。',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => '一個或多個郵件地址不正確',
     'checkboxes' => ':attribute 包含無效選項。',
     'radio_buttons' => ':attribute 無效。',
+    'image_file_too_large' => 'The :attribute may not be larger than :max.',
 
     'custom' => [
         'alpha_space' => ':attribute 含有無效字元',

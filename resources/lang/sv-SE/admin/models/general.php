@@ -16,7 +16,7 @@ return [
     'no_custom_field' => 'Inga egenanpassade fält',
     'add_default_values' => 'Lägg till standardvärden',
     'importer' => [
-        'require_serial' => 'Require Serial',
-        'serial_required' => 'Serial Required',
+        'require_serial' => 'Kräv serienummer',
+        'serial_required' => 'Serienummer krävs',
     ],
 ];

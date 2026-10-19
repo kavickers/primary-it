@@ -2,7 +2,7 @@
 
 return [
 
-    'asset_tag' => 'Eszköz cimke',
+    'asset_tag' => 'Eszköz címke',
     'asset_model' => 'Modell',
     'assigned_to' => 'Felelős',
     'book_value' => 'Jelenlegi érték',
@@ -25,7 +25,8 @@ return [
     'image' => 'Készülék kép',
     'days_without_acceptance' => 'Nem elfogadás óta eltelt napok száma',
     'monthly_depreciation' => 'Havi értékcsökkenés',
-    'requesting_user' => 'Igénylő felhasználó',
+    'requesting_user' => 'Kérvényezte',
+    'pending_requesters' => 'Kérvényezte még',
     'requested_date' => 'Kért időpont',
     'changed' => 'Módosítva',
     'icon' => 'Ikon',

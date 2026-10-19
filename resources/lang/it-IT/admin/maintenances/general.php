@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Manutenzioni Beni', // not used anymore
     'maintenances' => 'Manutenzioni',
+    'create' => 'Crea Manutenzione Bene',
     'edit' => 'Modifica Manutenzione Prodotto',
     'delete' => 'Elimina Manutenzione Prodotto',
     'view' => 'Controlla Dettagli Manutenzione Prodotto',

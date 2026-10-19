@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenses were deleted successfully after checking in :seats seats.',
+        'partial_success' => ':count licenses were deleted successfully after checking in :seats seats. See additional information below.',
+    ],
+
     'checkout' => [
         'error' => 'Mayroong isyu sa pag-check out ng lisensya. Mangyaring subukang muli.',
         'success' => 'Matagumpay na nai-check out ang lisensya',
@@ -55,6 +60,10 @@ return [
         'error' => 'Mayroong isyu sa pag-check in ng lisensya. Mangyaring subukang muli.',
         'not_reassignable' => 'Seat has been used',
         'success' => 'Matagumpay na nai-check in ang lisensya',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'License ":license" has no free seats. ":target" was not assigned to a seat.',
     ],
 
 ];

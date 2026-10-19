@@ -160,6 +160,47 @@ class AssetTest extends TestCase
         $this->assertEquals(Setting::getSettings()->next_auto_tag_base, $matches[0] + 1, "Next auto increment number should be the last normally-saved one plus one, but isn't");
     }
 
+    public function test_concurrent_asset_create_does_not_regress_next_auto_tag_base()
+    {
+        // Regression test for issue #19744. Two parallel asset-create
+        // requests both read next_auto_tag_base, then both try to write
+        // their own catch-up value. If the second writer naively saves,
+        // it clobbers the first writer's higher value. The fix (and
+        // this test) uses a conditional UPDATE that leaves the higher
+        // value alone.
+        $this->settings->enableAutoIncrement();
+
+        // Prime the in-process Setting cache so the observer later reads
+        // this stale object instead of refetching from the DB.
+        $settings = Setting::getSettings();
+        $staleBase = $settings->next_auto_tag_base;
+
+        // Simulate a concurrent writer that already won the race and
+        // bumped next_auto_tag_base past our stale read. Direct DB
+        // update bypasses the Setting-save cache invalidation, which
+        // is exactly what a sibling PHP process on the same DB would
+        // do from this process's point of view.
+        $winnerBase = $staleBase + 500;
+        DB::table('settings')->where('id', $settings->id)->update([
+            'next_auto_tag_base' => $winnerBase,
+        ]);
+
+        // Create an asset at the stale value. The observer will see
+        // the cached $settings (which still thinks the base is
+        // $staleBase) and try to catch next_auto_tag_base up to
+        // $staleBase + 1.
+        $asset = Asset::factory()->create([
+            'asset_tag' => 'ABCD'.$staleBase,
+        ]);
+        $this->assertModelExists($asset);
+
+        // The DB value must still be the higher value from the
+        // simulated concurrent writer, not clobbered down to our
+        // smaller catch-up.
+        $actual = DB::table('settings')->where('id', $settings->id)->value('next_auto_tag_base');
+        $this->assertEquals($winnerBase, $actual, 'next_auto_tag_base was regressed by a stale catch-up write');
+    }
+
     public function test_auto_increment_almost_big()
     {
         // TODO: this looks pretty close to the one above, could we maybe squish them together?
@@ -354,8 +395,11 @@ class AssetTest extends TestCase
         $asset = Asset::factory()->create();
         $otherAsset = Asset::factory()->create();
 
-        $primaryAccessory = Accessory::factory()->create(['purchase_cost' => 10]);
-        $secondaryAccessory = Accessory::factory()->create(['purchase_cost' => 15]);
+        // See test_asset_components_calculated_total_uses_assigned_quantity
+        // for why per-unit cost must be seeded via withInitialAcquisition
+        // rather than a create-array override.
+        $primaryAccessory = Accessory::factory()->withInitialAcquisition(null, 10.0)->create();
+        $secondaryAccessory = Accessory::factory()->withInitialAcquisition(null, 15.0)->create();
 
         AccessoryCheckout::factory()->create([
             'accessory_id' => $primaryAccessory->id,
@@ -386,8 +430,12 @@ class AssetTest extends TestCase
     {
         $asset = Asset::factory()->create();
 
-        $firstComponent = Component::factory()->create(['purchase_cost' => 10]);
-        $secondComponent = Component::factory()->create(['purchase_cost' => 25]);
+        // Per-unit cost lives on the initial OrderItem the observer
+        // writes; withInitialAcquisition seeds that OrderItem's price so
+        // calculatedPurchaseCost (via lastOrderDefaults) reads the
+        // expected value back for this test.
+        $firstComponent = Component::factory()->withInitialAcquisition(null, 10.0)->create();
+        $secondComponent = Component::factory()->withInitialAcquisition(null, 25.0)->create();
 
         $asset->components()->attach($firstComponent->id, [
             'assigned_qty' => 3,
@@ -403,7 +451,6 @@ class AssetTest extends TestCase
 
         $freshAsset = $asset->fresh();
 
-        $this->assertEquals(35, $freshAsset->components->sum('purchase_cost'));
         $this->assertEquals(80, $freshAsset->components->sum('calculated_purchase_cost'));
         $this->assertSame(80.0, $freshAsset->getComponentCost());
     }
@@ -412,7 +459,12 @@ class AssetTest extends TestCase
     {
         $asset = Asset::factory()->create();
 
-        $componentWithoutCost = Component::factory()->create(['purchase_cost' => null]);
+        // Force the observer-written OrderItem's price to null AND null
+        // out the parent's default_purchase_cost so lastOrderDefaults
+        // returns unit_cost=null; calculatedPurchaseCost coerces to 0.0
+        // when assigned to an asset.
+        $componentWithoutCost = Component::factory()->create(['default_purchase_cost' => null]);
+        $componentWithoutCost->orderItems()->update(['price' => null]);
 
         $asset->components()->attach($componentWithoutCost->id, [
             'assigned_qty' => 4,

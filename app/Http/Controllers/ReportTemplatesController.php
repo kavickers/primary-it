@@ -7,6 +7,7 @@ use App\Models\ReportTemplate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use UnhandledMatchError;
 
 class ReportTemplatesController extends Controller
 {
@@ -18,6 +19,7 @@ class ReportTemplatesController extends Controller
         $validated = $request->validate(Arr::except((new ReportTemplate)->getRules(), 'options'));
 
         $report = $request->user()->reportTemplates()->create([
+            'type' => $validated['type'],
             'name' => $validated['name'],
             'options' => $request->except(['_token', 'name', 'is_shared']),
             'is_shared' => $request->has('is_shared'),
@@ -32,30 +34,29 @@ class ReportTemplatesController extends Controller
     {
         $this->authorize('reports.view');
 
-        $customfields = CustomField::get();
-        $report_templates = ReportTemplate::orderBy('name')->get();
+        if ($reportTemplate->created_by !== auth()->id() && ! $reportTemplate->is_shared) {
+            abort(404, trans('general.generic_model_not_found', ['model' => trans('general.report_template')]));
+        }
 
-        return view('reports/custom', [
+        $customfields = CustomField::get();
+
+        try {
+            $view = $reportTemplate->getViewPath();
+        } catch (UnhandledMatchError $e) {
+            return redirect()
+                ->route('reports.index')
+                ->with('error', 'Saved template type is not valid.');
+        }
+
+        return view($view, [
             'customfields' => $customfields,
-            'report_templates' => $report_templates,
             'template' => $reportTemplate,
         ]);
     }
 
     public function edit(ReportTemplate $reportTemplate)
     {
-        $this->authorize('reports.view');
-
-        if ($reportTemplate->created_by != auth()->id()) {
-            return redirect()
-                ->route('report-templates.show', $reportTemplate)
-                ->withError(trans('general.report_not_editable'));
-        }
-
-        return view('reports/custom', [
-            'customfields' => CustomField::get(),
-            'template' => $reportTemplate,
-        ]);
+        return redirect()->route('report-templates.show', $reportTemplate);
     }
 
     public function update(Request $request, ReportTemplate $reportTemplate): RedirectResponse

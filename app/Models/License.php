@@ -2,25 +2,30 @@
 
 namespace App\Models;
 
-use App\Console\Commands\SendExpiringLicenseNotifications;
 use App\Helpers\Helper;
+use App\Models\Builders\LicenseQueryBuilder;
 use App\Models\Traits\CompanyableTrait;
+use App\Models\Traits\HasCalendarEvents;
 use App\Models\Traits\HasUploads;
 use App\Models\Traits\Loggable;
+use App\Models\Traits\Requestable;
 use App\Models\Traits\Searchable;
 use App\Presenters\LicensePresenter;
 use App\Presenters\Presentable;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Session;
 use Watson\Validating\ValidatingTrait;
 
+/**
+ * @mixin IdeHelperLicense
+ */
 class License extends Depreciable
 {
     use HasFactory;
@@ -28,8 +33,10 @@ class License extends Depreciable
     protected $presenter = LicensePresenter::class;
 
     use CompanyableTrait;
+    use HasCalendarEvents;
     use HasUploads;
     use Loggable, Presentable;
+    use Requestable;
     use SoftDeletes;
 
     protected $injectUniqueIdentifier = true;
@@ -44,12 +51,20 @@ class License extends Depreciable
 
     protected $table = 'licenses';
 
+    /**
+     * Placeholder emitted anywhere a license product key would appear for a
+     * caller who lacks the viewKeys gate. Kept as a single source of truth
+     * so the API transformer, CSV export, and any future surface stay in sync.
+     */
+    public const PRODUCT_KEY_MASK = '------------';
+
     protected $casts = [
         'purchase_date' => 'date',
         'expiration_date' => 'date',
         'termination_date' => 'date',
         'category_id' => 'integer',
         'company_id' => 'integer',
+        'requestable' => 'boolean',
     ];
 
     protected $rules = [
@@ -59,18 +74,19 @@ class License extends Depreciable
         'license_name' => 'string|nullable|max:100',
         'notes' => 'string|nullable',
         'category_id' => 'required|exists:categories,id',
-        'company_id' => 'integer|nullable|exists:companies,id',
+        'company_id' => 'integer|nullable|exists:companies,id|fmcs_company',
         'purchase_cost' => 'numeric|nullable|gte:0|max:99999999999999999.99',
         'purchase_date' => 'date_format:Y-m-d|nullable|max:10|required_with:depreciation_id',
         'expiration_date' => 'date_format:Y-m-d|nullable|max:10',
         'termination_date' => 'date_format:Y-m-d|nullable|max:10',
         'min_amt' => 'numeric|nullable|gte:0',
+        'requestable' => 'nullable|boolean',
     ];
 
     /**
      * The attributes that are mass assignable.
      *
-     * @var array
+     * @var list<string>
      */
     protected $fillable = [
         'company_id',
@@ -93,6 +109,7 @@ class License extends Depreciable
         'supplier_id',
         'termination_date',
         'min_amt',
+        'requestable',
     ];
 
     use Searchable;
@@ -175,6 +192,41 @@ class License extends Depreciable
             && ($this->deleted_at == '');
     }
 
+    public function calendarEventCompanyId(): ?int
+    {
+        return $this->company_id;
+    }
+
+    public function calendarEventDefinitions(): array
+    {
+        return [
+            [
+                'field' => 'expiration_date',
+                'event_type' => 'license.expiration',
+            ],
+            [
+                'field' => 'termination_date',
+                'event_type' => 'license.termination',
+            ],
+        ];
+    }
+
+    /**
+     * Normalize the requestable form input so an empty string from an
+     * unchecked checkbox lands as false rather than a truthy "0" cast
+     * (matches Accessory / Consumable / Component setRequestableAttribute).
+     */
+    public function setRequestableAttribute($value)
+    {
+        if ($value == '') {
+            $value = null;
+        }
+        $this->attributes['requestable'] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function terminatesFormattedDate(): Attribute
     {
         return Attribute::make(
@@ -182,6 +234,9 @@ class License extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<float|null, never>
+     */
     protected function terminatesDiffInDays(): Attribute
     {
         return Attribute::make(
@@ -189,6 +244,9 @@ class License extends Depreciable
         );
     }
 
+    /**
+     * @return Attribute<string|null, never>
+     */
     protected function terminatesDiffForHumans(): Attribute
     {
         return Attribute::make(
@@ -434,6 +492,11 @@ class License extends Depreciable
     public function manufacturer()
     {
         return $this->belongsTo(Manufacturer::class, 'manufacturer_id')->withTrashed();
+    }
+
+    public function depreciation(): BelongsTo
+    {
+        return $this->belongsTo(Depreciation::class, 'depreciation_id');
     }
 
     /**
@@ -830,129 +893,33 @@ class License extends Depreciable
         return $this->hasMany(LicenseSeat::class)->whereNull('assigned_to')->whereNull('deleted_at')->whereNull('asset_id');
     }
 
-    public function scopeActiveLicenses($query)
+    /**
+     * TextSearch variant that removes `serial` from the searchable attribute
+     * set for the duration of the call. Used by the API index for callers
+     * who lack the `viewKeys` permission, so search / filter parameters
+     * cannot be used as an existence oracle against license product keys.
+     *
+     * Stays on the model (not the builder) because it needs internal
+     * access to the model's protected $searchableAttributes property.
+     */
+    public function scopeTextSearchWithoutSerial($query, $search)
     {
+        $original = $this->searchableAttributes;
 
-        return $query->whereNull('licenses.deleted_at')
+        $this->searchableAttributes = array_values(array_filter(
+            $original,
+            fn ($attribute) => $attribute !== 'serial'
+        ));
 
-            // The termination date is null or within range
-            ->where(function ($query) {
-                $query->whereNull('termination_date')
-                    ->orWhereDate('termination_date', '>', [Carbon::now()]);
-            })
-            ->where(function ($query) {
-                $query->whereNull('expiration_date')
-                    ->orWhereDate('expiration_date', '>', [Carbon::now()]);
-            });
+        try {
+            return $query->TextSearch($search);
+        } finally {
+            $this->searchableAttributes = $original;
+        }
     }
 
-    /**
-     * Expiried/terminated licenses scope
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  [v1.0]
-     *
-     * @return Relation
-     *
-     * @see SendExpiringLicenseNotifications
-     */
-    public function scopeExpiredLicenses($query)
+    public function newEloquentBuilder($query): LicenseQueryBuilder
     {
-        return $query->whereDate('termination_date', '<=', Carbon::now())// The termination date is null or within range
-            ->orWhere(function ($query) {
-                $query->whereDate('expiration_date', '<=', Carbon::now());
-            })
-            ->whereNull('licenses.deleted_at');
-    }
-
-    /**
-     * Expiring/terminating licenses scope
-     *
-     * This checks if:
-     *
-     * 1) The license has not been deleted
-     * 2) The expiration date is between now and the number of days specified
-     * 3) There is an expiration date set and the termination date has not passed
-     * 4) The license termination date is null or has not passed
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  [v1.0]
-     *
-     * @return Relation
-     *
-     * @see SendExpiringLicenseNotifications
-     */
-    public function scopeExpiringLicenses($query, $days = 60, $includeExpired = false)
-    {
-        return $query// The termination date is null or within range
-            ->where(function ($query) use ($days) {
-                $query->whereNull('termination_date')
-                    ->orWhereBetween('termination_date', [Carbon::now(), Carbon::now()->addDays($days)]);
-            })
-            ->where(function ($query) use ($days, $includeExpired) {
-                $query->whereNotNull('expiration_date')
-                    // Handle expiring licenses without termination dates
-                    ->where(function ($query) use ($days, $includeExpired) {
-                        $query->whereNull('termination_date')
-                            ->whereBetween('expiration_date', [Carbon::now(), Carbon::now()->addDays($days)])
-                            // include expired licenses if requested
-                            ->when($includeExpired, function ($query) {
-                                $query->orwhereDate('expiration_date', '<=', Carbon::now());
-                            });
-                    })
-                    // Handle expiring licenses with termination dates in the future
-                    ->orWhere(function ($query) use ($days) {
-                        $query->whereBetween('termination_date', [Carbon::now(), Carbon::now()->addDays($days)]);
-                    });
-            });
-    }
-
-    /**
-     * Query builder scope to order on manufacturer
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderManufacturer($query, $order)
-    {
-        return $query->leftJoin('manufacturers', 'licenses.manufacturer_id', '=', 'manufacturers.id')->select('licenses.*')
-            ->orderBy('manufacturers.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on supplier
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderSupplier($query, $order)
-    {
-        return $query->leftJoin('suppliers', 'licenses.supplier_id', '=', 'suppliers.id')->select('licenses.*')
-            ->orderBy('suppliers.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on company
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderCompany($query, $order)
-    {
-        return $query->leftJoin('companies as companies', 'licenses.company_id', '=', 'companies.id')->select('licenses.*')
-            ->orderBy('companies.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on the user that created it
-     */
-    public function scopeOrderByCreatedBy($query, $order)
-    {
-        return $query->leftJoin('users as admin_sort', 'licenses.created_by', '=', 'admin_sort.id')->select('licenses.*')->orderBy('admin_sort.first_name', $order)->orderBy('admin_sort.last_name', $order);
+        return new LicenseQueryBuilder($query);
     }
 }

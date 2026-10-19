@@ -2,6 +2,7 @@
 
 namespace App\Presenters;
 
+use App\Enums\FileStorage;
 use DateTime;
 use Illuminate\Support\Facades\Storage;
 
@@ -20,6 +21,7 @@ class DepreciationReportPresenter extends Presenter
         $layout = [
             [
                 'field' => 'company',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -27,85 +29,101 @@ class DepreciationReportPresenter extends Presenter
                 'visible' => false,
             ], [
                 'field' => 'category',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.category'),
                 'visible' => true,
             ], [
                 'field' => 'name',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => false,
-                'title' => trans('admin/hardware/form.name'),
+                // Match the import wizard's Name label so
+                // downloads use importer's auto-mapper.
+                'title' => trans('general.item_name_var', ['item' => trans('general.asset')]),
                 'visible' => false,
             ], [
                 'field' => 'asset_tag',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.asset_tag'),
                 'visible' => true,
             ], [
                 'field' => 'model',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.asset_model'),
                 'visible' => true,
             ],  [
                 'field' => 'model_number',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/models/table.modelnumber'),
                 'visible' => false,
             ], [
                 'field' => 'serial',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/form.serial'),
                 'visible' => true,
             ], [
                 'field' => 'depreciation',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.depreciation'),
                 'visible' => true,
             ], [
                 'field' => 'number_of_months',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/depreciations/general.number_of_months'),
                 'visible' => true,
             ],  [
                 'field' => 'status',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/table.status'),
                 'visible' => true,
             ], [
                 'field' => 'checked_out_to',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/table.checkoutto'),
                 'visible' => false,
             ], [
                 'field' => 'location',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/table.location'),
                 'visible' => true,
             ],  [
                 'field' => 'manufacturer',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.manufacturer'),
                 'visible' => false,
             ], [
                 'field' => 'supplier',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.supplier'),
                 'visible' => false,
             ], [
                 'field' => 'purchase_date',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => true,
@@ -113,12 +131,14 @@ class DepreciationReportPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'currency',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'visible' => false,
                 'title' => 'Currency',
             ], [
                 'field' => 'purchase_cost',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => true,
@@ -127,12 +147,14 @@ class DepreciationReportPresenter extends Presenter
                 'class' => 'text-right',
             ], [
                 'field' => 'order_number',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => false,
                 'title' => trans('general.order_number'),
             ],  [
                 'field' => 'eol',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'visible' => false,
@@ -140,6 +162,7 @@ class DepreciationReportPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'book_value',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => false,
                 'visible' => true,
@@ -148,12 +171,14 @@ class DepreciationReportPresenter extends Presenter
                 'class' => 'text-right',
             ], [
                 'field' => 'monthly_depreciation',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => true,
                 'title' => trans('admin/hardware/table.monthly_depreciation'),
             ], [
                 'field' => 'diff',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'visible' => true,
@@ -162,6 +187,7 @@ class DepreciationReportPresenter extends Presenter
                 'class' => 'text-right',
             ], [
                 'field' => 'warranty_expires',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'visible' => false,
@@ -233,7 +259,7 @@ class DepreciationReportPresenter extends Presenter
             $imagePath = $this->model->image;
         }
         if (! empty($imagePath)) {
-            return Storage::disk('public')->url(app('assets_upload_path').e($imagePath));
+            return Storage::disk('public')->url(FileStorage::Assets->publicPath().e($imagePath));
         }
 
         return $imagePath;

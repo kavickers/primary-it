@@ -17,10 +17,10 @@ return [
 
     'delete' => [
         'confirm' => 'Biztosan törölni szeretné ezt a szállítót?',
-        'error' => 'A szállító törlését okozta. Kérlek próbáld újra.',
+        'error' => 'Hiba történt a Szállító törlése közben. Kérem, próbálja újra.',
         'success' => 'A szállító sikeresen törölve lett.',
         'not_found' => 'A beszállító nem található.',
-        'bulk_success' => 'A beszállítók sikeresen törlésre kerültek.',
+        'bulk_success' => 'Supplier deleted successfully.|:count suppliers were deleted successfully.',
         'partial_success' => '.',
     ],
 

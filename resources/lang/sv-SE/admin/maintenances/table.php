@@ -2,7 +2,7 @@
 
 return [
     'title' => 'Tillgångsunderhåll',
-    'asset_name' => 'Företagsnamn',
+    'asset_name' => 'Tillgångsnamn',
     'is_warranty' => 'Garanti',
     'dl_csv' => 'Ladda ned CSV',
 ];

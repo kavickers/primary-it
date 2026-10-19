@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Models\User;
@@ -65,7 +66,15 @@ class ResetPasswordController extends Controller
 
         $credentials = $request->only('email', 'token');
 
-        if (is_null($this->broker()->getUser($credentials))) {
+        // Password::broker() is typed to return the interface
+        // Illuminate\Contracts\Auth\PasswordBroker, which doesn't
+        // declare getUser(). The concrete Illuminate\Auth\Passwords\
+        // PasswordBroker does. Narrow the type locally so PHPStan can
+        // resolve the method against the concrete class.
+        /** @var \Illuminate\Auth\Passwords\PasswordBroker $broker */
+        $broker = $this->broker();
+
+        if (is_null($broker->getUser($credentials))) {
             Log::debug('Password reset form FAILED - this token is not valid.');
 
             return redirect()->route('password.request')->with('error', trans('passwords.token'));
@@ -120,7 +129,8 @@ class ResetPasswordController extends Controller
 
                 Log::debug('Password reset for '.$user->username.' FAILED - this user exists but the token is not valid');
 
-                return redirect()->back()->withInput($request->only('email'))->with('success', trans('passwords.reset'));
+                return redirect()->to(Helper::sameOriginUrl(url()->previous()) ?? route('login'))
+                    ->withInput($request->only('email'))->with('success', trans('passwords.reset'));
             }
 
         }

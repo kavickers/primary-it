@@ -2,18 +2,24 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\FileStorage;
 use App\Events\CheckoutableCheckedIn;
 use App\Mail\BulkDeleteReportMail;
 use App\Models\Accessory;
 use App\Models\AccessoryCheckout;
 use App\Models\Actionlog;
 use App\Models\Asset;
+use App\Models\CalendarEvent;
 use App\Models\CheckoutAcceptance;
+use App\Models\CheckoutRequest;
 use App\Models\Company;
 use App\Models\Component;
 use App\Models\Consumable;
 use App\Models\License;
 use App\Models\LicenseSeat;
+use App\Models\Maintenance;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
@@ -93,6 +99,10 @@ class BulkDelete extends Command
             options: function (string $value): array {
                 $results = [];
 
+                if ($value === '' || str_contains('(all companies)', strtolower($value))) {
+                    $results['__all__'] = '(All Companies + Unassigned)';
+                }
+
                 if ($value === '' || str_contains('(no company / unassigned)', strtolower($value))) {
                     $results['__null__'] = '(No Company / Unassigned)';
                 }
@@ -112,6 +122,17 @@ class BulkDelete extends Command
             required: 'Please select at least one company.',
             hint: 'If you\'re searching on several differently named companies, use the up-arrow to go back to the search box to search again. ',
         );
+
+        // "All Companies + Unassigned" expands to every company plus the
+        // no-company scope, so callers don't have to pick each one by
+        // hand. Any other selections alongside it are redundant, so we
+        // let it win by resetting the key list.
+        if (in_array('__all__', $selectedCompanyKeys, true)) {
+            $selectedCompanyKeys = array_merge(
+                Company::orderBy('name')->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                ['__null__'],
+            );
+        }
 
         $includeNullCompany = in_array('__null__', $selectedCompanyKeys);
         $selectedCompanyIds = array_values(array_filter(
@@ -404,11 +425,11 @@ class BulkDelete extends Command
             ->where('activated', 1)
             ->where(function (Builder $q) use ($companyIds, $includeNull) {
                 if (! empty($companyIds)) {
-                    $q->whereIn('company_id', $companyIds);
+                    $q->whereHas('companies', fn (Builder $sub) => $sub->whereIn('companies.id', $companyIds));
                 }
                 if ($includeNull) {
-                    $method = ! empty($companyIds) ? 'orWhereNull' : 'whereNull';
-                    $q->{$method}('company_id');
+                    $method = ! empty($companyIds) ? 'orWhereDoesntHave' : 'whereDoesntHave';
+                    $q->{$method}('companies');
                 }
             });
     }
@@ -482,20 +503,34 @@ class BulkDelete extends Command
                 // asset, and any other assets that were assigned to this one
                 $maintenanceImages = [];
                 if ($deleteType === 'hard') {
+                    $assetId = (int) $asset->getKey();
                     if ($deleteFiles) {
                         $maintenanceImages = $asset->maintenances()
                             ->whereNotNull('image')
                             ->pluck('image')
                             ->toArray();
                     }
+                    // Calendar events published by each maintenance must go with the
+                    // maintenance rows themselves. Nothing else observes maintenances
+                    // for calendar cleanup once the parent asset is gone.
+                    $maintenanceIds = Maintenance::where('item_id', $assetId)
+                        ->where('item_type', Asset::class)
+                        ->pluck('id')
+                        ->toArray();
+                    if (! empty($maintenanceIds)) {
+                        CalendarEvent::where('source_type', Maintenance::class)
+                            ->whereIn('source_id', $maintenanceIds)
+                            ->forceDelete();
+                    }
                     $asset->maintenances()->forceDelete();
-                    AccessoryCheckout::where('assigned_to', $asset->id)
+                    AccessoryCheckout::where('assigned_to', $assetId)
                         ->where('assigned_type', Asset::class)
                         ->delete();
                     DB::table('assets')
-                        ->where('assigned_to', $asset->id)
+                        ->where('assigned_to', $assetId)
                         ->where('assigned_type', Asset::class)
                         ->update(['assigned_to' => null, 'assigned_type' => null]);
+                    $this->purgeItemRelatedRecords(Asset::class, $assetId);
                 }
 
                 match ($deleteType) {
@@ -514,10 +549,10 @@ class BulkDelete extends Command
 
                 if ($deleteFiles) {
                     if ($asset->image) {
-                        $this->deleteStorageFile('public', app('assets_upload_path').$asset->image);
+                        $this->deleteStorageFile('public', FileStorage::Assets->publicPath().$asset->image);
                     }
                     foreach ($maintenanceImages as $img) {
-                        $this->deleteStorageFile('public', app('maintenances_upload_path').$img);
+                        $this->deleteStorageFile('public', FileStorage::Maintenances->publicPath().$img);
                     }
                     foreach ($actionLogPaths as $path) {
                         $this->deleteStorageFile('local', $path);
@@ -602,6 +637,7 @@ class BulkDelete extends Command
                         ->forceDelete();
                     $license->licenseseats()->forceDelete();
                     DB::table('kits_licenses')->where('license_id', $license->id)->delete();
+                    $this->purgeItemRelatedRecords(License::class, (int) $license->getKey());
                     $license->forceDelete();
                     $this->reportLines[] = "Hard-deleted license {$license->name}";
                 }
@@ -679,7 +715,18 @@ class BulkDelete extends Command
                 }
 
                 if ($deleteType === 'hard') {
-                    DB::table('kits_accessories')->where('accessory_id', $accessory->id)->delete();
+                    $accessoryId = (int) $accessory->getKey();
+                    if ($deleteFiles) {
+                        CheckoutAcceptance::where('checkoutable_type', Accessory::class)
+                            ->where('checkoutable_id', $accessoryId)
+                            ->get()
+                            ->each(fn (CheckoutAcceptance $ca) => $this->deleteAcceptanceFiles($ca));
+                    }
+                    CheckoutAcceptance::where('checkoutable_type', Accessory::class)
+                        ->where('checkoutable_id', $accessoryId)
+                        ->forceDelete();
+                    DB::table('kits_accessories')->where('accessory_id', $accessoryId)->delete();
+                    $this->purgeItemRelatedRecords(Accessory::class, $accessoryId);
                 }
 
                 match ($deleteType) {
@@ -694,7 +741,7 @@ class BulkDelete extends Command
 
                 if ($deleteFiles) {
                     if ($accessory->image) {
-                        $this->deleteStorageFile('public', app('accessories_upload_path').$accessory->image);
+                        $this->deleteStorageFile('public', FileStorage::Accessories->publicPath().$accessory->image);
                     }
                     foreach ($actionLogPaths as $path) {
                         $this->deleteStorageFile('local', $path);
@@ -765,6 +812,10 @@ class BulkDelete extends Command
                     $component->assetlog()->forceDelete();
                 }
 
+                if ($deleteType === 'hard') {
+                    $this->purgeItemRelatedRecords(Component::class, (int) $component->getKey());
+                }
+
                 match ($deleteType) {
                     'soft' => $component->delete(),
                     'hard' => $component->forceDelete(),
@@ -777,7 +828,7 @@ class BulkDelete extends Command
 
                 if ($deleteFiles) {
                     if ($component->image) {
-                        $this->deleteStorageFile('public', app('components_upload_path').$component->image);
+                        $this->deleteStorageFile('public', FileStorage::Components->publicPath().$component->image);
                     }
                     foreach ($actionLogPaths as $path) {
                         $this->deleteStorageFile('local', $path);
@@ -821,7 +872,18 @@ class BulkDelete extends Command
                 }
 
                 if ($deleteType === 'hard') {
-                    DB::table('kits_consumables')->where('consumable_id', $consumable->id)->delete();
+                    $consumableId = (int) $consumable->getKey();
+                    if ($deleteFiles) {
+                        CheckoutAcceptance::where('checkoutable_type', Consumable::class)
+                            ->where('checkoutable_id', $consumableId)
+                            ->get()
+                            ->each(fn (CheckoutAcceptance $ca) => $this->deleteAcceptanceFiles($ca));
+                    }
+                    CheckoutAcceptance::where('checkoutable_type', Consumable::class)
+                        ->where('checkoutable_id', $consumableId)
+                        ->forceDelete();
+                    DB::table('kits_consumables')->where('consumable_id', $consumableId)->delete();
+                    $this->purgeItemRelatedRecords(Consumable::class, $consumableId);
                 }
 
                 match ($deleteType) {
@@ -836,7 +898,7 @@ class BulkDelete extends Command
 
                 if ($deleteFiles) {
                     if ($consumable->image) {
-                        $this->deleteStorageFile('public', app('consumables_upload_path').$consumable->image);
+                        $this->deleteStorageFile('public', FileStorage::Consumables->publicPath().$consumable->image);
                     }
                     foreach ($actionLogPaths as $path) {
                         $this->deleteStorageFile('local', $path);
@@ -875,9 +937,10 @@ class BulkDelete extends Command
             // companies outside the selected scope. If so, only remove the selected-company
             // associations and skip full deletion to avoid orphaning them from their other companies.
             if (! empty($companyIds)) {
-                $allUserCompanyIds = array_unique(array_filter(array_merge(
+                // Pivot is the authoritative source of membership; the legacy
+                // users.company_id scalar is no longer consulted.
+                $allUserCompanyIds = array_values(array_unique(array_filter(
                     $user->companies()->pluck('companies.id')->toArray(),
-                    $user->company_id ? [$user->company_id] : [],
                 )));
                 $outsideCompanyIds = array_values(array_diff($allUserCompanyIds, $companyIds));
 
@@ -889,6 +952,7 @@ class BulkDelete extends Command
                         $this->reportLines[] = "Would partially disassociate user {$user->username} — also belongs to: {$outsideNames}";
                     } else {
                         $user->companies()->detach($companyIds);
+                        $user->syncLegacyCompanyIdMirror();
                         warning("  Skipped full deletion of {$user->username}: they also belong to {$outsideNames}. Removed selected company associations only.");
                         $this->reportLines[] = "Partially disassociated user {$user->username} — also belongs to: {$outsideNames}. Full deletion skipped.";
                     }
@@ -926,6 +990,17 @@ class BulkDelete extends Command
                 CheckoutAcceptance::where('assigned_to_id', $user->id)->forceDelete();
                 if ($deleteType === 'hard') {
                     DB::table('company_user')->where('user_id', $user->id)->delete();
+                    // User-side related-record purge. Checkout requests carry
+                    // a user_id column (the requester), and User is a
+                    // HasCalendarEvents publisher (end_date lane), so both
+                    // need to be cleaned when the user is hard-deleted.
+                    // Orders reference users via created_by only, which we
+                    // leave nullable rather than deleting the order.
+                    $userId = (int) $user->getKey();
+                    CheckoutRequest::where('user_id', $userId)->forceDelete();
+                    CalendarEvent::where('source_type', User::class)
+                        ->where('source_id', $userId)
+                        ->forceDelete();
                 }
 
                 if ($clearLogs) {
@@ -944,7 +1019,7 @@ class BulkDelete extends Command
 
                 if ($deleteFiles) {
                     if ($user->avatar) {
-                        $this->deleteStorageFile('public', app('users_upload_path').$user->avatar);
+                        $this->deleteStorageFile('public', FileStorage::Avatars->publicPath().$user->avatar);
                     }
                     $acceptancesToDelete->each(fn (CheckoutAcceptance $ca) => $this->deleteAcceptanceFiles($ca));
                     foreach ($actionLogPaths as $path) {
@@ -980,10 +1055,46 @@ class BulkDelete extends Command
     private function deleteAcceptanceFiles(CheckoutAcceptance $acceptance): void
     {
         if ($acceptance->signature_filename) {
-            $this->deleteStorageFile('local', 'private_uploads/signatures/'.$acceptance->signature_filename);
+            $this->deleteStorageFile('local', FileStorage::Signatures->privateStorageKey().$acceptance->signature_filename);
         }
         if ($acceptance->stored_eula_file) {
-            $this->deleteStorageFile('local', 'private_uploads/eula-pdfs/'.$acceptance->stored_eula_file);
+            $this->deleteStorageFile('local', FileStorage::EulaPdfs->privateStorageKey().$acceptance->stored_eula_file);
+        }
+    }
+
+    /**
+     * Purge related records that reference a checkoutable (Asset, License,
+     * Accessory, Component, Consumable) via a polymorphic column. Called on
+     * hard-delete only; soft-delete keeps these records so a restore is
+     * meaningful. Covers checkout_requests, calendar_events, order_items,
+     * and empties out orders that lose their last item as a result.
+     */
+    private function purgeItemRelatedRecords(string $modelClass, int $itemId): void
+    {
+        CheckoutRequest::where('requestable_type', $modelClass)
+            ->where('requestable_id', $itemId)
+            ->forceDelete();
+
+        CalendarEvent::where('source_type', $modelClass)
+            ->where('source_id', $itemId)
+            ->forceDelete();
+
+        $affectedOrderIds = OrderItem::where('item_type', $modelClass)
+            ->where('item_id', $itemId)
+            ->pluck('order_id')
+            ->unique();
+
+        OrderItem::where('item_type', $modelClass)
+            ->where('item_id', $itemId)
+            ->forceDelete();
+
+        // An order with no remaining line items is a dangling shell,
+        // purge it so hard-delete leaves no orphans.
+        foreach ($affectedOrderIds as $orderId) {
+            $stillHasItems = OrderItem::where('order_id', $orderId)->exists();
+            if (! $stillHasItems) {
+                Order::where('id', $orderId)->forceDelete();
+            }
         }
     }
 }

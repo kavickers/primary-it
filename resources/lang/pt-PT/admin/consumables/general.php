@@ -9,4 +9,7 @@ return [
     'total' => 'Total',
     'update' => 'Atualizar consumível',
     'inventory_warning' => 'O inventário deste consumível está abaixo da quantidade mínima de :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

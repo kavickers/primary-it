@@ -3,6 +3,7 @@
 return [
     'actions' => 'Akcje',
     'add' => 'Dodaj nowy',
+    'back' => 'Powrót',
     'cancel' => 'Anuluj',
     'checkin_and_delete' => 'Odbierz wszytko i usuń użytkownika',
     'delete' => 'Kasuj',
@@ -22,7 +23,7 @@ return [
     'add_maintenance' => 'Dodaj konserwację',
     'append' => 'Dołącz',
     'new' => 'Nowy',
-    'show_hide_info' => 'Show/Hide More Information',
+    'show_hide_info' => 'Pokaż/Ukryj więcej informacji',
     'var' => [
         'clone' => 'Powiel :item_type',
         'edit' => 'Edytuj :item_type',

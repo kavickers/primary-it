@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => ':attribute moet uniek zijn in :table1 en :table2. ',
     'unique_undeleted' => 'De :attribute moet uniek zijn. ',
     'non_circular' => ':attribute mag geen circulaire referentie aanmaken.',
+    'parent_must_be_top_level' => 'The selected :attribute must itself be a top-level item. Only one level of nesting is allowed.',
+    'must_have_no_children' => 'This item already has children of its own, so it cannot be assigned a parent.',
+    'parent_within_scope' => 'The selected :attribute is outside your assigned scope.',
     'not_array' => ':attribute kan geen array zijn.',
     'disallow_same_pwd_as_user_fields' => 'Wachtwoord kan niet hetzelfde zijn als de gebruikersnaam.',
     'letters' => 'Wachtwoord moet ten minste één letter bevatten.',
@@ -171,10 +174,19 @@ return [
     'uploaded' => 'Uploaden van :attribute is mislukt.',
     'uppercase' => ':attribute veld moet met hoofdletter zijn.',
     'url' => ':attribute veld moet een geldige URL zijn.',
+    'external_url' => 'The :attribute field must be a valid external URL (http:// or https://) that does not point at a private or local address.',
+    'asset_tag_pattern_placeholder' => 'The asset tag pattern must include at least one placeholder from :placeholders, otherwise every synced asset would receive the same tag and only the first would save.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Custom Extras must be valid JSON. Parser error: :error',
+        'not_array' => 'Custom Extras must be a JSON array (starting with [ and ending with ]).',
+        'entry_not_object' => 'Custom Extras entry #:index must be a JSON object with key, label, and path fields.',
+        'missing_field' => 'Custom Extras entry #:index is missing the required ":field" field.',
+    ],
     'ulid' => ':attribute veld moet een geldige ULID zijn.',
     'uuid' => ':attribute veld moet een geldige UUID zijn.',
     'valid_css_color' => 'The :attribute field must be a valid CSS color (hex, rgb, rgba, hsl, or hsla).',
-    'fmcs_location' => 'Full multiple company support and location scoping is enabled in the Admin Settings, and the selected location and selected company are not compatible.',
+    'fmcs_company' => 'The :attribute field is required because full multiple companies support is enabled and floaters are not allowed.',
+    'fmcs_location' => 'Location ":location" belongs to :location_company, which does not match the selected company.',
     'is_unique_across_company_and_location' => 'The :attribute must be unique within the selected company and location.',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => 'één of meer e-mail adressen kloppen niet.',
     'checkboxes' => ':attribute bevat ongeldige opties.',
     'radio_buttons' => ':attribute is ongeldig.',
+    'image_file_too_large' => 'The :attribute may not be larger than :max.',
 
     'custom' => [
         'alpha_space' => ':attribute veld bevat een karakter wat niet is toegestaan.',

@@ -23,17 +23,17 @@ return [
     'bulk' => [
         'checkin_all' => [
             'button' => '全てのシートをチェックイン',
-            'modal' => 'This action will checkin one seat. | This action will checkin all :checkedout_seats_count seats for this license.',
+            'modal' => '1シートをチェックインします。|チェックアウト中の :checkedout_seats_countシートをすべてチェックインします。',
             'enabled_tooltip' => 'ユーザーとアセットの両方から、このライセンスのすべてのシートをチェックインします',
             'disabled_tooltip' => '現在チェックアウトされているシートがないため、これは無効です',
             'disabled_tooltip_reassignable' => 'ライセンスが再割り当てできないため、これは無効です',
             'success' => 'ライセンスのチェックインに成功しました! | すべてのライセンスは正常にチェックインされました!',
-            'log_msg' => 'Checked in via bulk license checkin in license GUI',
+            'log_msg' => 'ライセンス画面から一括チェックイン',
         ],
 
         'checkin_selected' => [
-            'success' => ':count seat checked in successfully. | :count seats checked in successfully.',
-            'no_seats_selected' => 'No seats were selected.',
+            'success' => ':countシートをチェックインしました。|:countシートをチェックインしました。',
+            'no_seats_selected' => 'シートが選択されていません。',
         ],
 
         'checkout_all' => [
@@ -47,6 +47,11 @@ return [
             'warn_no_avail_users' => '何もすることはありません。このライセンスが割り当てられていないユーザーはいません。',
             'log_msg' => 'ライセンスGUIで一括ライセンスチェックアウトを行いました',
 
+        ],
+
+        'delete_with_checkin' => [
+            'label' => 'シートをチェックインして削除',
+            'log_msg' => 'ライセンス一覧からチェックイン後に一括削除',
         ],
     ],
 

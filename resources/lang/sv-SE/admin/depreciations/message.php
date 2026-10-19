@@ -19,6 +19,8 @@ return [
         'confirm' => 'Är du säker på att du vill ta bort denna värdeminskningsklass?',
         'error' => 'Det gick inte att ta bort värdeminskningsklassen. Vänligen försök igen.',
         'success' => 'Värdeminskningsklassen har tagits bort.',
+        'bulk_success' => 'Deprecieringsklass raderad.|:count deprecieringsklasser har raderats.',
+        'partial_success' => 'Deprecieringsklass raderad. Se ytterligare information nedan.|:count deprecieringsklasser har raderats. Se ytterligare information nedan.',
     ],
 
 ];

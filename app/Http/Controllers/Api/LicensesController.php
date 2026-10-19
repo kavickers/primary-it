@@ -12,6 +12,7 @@ use App\Http\Transformers\LicenseSeatsTransformer;
 use App\Http\Transformers\LicensesTransformer;
 use App\Http\Transformers\SelectlistTransformer;
 use App\Models\Asset;
+use App\Models\CheckoutAcceptance;
 use App\Models\Company;
 use App\Models\License;
 use App\Models\LicenseSeat;
@@ -20,6 +21,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 class LicensesController extends Controller
 {
@@ -34,6 +36,12 @@ class LicensesController extends Controller
     {
         $this->authorize('view', License::class);
 
+        // Callers without viewKeys must not be able to filter or search on
+        // licenses.serial. The transformer masks the value in the response
+        // body, but a filter/search hit still leaks key existence through
+        // the row count and result presence.
+        $canViewKeys = Gate::allows('viewKeys', License::class);
+
         $licenses = License::with('company', 'manufacturer', 'supplier', 'category', 'adminuser', 'licenseSeatsRelation', 'assignedCount')
             ->withCount([
                 'freeSeats as free_seats_count',
@@ -45,19 +53,25 @@ class LicensesController extends Controller
             $licenses->ExpiredLicenses();
         } elseif ($request->input('status') == 'expiring') {
             $licenses->ExpiringLicenses($settings->alert_interval);
-        } elseif ($request->input('status') == 'active') {
+        } else {
             $licenses->ActiveLicenses();
         }
 
         if ($request->filled('company_id')) {
-            $licenses->where('licenses.company_id', '=', $request->input('company_id'));
+            // expand_company_hierarchy=1 opts the company show-page tabs into the
+            // parent/child rollup so a child shows items inherited from its parent.
+            if ($request->boolean('expand_company_hierarchy')) {
+                $licenses->whereIn('licenses.company_id', Company::reachableCompanyIds($request->input('company_id')));
+            } else {
+                $licenses->where('licenses.company_id', '=', $request->input('company_id'));
+            }
         }
 
         if ($request->filled('name')) {
             $licenses->where('licenses.name', '=', $request->input('name'));
         }
 
-        if ($request->filled('product_key')) {
+        if ($request->filled('product_key') && $canViewKeys) {
             $licenses->where('licenses.serial', '=', $request->input('product_key'));
         }
 
@@ -109,9 +123,14 @@ class LicensesController extends Controller
             $licenses->whereNull('expiration_date');
         }
 
-        // This invokes the Searchable model trait and will handle input by search or by advanced search filter
+        // This invokes the Searchable model trait and will handle input by search or by advanced search filter.
+        // Callers without viewKeys go through TextSearchWithoutSerial, which strips
+        // licenses.serial out of the searchable attribute set for the duration of the call.
         if ($request->filled('filter') || $request->filled('search')) {
-            $licenses->TextSearch($request->input('filter') ? $request->input('filter') : $request->input('search'));
+            $searchTerm = $request->input('filter') ? $request->input('filter') : $request->input('search');
+            $canViewKeys
+                ? $licenses->TextSearch($searchTerm)
+                : $licenses->TextSearchWithoutSerial($searchTerm);
         }
 
         if ($request->input('deleted') == 'true') {
@@ -147,6 +166,9 @@ class LicensesController extends Controller
                 break;
             case 'product_key':
                 $licenses = $licenses->orderBy('licenses.serial', $order);
+                break;
+            case 'percent_remaining':
+                $licenses = $licenses->OrderPercentRemaining($order);
                 break;
             default:
                 $allowed_columns =
@@ -304,6 +326,8 @@ class LicensesController extends Controller
             'assigned_to' => 'required_if:target_type,user|integer|nullable',
             'asset_id' => 'required_if:target_type,asset|integer|nullable',
             'notes' => 'sometimes|string|nullable',
+            // Opt-in flag for instantly reassigning an occupied seat.
+            'reassign' => 'sometimes|boolean',
         ]);
 
         if ($license->isInactive()) {
@@ -331,6 +355,45 @@ class LicensesController extends Controller
                 $errorResponse = response()->json(Helper::formatStandardApiResponse('error', null, trans('admin/licenses/message.checkout.unavailable')));
 
                 return;
+            }
+
+            // GHSA-r25g-f428-466r: reject occupied seats on explicit-id
+            // checkout by default.
+            if ($licenseSeat->assigned_to !== null || $licenseSeat->asset_id !== null) {
+                if (! ($validated['reassign'] ?? false)) {
+                    $errorResponse = response()->json(Helper::formatStandardApiResponse('error', null, trans('admin/licenses/message.checkout.unavailable')));
+
+                    return;
+                }
+
+                if (! $licenseSeat->license->reassignable) {
+                    $errorResponse = response()->json(Helper::formatStandardApiResponse('error', null, trans('admin/licenses/message.checkout.unavailable')));
+
+                    return;
+                }
+
+                // Fire CheckoutableCheckedIn for the
+                // current holder and delete their pending acceptance
+                $displaced = $licenseSeat->assigned_to
+                    ? User::withoutGlobalScopes()->find($licenseSeat->assigned_to)
+                    : ($licenseSeat->asset_id ? Asset::withoutGlobalScopes()->find($licenseSeat->asset_id) : null);
+
+                if ($displaced instanceof User) {
+                    CheckoutAcceptance::pending()
+                        ->where('checkoutable_type', LicenseSeat::class)
+                        ->where('checkoutable_id', $licenseSeat->id)
+                        ->where('assigned_to_id', $displaced->id)
+                        ->get()
+                        ->each(fn ($a) => $a->delete());
+                }
+
+                $licenseSeat->assigned_to = null;
+                $licenseSeat->asset_id = null;
+                $licenseSeat->save();
+
+                if ($displaced) {
+                    event(new CheckoutableCheckedIn($licenseSeat, $displaced, auth()->user(), $validated['notes'] ?? null));
+                }
             }
 
             if ($validated['target_type'] === 'user') {
@@ -476,5 +539,32 @@ class LicensesController extends Controller
         $history = (clone $historyQuery)->skip($offset)->take($limit)->get();
 
         return response()->json((new ActionlogsTransformer)->transformActionlogs($history, $total), 200, ['Content-Type' => 'application/json;charset=utf8'], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * List licenses that are requestable AND reachable by the current
+     * caller (per FMCS + location scoping). Hydrates the licenses tab
+     * on /account/requestable. See the sibling
+     * AccessoriesController::requestable for design rationale.
+     */
+    public function requestable(Request $request): array
+    {
+        $query = License::with('category', 'company', 'manufacturer', 'requests')
+            ->Requestable();
+
+        if ($request->filled('search')) {
+            $query->TextSearch($request->input('search'));
+        }
+
+        $total = $query->count();
+        $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
+        $limit = app('api_limit_value');
+
+        $order = $request->input('order') === 'asc' ? 'asc' : 'desc';
+        $sort = in_array($request->input('sort'), ['name', 'created_at'], true) ? $request->input('sort') : 'name';
+
+        $rows = $query->orderBy($sort, $order)->skip($offset)->take($limit)->get();
+
+        return (new LicensesTransformer)->transformRequestedLicenses($rows, $total);
     }
 }

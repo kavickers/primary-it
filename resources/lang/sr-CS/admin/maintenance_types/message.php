@@ -14,6 +14,8 @@ return [
         'confirm' => 'Da li zaista želite da izbrišete ovaj tip održavanja?',
         'error' => 'Došlo je do problema prilikom brisanja tipa održavanja. Molim vas pokušajte ponovo.',
         'success' => 'Tip održavanja je uspešno izbrisan.',
+        'bulk_success' => 'Tip održavanja je uspešno obrisan.|:count tipa održavanj su uspešno obrisana.',
+        'partial_success' => 'Tip održavanja je uspešno obrisan. Ispod pogledajte dodatne informacije. |:count tipa održavanj su uspešno obrisana. Ispod pogledajte dodatne informacije.',
     ],
     'complete' => [
         'success' => 'Održavanje je označeno kao završeno.',

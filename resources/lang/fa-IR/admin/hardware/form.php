@@ -10,7 +10,7 @@ return [
     'bulk_update' => 'به روز رسانی دارایی های فله',
     'bulk_update_help' => 'این فرم برای به روز رسانی دارایی های متعدد در یک بار را به شما اجازه می دهد. تنها قسمت ها نیاز به تغییر را پر کنید. هر زمینه های خالی سمت چپ بدون تغییر باقی می ماند. ',
     'bulk_update_warn' => 'You are about to edit the properties of a single asset.|You are about to edit the properties of :asset_count assets.',
-    'bulk_update_with_custom_field' => 'Note the assets are :asset_model_count different types of models.',
+    'bulk_update_with_custom_field' => 'Your selection spans :asset_model_count different asset models. Custom fields below are grouped by model.',
     'bulk_update_model_prefix' => 'On Models',
     'bulk_update_custom_field_unique' => 'This is a unique field and can not be bulk edited.',
     'checkedout_to' => 'تحویل شده به
@@ -54,6 +54,7 @@ return [
     'redirect_to_all' => 'Return to all :type',
     'redirect_to_type' => 'Go to :type',
     'redirect_to_checked_out_to' => 'Go to Checked Out to',
+    'redirect_to_bulk_checkout' => 'Return to Bulk Checkout',
     'select_statustype' => 'انتخاب نوع وضعیت',
     'serial' => 'سریال',
     'serial_required' => 'Asset :number requires a serial number',
@@ -64,6 +65,7 @@ return [
     'update' => 'به روز رسانی دارایی
 ',
     'warranty' => 'گارانتی',
+    'warranty_months' => 'Warranty Months',
     'warranty_expires' => 'انقضای ضمانت',
     'years' => 'سال ها',
     'asset_location' => 'بروزرسانی مکان دارایی',

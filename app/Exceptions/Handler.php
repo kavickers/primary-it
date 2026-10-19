@@ -14,10 +14,11 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Session\TokenMismatchException;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Validation\ValidationException;
 use Intervention\Image\Exception\NotSupportedException;
 use JsonException;
+use Laravel\Passport\Exceptions\OAuthServerException as PassportOAuthServerException;
 use League\OAuth2\Server\Exception\OAuthServerException;
 use Livewire\Exceptions\ComponentNotFoundException;
 use Livewire\Exceptions\PublicPropertyNotFoundException;
@@ -29,7 +30,7 @@ class Handler extends ExceptionHandler
     /**
      * A list of the exception types that are not reported.
      *
-     * @var array
+     * @var array<int, class-string<\Throwable>>
      */
     protected $dontReport = [
         AuthenticationException::class,
@@ -40,6 +41,7 @@ class Handler extends ExceptionHandler
         ValidationException::class,
         NotSupportedException::class,
         OAuthServerException::class,
+        PassportOAuthServerException::class,
         JsonException::class,
         SCIMException::class, // these generally don't need to be reported
         InvalidFormatException::class,
@@ -57,12 +59,34 @@ class Handler extends ExceptionHandler
     public function report(Throwable $exception)
     {
         if ($this->shouldReport($exception)) {
-            if (class_exists(Log::class)) {
-                Log::error($exception);
-            }
-
             return parent::report($exception);
         }
+    }
+
+    /**
+     * Report a caught exception, and rethrow in dev when the underlying
+     * cause is a programmer-error \Error (TypeError, ArgumentCountError,
+     * etc.) so it fails loud with a stack trace in dev instead of hiding behind
+     * a friendly "something went wrong" flash. Plain \Exception (sub)types
+     * (QueryException, ItemStillHasAssets, etc.) *always* report + return so
+     * bulk operations can keep swallowing runtime-data failures per row.
+     *
+     * We should use this as a drop-in for `report($e)` inside the wide-net
+     * catch (\Throwable $e) blocks in the bulk destroy / import paths.
+     */
+    public static function reportOrRethrow(Throwable $e): void
+    {
+        // Both APP_DEBUG must be on AND the environment must
+        // not be production before the raw \Error is allowed to
+        // escape past the friendly user-facing error.
+        if (
+            config('app.debug')
+            && ! app()->environment('production')
+            && $e instanceof \Error
+        ) {
+            throw $e;
+        }
+        report($e);
     }
 
     /**
@@ -88,7 +112,13 @@ class Handler extends ExceptionHandler
 
         // CSRF token mismatch error
         if ($e instanceof TokenMismatchException) {
-            return redirect()->back()->with('error', trans('general.token_expired'));
+            // Any form POST can hit this branch, including pre-auth
+            // forms (login, password reset, setup wizard). Routing the
+            // fallback through sameOriginUrl prevents a crafted link
+            // that pairs an off-origin Referer with an expired token
+            // from steering the response Location off-site.
+            return redirect()->to(Helper::sameOriginUrl(url()->previous()) ?? route('home'))
+                ->with('error', trans('general.token_expired'));
         }
 
         // Invalid JSON exception
@@ -110,7 +140,9 @@ class Handler extends ExceptionHandler
 
         // Handle standard requests that fail because Carbon cannot parse the date on validation (when a submitted date value is definitely not a date)
         if ($e instanceof InvalidFormatException) {
-            return redirect()->back()->withInput()->with('error', trans('validation.date', ['attribute' => 'date']));
+            // Same open-redirect guard as the TokenMismatch branch above.
+            return redirect()->to(Helper::sameOriginUrl(url()->previous()) ?? route('home'))
+                ->withInput()->with('error', trans('validation.date', ['attribute' => 'date']));
         }
 
         // Handle API requests that fail
@@ -158,7 +190,7 @@ class Handler extends ExceptionHandler
         // This is traaaaash but it handles models that are not found while using route model binding :(
         // The only alternative is to set that at *each* route, which is crazypants
         if ($e instanceof ModelNotFoundException) {
-            $ids = method_exists($e, 'getIds') ? $e->getIds() : [];
+            $ids = $e->getIds();
 
             if (in_array('bulkedit', $ids, true)) {
                 $error_array = session()->get('bulk_asset_errors');
@@ -192,9 +224,15 @@ class Handler extends ExceptionHandler
                 $route = 'home';
             }
 
+            // Normalize the space-separated derived name to underscore
+            // so compound class names (AssetModel -> "asset model" -> "asset_model")
+            // resolve to keys that actually exist in general.php.
+            $translationKey = 'general.'.str_replace(' ', '_', $model_name);
+            $translatedName = Lang::has($translationKey) ? trans($translationKey) : $model_name;
+
             return redirect()
                 ->route($route)
-                ->withError(trans('general.generic_model_not_found', ['model' => $model_name]));
+                ->withError(trans('general.generic_model_not_found', ['model' => $translatedName]));
         }
 
         if ($this->isHttpException($e) && (isset($statusCode)) && ($statusCode == '404')) {
@@ -230,7 +268,7 @@ class Handler extends ExceptionHandler
     /**
      * A list of the inputs that are never flashed for validation exceptions.
      *
-     * @var array
+     * @var array<int, string>
      */
     protected $dontFlash = [
         'current_password',

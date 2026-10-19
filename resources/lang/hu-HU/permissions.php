@@ -36,11 +36,12 @@ return [
 
     'assets' => [
         'name' => 'Eszközök',
-        'note' => 'Hozzáférést biztosít az alkalmazás Eszközök menüpontjához.',
+        'note' => 'Hozzáférést biztosít az alkalmazás Eszközök menüpontjához. ',
     ],
 
     'assetsview' => [
         'name' => 'Eszközök megtekintése',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the asset model as well. This is to make it easier to share common documents like user manuals across assets without having to upload them to every asset, and to avoid having to grant the user permission to modify asset files. Users with this permission will also be able to view edit and checkin history.',
     ],
 
     'assetscreate' => [
@@ -72,11 +73,11 @@ return [
 
     'assetsviewrequestable' => [
         'name' => 'Igényelhető eszközök megtekintése',
-        'note' => 'Allows the user to view assets that are marked as requestable.',
+        'note' => 'Allows the user to view items that are marked as requestable.',
     ],
 
     'assetsviewencrypted-custom-fields' => [
-        'name' => 'View Encrypted Custom Fields',
+        'name' => 'Titkosított mezők megtekintése',
         'note' => 'Allows the user to view and modify encrypted custom fields on assets.',
     ],
 
@@ -86,16 +87,16 @@ return [
     ],
 
     'accessoriesview' => [
-        'name' => 'View Accessories',
+        'name' => 'Kiegészítők megtekintése',
     ],
     'accessoriescreate' => [
-        'name' => 'Create New Accessories',
+        'name' => 'Új kiegészítők létrehozása',
     ],
     'accessoriesedit' => [
-        'name' => 'Edit Accessories',
+        'name' => 'Kiegészítők szerkesztése',
     ],
     'accessoriesdelete' => [
-        'name' => 'Delete Accessories',
+        'name' => 'Kiegészítők törlése',
     ],
     'accessoriescheckout' => [
         'name' => 'Check Out Accessories',
@@ -106,22 +107,22 @@ return [
         'note' => 'Check accessories back into inventory that are currently checked out.',
     ],
     'accessoriesfiles' => [
-        'name' => 'Manage Accessory Files',
+        'name' => 'Kiegészítő fileok kezelése',
         'note' => 'Allows the user to upload, download, and delete files associated with accessories. (This only makes sense with view privileges or higher.)',
     ],
 
     'assetsfiles' => [
-        'name' => 'Manage Asset Files',
+        'name' => 'Eszköz fileok kezelése',
         'note' => 'Allows the user to upload, download, and delete files associated with assets. (This only makes sense with view privileges or higher.)',
     ],
 
     'usersfiles' => [
-        'name' => 'Manage User Files',
+        'name' => 'Felhasználói fileok kezelése',
         'note' => 'Allows the user to upload, download, and delete files associated with users. (This only makes sense with view privileges or higher.)',
     ],
 
     'modelsfiles' => [
-        'name' => 'Manage Model Files',
+        'name' => 'Modell fileok kezelése',
         'note' => 'Allows the user to upload, download, and delete files associated with asset models on both the model view and the asset view screens. (This only makes sense with view privileges or higher.)',
     ],
 
@@ -155,16 +156,16 @@ return [
         'note' => 'Grants access to the Consumables section of the application.',
     ],
     'consumablesview' => [
-        'name' => 'View Consumables',
+        'name' => 'Fogyóeszközök megtekintése',
     ],
     'consumablescreate' => [
-        'name' => 'Create New Consumables',
+        'name' => 'Új fogyóeszközök létrehozása',
     ],
     'consumablesedit' => [
-        'name' => 'Edit Consumables',
+        'name' => 'Fogyóeszközök szerkesztése',
     ],
     'consumablesdelete' => [
-        'name' => 'Delete Consumables',
+        'name' => 'Fogyóeszközök törlése',
     ],
     'consumablescheckout' => [
         'name' => 'Check Out Consumables',
@@ -176,27 +177,27 @@ return [
         'note' => 'Grants access to the Licenses section of the application.',
     ],
     'licensesview' => [
-        'name' => 'View Licenses',
+        'name' => 'Licenszek megtekintése',
     ],
     'licensescreate' => [
-        'name' => 'Create New Licenses',
+        'name' => 'Új licenszek létrehozása',
     ],
     'licensesedit' => [
-        'name' => 'Edit Licenses',
+        'name' => 'Licenszek szerkesztése',
     ],
     'licensesdelete' => [
-        'name' => 'Delete Licenses',
+        'name' => 'Licenszek törlése',
     ],
     'licensescheckout' => [
-        'name' => 'Assign Licenses',
+        'name' => 'Licenszek hozzárendelése',
         'note' => 'Allows the user to assign licenses to assets or users.',
     ],
     'licensescheckin' => [
-        'name' => 'Unassign Licenses',
+        'name' => 'Licensz hozzárendelések eltávolítása',
         'note' => 'Allows the user to unassign licenses from assets or users.',
     ],
     'licensesfiles' => [
-        'name' => 'Manage License Files',
+        'name' => 'Licensz fileok kezelése',
         'note' => 'Allows the user to upload, download, and delete files associated with licenses.',
     ],
     'componentsfiles' => [
@@ -255,6 +256,7 @@ return [
     ],
     'usersview' => [
         'name' => 'Felhasználók megtekintése',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the user as well. Users with this permission will also be able to view edit and checkin history.',
     ],
     'userscreate' => [
         'name' => 'Create New Users',
@@ -263,10 +265,10 @@ return [
         'name' => 'Edit Users',
     ],
     'usersdelete' => [
-        'name' => 'Delete Users',
+        'name' => 'Felhasználók törlése',
     ],
     'models' => [
-        'name' => 'Models',
+        'name' => 'Modellek',
         'note' => 'Grants access to the Models section of the application.',
     ],
     'modelsview' => [
@@ -274,29 +276,29 @@ return [
     ],
 
     'modelscreate' => [
-        'name' => 'Create New Models',
+        'name' => 'Új modellek létrehozása',
     ],
     'modelsedit' => [
-        'name' => 'Edit Models',
+        'name' => 'Modellek szerkesztése',
     ],
     'modelsdelete' => [
-        'name' => 'Delete Models',
+        'name' => 'Modellek törlése',
     ],
     'categories' => [
         'name' => 'Kategóriák',
-        'note' => 'Grants access to the Categories section of the application.',
+        'note' => 'Hozzáférése biztosítása az alkalmazás "Kategóriák" részéhez.',
     ],
     'categoriesview' => [
-        'name' => 'View Categories',
+        'name' => 'Kategóriák megtekintése',
     ],
     'categoriescreate' => [
-        'name' => 'Create New Categories',
+        'name' => 'Új kategóriák létrehozása',
     ],
     'categoriesedit' => [
-        'name' => 'Edit Categories',
+        'name' => 'Kategóriák szerkesztése',
     ],
     'categoriesdelete' => [
-        'name' => 'Delete Categories',
+        'name' => 'Kategóriák törlése',
     ],
     'departments' => [
         'name' => 'Osztályok',
@@ -348,51 +350,51 @@ return [
     ],
     'custom-fields' => [
         'name' => 'Egyéni mezők',
-        'note' => 'Grants access to the Custom Fields section of the application used by Assets.',
+        'note' => 'Hozzáférése biztosítása az alkalmazásben az Eszközök által használt "Egyéni mezők" részhez.',
     ],
     'customfieldsview' => [
-        'name' => 'View Custom Fields',
+        'name' => 'Egyéni mezők megtekintése',
     ],
     'customfieldscreate' => [
-        'name' => 'Create New Custom Fields',
+        'name' => 'Új egyéni mezők létrehozása',
     ],
     'customfieldsedit' => [
-        'name' => 'Edit Custom Fields',
+        'name' => 'Egyéni mezők szerkesztése',
     ],
     'customfieldsdelete' => [
-        'name' => 'Delete Custom Fields',
+        'name' => 'Egyéni mezők törlése',
     ],
     'suppliers' => [
         'name' => 'Beszállítók',
-        'note' => 'Grants access to the Suppliers section of the application.',
+        'note' => 'Hozzáférése biztosítása az alkalmazás "Beszállítók" részéhez.',
     ],
     'suppliersview' => [
-        'name' => 'View Suppliers',
+        'name' => 'Beszállítók megtekintése',
     ],
     'supplierscreate' => [
-        'name' => 'Create New Suppliers',
+        'name' => 'Új beszállítók létrehozása',
     ],
     'suppliersedit' => [
-        'name' => 'Edit Suppliers',
+        'name' => 'Beszállítók szerkesztése',
     ],
     'suppliersdelete' => [
-        'name' => 'Delete Suppliers',
+        'name' => 'Beszállítók törlése',
     ],
     'manufacturers' => [
         'name' => 'Gyártók',
-        'note' => 'Grants access to the Manufacturers section of the application.',
+        'note' => 'Hozzáférése biztosítása az alkalmazás "Gyártók" részéhez.',
     ],
     'manufacturersview' => [
-        'name' => 'View Manufacturers',
+        'name' => 'Gyártók megtekintése',
     ],
     'manufacturerscreate' => [
-        'name' => 'Create New Manufacturers',
+        'name' => 'Új gyártók létrehozása',
     ],
     'manufacturersedit' => [
-        'name' => 'Edit Manufacturers',
+        'name' => 'Gyártók szerkesztése',
     ],
     'manufacturersdelete' => [
-        'name' => 'Delete Manufacturers',
+        'name' => 'Gyártók törlése',
     ],
     'companies' => [
         'name' => 'Cégek',
@@ -415,11 +417,11 @@ return [
         'note' => 'Grants non-admin users the ability to manage certain aspects of their own user accounts.',
     ],
     'selftwo-factor' => [
-        'name' => 'Manage Two-Factor Authentication',
+        'name' => 'Kétfaktoros azonosítás kezelése',
         'note' => 'Allows users to enable, disable, and manage two-factor authentication for their own accounts.',
     ],
     'selfapi' => [
-        'name' => 'Manage API Tokens',
+        'name' => 'API Tokenek kezelése',
         'note' => 'Allows users to create, view, and revoke their own API tokens. User tokens will have the same permissions as the user who created them.',
     ],
     'selfedit-location' => [

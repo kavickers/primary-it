@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Demirbaş bakımları', // not used anymore
     'maintenances' => 'Bakımlar',
+    'create' => 'Varlık Bakımı Oluştur',
     'edit' => 'Varlık Bakımını Değiştir',
     'delete' => 'Varlık Bakımını Sil',
     'view' => 'Varlık Bakım Detaylarını Gör',

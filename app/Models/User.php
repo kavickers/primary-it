@@ -2,8 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\FileStorage;
 use App\Http\Traits\UniqueUndeletedTrait;
+use App\Models\Builders\UserQueryBuilder;
 use App\Models\Traits\CompanyableTrait;
+use App\Models\Traits\HasCalendarEvents;
+use App\Models\Traits\HasImageUpload;
 use App\Models\Traits\HasUploads;
 use App\Models\Traits\Loggable;
 use App\Models\Traits\Searchable;
@@ -21,6 +25,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\Access\Authorizable;
@@ -32,11 +37,21 @@ use Illuminate\Support\Str;
 use Laravel\Passport\HasApiTokens;
 use Watson\Validating\ValidatingTrait;
 
+/**
+ * @mixin IdeHelperUser
+ */
 class User extends SnipeModel implements AuthenticatableContract, AuthorizableContract, CanResetPasswordContract, HasLocalePreference
 {
     use CompanyableTrait;
+    use HasCalendarEvents;
     use HasFactory;
+    use HasImageUpload;
     use HasUploads;
+
+    public static function fileStorage(): FileStorage
+    {
+        return FileStorage::Avatars;
+    }
 
     protected $presenter = UserPresenter::class;
 
@@ -46,6 +61,22 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
     use Presentable;
     use Searchable;
     use UniqueUndeletedTrait;
+
+    /**
+     * Fields governed by the `canEditAuthFields` gate: credentials (username,
+     * email, password), the activation flag, and the permission blob. Any
+     * controller / importer / job that mass-assigns from user input must gate
+     * writes to these fields on `canEditAuthFields` against the target, and
+     * signal denial rather than silently dropping them. Add to this list to
+     * bring a new field under the same gate everywhere at once.
+     */
+    public const GATED_AUTH_FIELDS = [
+        'password',
+        'username',
+        'email',
+        'activated',
+        'permissions',
+    ];
 
     protected $hidden = [
         'password',
@@ -72,7 +103,6 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
         'activated',
         'address',
         'city',
-        'company_id',
         'country',
         'department_id',
         'email',
@@ -106,7 +136,7 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
     protected $casts = [
         'manager_id' => 'integer',
         'location_id' => 'integer',
-        'company_id' => 'integer',
+        'legacy_company_id' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -253,18 +283,13 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
 
     protected static function booted(): void
     {
-        // Bridge for factories/seeders that still set company_id directly: ensure
-        // that company appears in the pivot so FMCS scoping works correctly.
-        // Application code (controllers, importers) writes only to the pivot.
-        static::created(function (User $user) {
-            if ($user->company_id) {
-                $user->companies()->syncWithoutDetaching([$user->company_id]);
-            }
-        });
-
         static::forceDeleted(function (User $user) {
             CheckoutRequest::where(['user_id' => $user->id])->forceDelete();
             $user->purgeAssociatedPassportTokens();
+            // Soft-delete leaves pivot rows so a restore preserves group
+            // memberships. Force-delete removes the row entirely, so the
+            // pivot rows would point at nothing.
+            $user->groups()->detach();
         });
 
         static::softDeleted(function (User $user) {
@@ -319,6 +344,8 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
      * This overrides the SnipeModel displayName accessor to return the full name if display_name is not set
      *
      * @see SnipeModel::displayName()
+     *
+     * @return Attribute<string|null, mixed>
      */
     protected function displayName(): Attribute
     {
@@ -552,6 +579,33 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
         return $this->checkPermissionSection('superuser');
     }
 
+    public function canImpersonate(): bool
+    {
+        if (! $this->isSuperUser()) {
+            return false;
+        }
+
+        $allowed = array_map('mb_strtolower', (array) config('app.user_impersonation_usernames'));
+
+        return in_array(mb_strtolower((string) $this->username), $allowed, true);
+    }
+
+    public function mayImpersonate(User $target): bool
+    {
+        return $this->canImpersonate()
+            && $target->id !== $this->id
+            && ! $target->isSuperUser()
+            && $target->deleted_at === null
+            && $target->activated == 1;
+    }
+
+    public function twoFactorResettable(): bool
+    {
+        return $this->activated == '1'
+            && $this->two_factor_active_and_enrolled()
+            && ! in_array(Setting::getSettings()->two_factor_enabled, ['0', '', null], true);
+    }
+
     /**
      * Checks if the user is an admin
      *
@@ -564,6 +618,35 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
     public function isAdmin()
     {
         return $this->checkPermissionSection('admin');
+    }
+
+    /**
+     * Whether this user is allowed to save another user with no company
+     * assignment. Under floater mode, "no companies" means the target gains
+     * system-wide visibility, so the actor needs to already be at that
+     * privilege level: superusers can always grant it; floater actors
+     * (themselves uncompanied) can grant it to others without escalating —
+     * they already have the same access. The only blocked case is a
+     * *companied* non-superuser trying to elevate someone to floater, which
+     * would be a genuine escalation. When floater mode itself is off — or
+     * FMCS is off — there's no floater to grant, so the answer is yes. See
+     * #19200.
+     */
+    public function canGrantFloaterStatus(): bool
+    {
+        $settings = Setting::getSettings();
+
+        if (! $settings->full_multiple_companies_support) {
+            return true;
+        }
+        if (! $settings->null_company_is_floater) {
+            return true;
+        }
+        if ($this->isSuperUser()) {
+            return true;
+        }
+
+        return ! $this->companies()->exists();
     }
 
     /**
@@ -595,15 +678,55 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
      */
     public function isDeletable()
     {
-
         return Gate::allows('delete', $this)
-            && (($this->assets_count ?? $this->assets()->count()) === 0)
+            && $this->hasNoAssignmentBlockers()
+            && ($this->deleted_at == '');
+    }
+
+    public function calendarEventDefinitions(): array
+    {
+        return [
+            [
+                'field' => 'start_date',
+                'event_type' => 'user.start_date',
+                'all_day' => true,
+            ],
+            [
+                'field' => 'end_date',
+                'event_type' => 'user.end_date',
+                'all_day' => true,
+            ],
+        ];
+    }
+
+    /**
+     * SCIM library shim. This could maybe be moved into the user model itself,
+     * but since it hooks into arietimmerman's library, this was the easier path
+     * without pulling it into traits. Returns the primary key so a scim-client
+     * fetch of /Me matches the shape of a fetch of /Users/{id}
+     */
+    public function getUserId(): int
+    {
+        return (int) $this->id;
+    }
+
+    /**
+     * The association-blocker half of isDeletable(): true only when the
+     * user has no assigned assets / accessories / licenses / consumables
+     * and isn't managing any users or locations. Split out from
+     * isDeletable() so scripts running outside a request context,
+     * Artisan `snipeit:ldap-sync --delete` flow in particular, can share
+     * the exact same rule without needing an authenticated Gate user to
+     * satisfy the delete-permission check.
+     */
+    public function hasNoAssignmentBlockers(): bool
+    {
+        return (($this->assets_count ?? $this->assets()->count()) === 0)
             && (($this->accessories_count ?? $this->accessories()->count()) === 0)
             && (($this->licenses_count ?? $this->licenses()->count()) === 0)
             && (($this->consumables_count ?? $this->consumables()->count()) === 0)
             && (($this->manages_users_count ?? $this->managesUsers()->count()) === 0)
-            && (($this->manages_locations_count ?? $this->managedLocations()->count()) === 0)
-            && ($this->deleted_at == '');
+            && (($this->manages_locations_count ?? $this->managedLocations()->count()) === 0);
     }
 
     /**
@@ -615,9 +738,14 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
      *
      * @return Relation
      */
+    /**
+     * @deprecated Use companies() for multi-company support. This resolves via
+     * the legacy_company_id mirror, which is kept in sync with the pivot but is
+     * not authoritative and may be dropped in a future release.
+     */
     public function company()
     {
-        return $this->belongsTo(Company::class, 'company_id');
+        return $this->belongsTo(Company::class, 'legacy_company_id');
     }
 
     public function companies(): BelongsToMany
@@ -627,39 +755,65 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
 
     /**
      * Returns whether an FMCS company check should allow this user to receive
-     * an asset that belongs to the given company.
+     * an item that belongs to the given company (null = uncompanied item).
      *
-     * - If the user has no company associations at all: returns true (no restriction).
-     * - If the user has associations: returns true only when $companyId is among them.
+     * Mirrors the rules in CompanyableTrait::canCheckoutTo so the User-target
+     * branch behaves the same as every other companyable target:
+     *  - Both sides uncompanied → allowed (null↔null).
+     *  - Item uncompanied, user companied → only when null_company_is_floater
+     *    is on (floater mode treats null-company items as system-wide).
+     *  - Item companied, user uncompanied → only when null_company_is_floater
+     *    is on (floater users see everything).
+     *  - Both sides companied → user's pivot must contain the item's company.
      */
-    public function canReceiveFromCompany(int $companyId): bool
+    public function canReceiveFromCompany(?int $companyId): bool
     {
-        // Items with no company association are unrestricted — anyone can receive them.
-        if (! $companyId) {
-            return true;
-        }
-
         // Query the pivot directly to avoid the Company model's FMCS global scope,
         // which would restrict results to the current actor's visible companies.
         $userCompanyIds = DB::table('company_user')
             ->where('user_id', $this->id)
             ->pluck('company_id');
 
+        if (is_null($companyId)) {
+            if ((bool) Setting::getSettings()->null_company_is_floater) {
+                return true;
+            }
+
+            return $userCompanyIds->isEmpty();
+        }
+
         if ($userCompanyIds->isEmpty()) {
             return (bool) Setting::getSettings()->null_company_is_floater;
         }
 
-        return $userCompanyIds->contains($companyId);
+        if ($userCompanyIds->contains($companyId)) {
+            return true;
+        }
+
+        // Membership in a parent company implies access to its children — accept
+        // an item from a child company when the user belongs to its parent.
+        return DB::table('companies')
+            ->where('id', $companyId)
+            ->whereIn('parent_id', $userCompanyIds)
+            ->exists();
     }
 
     /**
-     * Returns all companies this user belongs to — union of the primary company_id
-     * column and the many-to-many pivot — as a deduplicated Collection.
+     * Returns all companies this user has access to — the pivot memberships plus
+     * any child companies of those memberships (one-level-deep hierarchy).
      * Used to scope FMCS dropdowns to companies the user is allowed to work with.
      */
     public function allCompanies(): Collection
     {
-        return $this->companies->unique('id')->values();
+        $direct = $this->companies->unique('id');
+
+        if ($direct->isEmpty()) {
+            return $direct->values();
+        }
+
+        $children = Company::whereIn('parent_id', $direct->pluck('id'))->get();
+
+        return $direct->concat($children)->unique('id')->values();
     }
 
     /**
@@ -672,9 +826,21 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
      */
     public function syncCompaniesWithLogging(array $companyIds): void
     {
+        // Belt-and-suspenders coercion so no caller — API, web, importer,
+        // artisan, tinker, a queue job, a future FMCS refactor — can slip
+        // nested arrays or other non-scalars into ->sync(), which would
+        // bind them into SQL query params and trip "Array to string
+        // conversion" (elevated to ErrorException by Laravel's error
+        // handler). Reduce to a flat, unique list of positive int ids.
+        $companyIds = array_values(array_unique(array_filter(
+            array_map('intval', array_filter($companyIds, 'is_scalar'))
+        )));
+
         $oldIds = $this->companies()->orderBy('companies.id')->pluck('companies.id')->toArray();
         $this->companies()->sync($companyIds);
         $newIds = $this->companies()->orderBy('companies.id')->pluck('companies.id')->toArray();
+
+        $this->syncLegacyCompanyIdMirror();
 
         if ($oldIds === $newIds) {
             return;
@@ -700,6 +866,260 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
         $logAction->created_by = auth()->id();
         $logAction->log_meta = json_encode($companyChange);
         $logAction->logaction('update');
+    }
+
+    /**
+     * Sync group pivot membership and log the change if the set of groups changed.
+     *
+     * Same as syncCompaniesWithLogging(): if UserObserver::updating()
+     * already wrote an Actionlog for this edit session (via
+     * $this->currentUpdateLogId), the group diff is merged into that
+     * existing row so a single edit produces one log entry, not two.
+     * Otherwise a standalone Actionlog is written.
+     */
+    public function syncGroupsWithLogging(array $groupIds): void
+    {
+        // Same defensive coercion as the company version: reduce any
+        // callable payload shape (API JSON, form input, bulk edit,
+        // future LDAP importer) to a flat, unique list of positive int
+        // ids before it hits ->sync(). Prevents "Array to string
+        // conversion" tripping on nested arrays and drops junk shapes
+        // (null, booleans, unparseable strings) silently.
+        $groupIds = array_values(array_unique(array_filter(
+            array_map('intval', array_filter($groupIds, 'is_scalar'))
+        )));
+
+        $oldSnapshot = $this->currentGroupSnapshot();
+        $this->groups()->sync($groupIds);
+        $newSnapshot = $this->currentGroupSnapshot();
+
+        $this->recordGroupsChange($oldSnapshot, $newSnapshot);
+    }
+
+    /**
+     * Log the attachment of a single group to this user. Called from
+     * paths that mutate the pivot without going through
+     * syncGroupsWithLogging() (SCIM SnipeMutableCollection::add(),
+     * LdapSync attaching the LDAP default group, future sync adapters
+     * that propagate group membership).
+     *
+     * The caller has already run ->attach() (or the equivalent). This
+     * method's job is to record the delta if it was a real add. When
+     * the group was already attached before the call, we no-op so
+     * repeat-attach patterns don't produce noise.
+     */
+    public function logGroupAttached(int $groupId): void
+    {
+        $newSnapshot = $this->currentGroupSnapshot();
+        if (! collect($newSnapshot)->contains('id', $groupId)) {
+            // The caller's ->attach() didn't produce a real add (e.g.
+            // duplicate insert silently ignored, race with another
+            // process, group id doesn't exist). Nothing to log.
+            return;
+        }
+
+        $oldSnapshot = array_values(array_filter(
+            $newSnapshot,
+            fn ($entry) => $entry['id'] !== $groupId,
+        ));
+
+        $this->recordGroupsChange($oldSnapshot, $newSnapshot);
+    }
+
+    /**
+     * Log the detachment of a single group. Companion to
+     * logGroupAttached(). Called from SCIM's
+     * SnipeMutableCollection::remove() and any other path that runs
+     * ->detach() on a single group without going through
+     * syncGroupsWithLogging().
+     */
+    public function logGroupDetached(int $groupId): void
+    {
+        $newSnapshot = $this->currentGroupSnapshot();
+        if (collect($newSnapshot)->contains('id', $groupId)) {
+            // Detach didn't remove the group (never was attached, or
+            // still present for some other reason). Nothing to log.
+            return;
+        }
+
+        // Look up the detached group's current name so the log records
+        // it verbatim, not the id alone. If the group row is somehow
+        // gone by the time we look (deleted in the same request),
+        // record the id with a placeholder rather than skipping the
+        // log entirely, so the pivot mutation is still visible.
+        $detached = Group::find($groupId);
+        $oldSnapshot = $newSnapshot;
+        $oldSnapshot[] = ['id' => $groupId, 'name' => $detached ? $detached->name : '#'.$groupId];
+        usort($oldSnapshot, fn ($a, $b) => $a['id'] <=> $b['id']);
+
+        $this->recordGroupsChange($oldSnapshot, $newSnapshot);
+    }
+
+    /**
+     * Current pivot state as an ordered list of {id, name} pairs.
+     * The name is snapshotted at log-write time so the history entry
+     * preserves what the group was called when the change happened,
+     * regardless of later renames or deletes.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function currentGroupSnapshot(): array
+    {
+        return $this->groups()
+            ->orderBy('permission_groups.id')
+            ->get(['permission_groups.id', 'permission_groups.name'])
+            ->map(fn ($group) => ['id' => (int) $group->id, 'name' => (string) $group->name])
+            ->all();
+    }
+
+    /**
+     * Write (or merge into) an Actionlog for a groups pivot change.
+     * Merges into $this->currentUpdateLogId when the observer already
+     * opened a log row for this edit session so field + group
+     * changes stay in one log entry. Otherwise writes a standalone
+     * 'update' Actionlog row.
+     *
+     * @param  array<int, array{id: int, name: string}>  $oldSnapshot
+     * @param  array<int, array{id: int, name: string}>  $newSnapshot
+     */
+    private function recordGroupsChange(array $oldSnapshot, array $newSnapshot): void
+    {
+        if ($oldSnapshot === $newSnapshot) {
+            return;
+        }
+
+        $groupChange = ['groups' => ['old' => $oldSnapshot, 'new' => $newSnapshot]];
+
+        if ($this->currentUpdateLogId && ($existing = Actionlog::find($this->currentUpdateLogId))) {
+            $meta = json_decode($existing->log_meta ?? '{}', true) ?: [];
+            $existing->log_meta = json_encode(array_merge($meta, $groupChange));
+            $existing->save();
+            $this->currentUpdateLogId = null;
+
+            return;
+        }
+
+        $logAction = new Actionlog;
+        $logAction->item_type = static::class;
+        $logAction->item_id = $this->id;
+        $logAction->target_type = static::class;
+        $logAction->target_id = $this->id;
+        $logAction->created_at = date('Y-m-d H:i:s');
+        $logAction->created_by = auth()->id();
+        $logAction->log_meta = json_encode($groupChange);
+        $logAction->logaction('update');
+    }
+
+    /**
+     * FMCS-safe wrapper around syncCompaniesWithLogging() for the user
+     * update path. Folds the target's memberships in companies the
+     * editor cannot see back into the submitted list before syncing,
+     * so a scoped editor's save can't silently detach the target from
+     * tenants outside the editing user's own membership.
+     *
+     * Superuser editors skip the merge because they can see every
+     * company, so their submission already represents full intent.
+     */
+    public function syncCompaniesPreservingInvisibleTo(?User $editor, array $submittedCompanyIds): void
+    {
+        $submitted = array_map('intval', $submittedCompanyIds);
+
+        // FMCS is off, so every user can see every company
+        // and there is no invisible-to-editor set to preserve. Superuser
+        // editors also skip because their submission already
+        // represents full intent across all tenants. A null editor
+        // means no scope context (CLI-run importer, seeder, artisan
+        // command), which behaves like a superuser edit: sync the
+        // submission verbatim because there is no scope to preserve
+        // against.
+        $fmcsOn = (bool) Setting::getSettings()->full_multiple_companies_support;
+        if (! $fmcsOn || $editor === null || $editor->isSuperUser()) {
+            $this->syncCompaniesWithLogging($submitted);
+
+            return;
+        }
+
+        // Read editor + target memberships directly from the pivot so
+        // Company's global CompanyableScope does not filter Companies
+        // down to what the acting user (the editor) can see before we
+        // compute the invisible-to-editor set. Going through
+        // $editor->companies() / $this->companies() under a scoped
+        // non-superuser editor would return only the editor's own
+        // companies from the Companies side of the join, which turns
+        // the whereNotIn below into an empty result and drops every
+        // preserved company. See GH #19569.
+        $editorDirect = DB::table('company_user')
+            ->where('user_id', $editor->id)
+            ->pluck('company_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        // The editor's reach must match what every gate upstream of this
+        // helper enforces (Company::getIdsForCurrentUser(), the
+        // SaveUserRequest floater gate, parent_within_scope): direct
+        // memberships PLUS their child companies. Using only the direct
+        // rows silently drops a permitted child-company submission after
+        // the gates have accepted it. Under null_company_is_floater that
+        // left the target with no company at all, promoting them to a
+        // system-wide floater and escaping tenant isolation. See
+        // GHSA-35hv-26vj-9445.
+        $editorChildren = empty($editorDirect) ? [] : DB::table('companies')
+            ->whereIn('parent_id', $editorDirect)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $editorVisible = array_values(array_unique(array_merge($editorDirect, $editorChildren)));
+
+        $submittedVisible = array_values(array_intersect($submitted, $editorVisible));
+
+        $invisiblePreserved = DB::table('company_user')
+            ->where('user_id', $this->id)
+            ->whereNotIn('company_id', $editorVisible)
+            ->pluck('company_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $this->syncCompaniesWithLogging(
+            array_values(array_unique(array_merge($submittedVisible, $invisiblePreserved))),
+        );
+    }
+
+    /**
+     * Update the legacy users.company_id column so that it mirrors the
+     * company_user pivot: empty pivot writes NULL; a non-empty pivot writes
+     * the lowest-id pivot entry (arbitrary but stable).
+     *
+     * The column is a compatibility mirror maintained only for external
+     * consumers that historically read it (the API transformer, CSV export
+     * templates, SCIM schema mappings). It has NO role in FMCS scoping,
+     * checkout eligibility, or any internal application logic. Do not read
+     * it from application code.
+     *
+     * Call this after any write to the company_user pivot so the mirror
+     * stays consistent. Writes via the query builder so it doesn't trigger
+     * the User model's save events (which would recurse through
+     * UserObserver::updating and produce a spurious change log entry).
+     */
+    public function syncLegacyCompanyIdMirror(): void
+    {
+        if (! $this->exists) {
+            return;
+        }
+
+        $lowestPivotId = DB::table('company_user')
+            ->where('user_id', $this->id)
+            ->orderBy('company_id')
+            ->value('company_id');
+
+        $target = $lowestPivotId ? (int) $lowestPivotId : null;
+
+        if ((int) $this->legacy_company_id === (int) $target && ($target !== null || is_null($this->legacy_company_id))) {
+            return;
+        }
+
+        DB::table('users')->where('id', $this->id)->update(['legacy_company_id' => $target]);
+        $this->legacy_company_id = $target;
+        $this->syncOriginalAttribute('legacy_company_id');
     }
 
     /**
@@ -750,6 +1170,9 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
         return $this->last_name ? $this->first_name.' '.$this->last_name : $this->first_name;
     }
 
+    /**
+     * @return Attribute<string, never>
+     */
     protected function linkLightColor(): Attribute
     {
         return Attribute::make(
@@ -769,6 +1192,9 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
         );
     }
 
+    /**
+     * @return Attribute<string, never>
+     */
     protected function linkDarkColor(): Attribute
     {
         return Attribute::make(
@@ -788,6 +1214,9 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
         );
     }
 
+    /**
+     * @return Attribute<string, never>
+     */
     protected function navLinkColor(): Attribute
     {
         return Attribute::make(
@@ -839,15 +1268,27 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
     }
 
     /**
+     * Maintenances whose underlying asset was checked out to this user at the
+     * time the maintenance was opened — i.e. the polymorphic checked_out_to_*
+     * pair on the maintenances row points at this user.
+     *
+     * Distinct from maintenances() (which tracks who *created* the record)
+     * and from responsibleParty() (whoever is responsible for completion).
+     * Used by the user detail view's Maintenances tab and badge count.
+     */
+    public function assignedMaintenances(): MorphMany
+    {
+        return $this->morphMany(Maintenance::class, 'checked_out_to')->withTrashed();
+    }
+
+    /**
      * Establishes the user -> accessories relationship
      *
      * @author A. Gianotto <snipe@snipe.net>
      *
      * @since  [v2.0]
-     *
-     * @return Relation
      */
-    public function accessories()
+    public function accessories(): BelongsToMany
     {
         return $this->belongsToMany(Accessory::class, 'accessories_checkout', 'assigned_to', 'accessory_id')
             ->where('assigned_type', '=', 'App\Models\User')
@@ -860,10 +1301,8 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
      * @author A. Gianotto <snipe@snipe.net>
      *
      * @since  [v3.0]
-     *
-     * @return Relation
      */
-    public function consumables()
+    public function consumables(): BelongsToMany
     {
         return $this->belongsToMany(Consumable::class, 'consumables_users', 'assigned_to', 'consumable_id')->withPivot('id', 'created_at', 'note')->withTrashed();
     }
@@ -874,10 +1313,8 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
      * @author A. Gianotto <snipe@snipe.net>
      *
      * @since  [v1.0]
-     *
-     * @return Relation
      */
-    public function licenses()
+    public function licenses(): BelongsToMany
     {
         return $this->belongsToMany(License::class, 'license_seats', 'assigned_to', 'license_id')->withPivot('id', 'created_at', 'updated_at');
     }
@@ -1117,45 +1554,18 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
      *
      * @since  [v6.2.0]
      *
+     * Stored raw (not bcrypted) on users who have no meaningful password
+     * on file — created deactivated via the UI, imported without a
+     * password, synced from LDAP/SCIM, or otherwise. Because it is stored
+     * as a plain string, Hash::check at login will never return true no
+     * matter what the input is, so there is no possible authentication
+     * path against this placeholder.
+     *
      * @return string
      */
     public function noPassword()
     {
         return '*** NO PASSWORD ***';
-    }
-
-    /**
-     * Query builder scope to return NOT-deleted users
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  [v2.0]
-     *
-     * @param  string  $query
-     * @return \Illuminate\Database\Query\Builder
-     */
-    public function scopeGetNotDeleted($query)
-    {
-        return $query->whereNull('deleted_at');
-    }
-
-    /**
-     * Query builder scope to return users by email or username
-     *
-     * @author A. Gianotto <snipe@snipe.net>
-     *
-     * @since  [v2.0]
-     *
-     * @param  string  $query
-     * @param  string  $user_username
-     * @param  string  $user_email
-     * @return \Illuminate\Database\Query\Builder
-     */
-    public function scopeMatchEmailOrUsername($query, $user_username, $user_email)
-    {
-        return $query->where('email', '=', $user_email)
-            ->orWhere('username', '=', $user_username)
-            ->orWhere('username', '=', $user_email);
     }
 
     /**
@@ -1168,6 +1578,29 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
      * @param  string  $query
      * @return string
      */
+    /**
+     * The MySQL/MariaDB default collation utf8mb4_unicode_ci folds accents
+     * and case, so `WHERE username = ?` on that engine can silently route
+     * 'snípeitreport3' (with an accent on the i) to the row for 'snipeitreport3'.
+     *
+     * Federated/SSO auth flows (SAML, LDAP, REMOTE_USER, Google OAuth) must call
+     * this after their username lookup so an attacker-controlled external identifier
+     * can't authenticate as a different local account. hash_equals runs in constant
+     * time so this check doesn't leak any timing signal.
+     *
+     * Returns the user when the strings match byte-for-byte after lowercasing,
+     * null otherwise. (This was previously just bite-for-bite, but most IdPs are
+     * case-insensitive, so we normalize to lowercase before comparing.)
+     */
+    public static function verifyExactUsernameMatch(?self $user, string $expected): ?self
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        return hash_equals(mb_strtolower((string) $user->username), mb_strtolower($expected)) ? $user : null;
+    }
+
     public static function generateEmailFromFullName($name)
     {
         $username = self::generateFormattedNameFromFullName($name, Setting::getSettings()->email_format);
@@ -1334,33 +1767,11 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
     }
 
     /**
-     * Query builder scope to search user by name with spaces in it.
-     * We don't use the advancedTextSearch() scope because that searches
-     * all of the relations as well, which is more than what we need.
+     * Run additional, advanced searches. Overrides advancedTextSearch
+     * on the Searchable trait to also search user name with spaces in
+     * it via orWhereMultipleColumns.
      *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  array  $terms  The search terms
-     * @return \Illuminate\Database\Query\Builder
-     */
-    public function scopeSimpleNameSearch($query, $search)
-    {
-        return $query->where('first_name', 'LIKE', '%'.$search.'%')
-            ->orWhere('last_name', 'LIKE', '%'.$search.'%')
-            ->orWhere('display_name', 'LIKE', '%'.$search.'%')
-            ->orWhereMultipleColumns(
-                [
-                    'users.first_name',
-                    'users.last_name',
-                ], $search
-            );
-    }
-
-    /**
-     * Run additional, advanced searches.
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  array  $terms  The search terms
-     * @return Builder
+     * @param  array<int, string>  $terms  The search terms
      */
     public function advancedTextSearch(Builder $query, array $terms)
     {
@@ -1377,135 +1788,6 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
     }
 
     /**
-     * Query builder scope to return users by group
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  int  $id
-     * @return \Illuminate\Database\Query\Builder
-     */
-    public function scopeByGroup($query, $id)
-    {
-        return $query->whereHas(
-            'groups', function ($query) use ($id) {
-                $query->where('permission_groups.id', '=', $id);
-            }
-        );
-    }
-
-    /**
-     * Return only admins and superusers
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     */
-    public function scopeOnlySuperAdmins($query)
-    {
-
-        return $query->where('users.permissions', 'LIKE', '%"superuser":"1"%')
-            ->orWhere('users.permissions', 'LIKE', '%"superuser":1%')
-            ->orWhereHas(
-                'groups', function ($query) {
-                    $query->where('permission_groups.permissions', 'LIKE', '%"superuser":"1"%')
-                        ->orWhere('permission_groups.permissions', 'LIKE', '%"superuser":1%');
-                }
-            );
-
-    }
-
-    /**
-     * Return only admins and superusers
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     */
-    public function scopeOnlyAdminsAndSuperAdmins($query)
-    {
-
-        return $query->where('users.permissions', 'LIKE', '%"superuser":"1"%')
-            ->orWhere('users.permissions', 'LIKE', '%"superuser":1%')
-            ->orWhere('users.permissions', 'LIKE', '%"admin":1%')
-            ->orWhere('users.permissions', 'LIKE', '%"admin":"1"%')
-            ->orWhereHas(
-                'groups', function ($query) {
-                    $query->where('permission_groups.permissions', 'LIKE', '%"superuser":"1"%')
-                        ->orWhere('permission_groups.permissions', 'LIKE', '%"superuser":1%')
-                        ->orWhere('permission_groups.permissions', 'LIKE', '%"admin":1%')
-                        ->orWhere('permission_groups.permissions', 'LIKE', '%"admin":"1"%');
-                }
-            );
-
-    }
-
-    /**
-     * Query builder scope to order on manager
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderManager($query, $order)
-    {
-        // Left join here, or it will only return results with parents
-        return $query->leftJoin('users as users_manager', 'users.manager_id', '=', 'users_manager.id')->orderBy('users_manager.first_name', $order)->orderBy('users_manager.last_name', $order);
-    }
-
-    /**
-     * Query builder scope to order on company
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderLocation($query, $order)
-    {
-        return $query->leftJoin('locations as locations_users', 'users.location_id', '=', 'locations_users.id')->orderBy('locations_users.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on department
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderDepartment($query, $order)
-    {
-        return $query->leftJoin('departments as departments_users', 'users.department_id', '=', 'departments_users.id')->orderBy('departments_users.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on admin user
-     *
-     * @param  \Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return \Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderByCreatedBy($query, $order)
-    {
-        // Left join here, or it will only return results with parents
-        return $query->leftJoin('users as admin_user', 'users.created_by', '=', 'admin_user.id')
-            ->orderBy('admin_user.first_name', $order)
-            ->orderBy('admin_user.last_name', $order);
-    }
-
-    /**
-     * Query builder scope to order on company
-     *
-     * @param  Illuminate\Database\Query\Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return Illuminate\Database\Query\Builder Modified query builder
-     */
-    public function scopeOrderCompany($query, $order)
-    {
-        $sub = DB::table('company_user')
-            ->join('companies', 'companies.id', '=', 'company_user.company_id')
-            ->select('company_user.user_id', DB::raw('MIN(companies.name) as min_company_name'))
-            ->groupBy('company_user.user_id');
-
-        return $query
-            ->leftJoinSub($sub, 'companies_sort', 'companies_sort.user_id', '=', 'users.id')
-            ->orderBy('companies_sort.min_company_name', $order);
-    }
-
-    /**
      * Get the preferred locale for the user.
      *
      * This uses the HasLocalePreference contract to determine the user's preferred locale,
@@ -1517,102 +1799,84 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
         return $this->locale ?? Setting::getSettings()->locale ?? config('app.locale');
     }
 
+    protected bool $userTotalCostComputed = false;
+
     public function getUserTotalCost()
     {
-        $asset_cost = 0;
-        $license_cost = 0;
-        $accessory_cost = 0;
-        foreach ($this->assets as $asset) {
-            $asset_cost += $asset->purchase_cost;
-            $this->asset_cost = $asset_cost;
-        }
-        foreach ($this->licenses as $license) {
-            $license_cost += $license->purchase_cost;
-            $this->license_cost = $license_cost;
-        }
-        foreach ($this->accessories as $accessory) {
-            $accessory_cost += $accessory->purchase_cost;
-            $this->accessory_cost = $accessory_cost;
+        if ($this->userTotalCostComputed) {
+            return $this;
         }
 
-        $this->total_user_cost = ($asset_cost + $accessory_cost + $license_cost);
+        $this->asset_cost = (float) $this->assets()->sum('purchase_cost');
+        $this->license_cost = (float) $this->licenses()->sum('purchase_cost');
+        $this->maintenance_cost = (float) $this->assignedMaintenances()->sum('cost');
+
+        $this->accessory_cost = $this->sumPivotUnitCosts(
+            pivotTable: 'accessories_checkout',
+            pivotFk: 'accessory_id',
+            modelClass: \App\Models\Accessory::class,
+            extraWhere: ['assigned_type' => \App\Models\User::class],
+        );
+        $this->consumable_cost = $this->sumPivotUnitCosts(
+            pivotTable: 'consumables_users',
+            pivotFk: 'consumable_id',
+            modelClass: \App\Models\Consumable::class,
+        );
+
+        $this->total_user_cost = $this->asset_cost + $this->accessory_cost + $this->consumable_cost + $this->license_cost + $this->maintenance_cost;
+
+        $this->userTotalCostComputed = true;
 
         return $this;
     }
 
-    public function scopeUserLocation($query, $location, $search)
-    {
+    /**
+     * Sum (pivot_row_count * last_unit_cost) across every distinct
+     * item this user has any pivot rows for.
+     *
+     * $modelClass must use the HasOrders trait.
+     *
+     * @param  array<string, mixed>  $extraWhere  additional pivot-side filters (e.g. polymorphic assigned_type)
+     */
+    private function sumPivotUnitCosts(
+        string $pivotTable,
+        string $pivotFk,
+        string $modelClass,
+        array $extraWhere = [],
+    ): float {
+        $countsByItem = \Illuminate\Support\Facades\DB::table($pivotTable)
+            ->where('assigned_to', $this->id);
+        foreach ($extraWhere as $column => $value) {
+            $countsByItem->where($column, $value);
+        }
+        $countsByItem = $countsByItem
+            ->groupBy($pivotFk)
+            ->select($pivotFk)
+            ->selectRaw('COUNT(*) as pivot_count')
+            ->pluck('pivot_count', $pivotFk)
+            ->all();
 
-        return $query->where('location_id', '=', $location)
-            ->where('users.first_name', 'LIKE', '%'.$search.'%')
-            ->orWhere('users.email', 'LIKE', '%'.$search.'%')
-            ->orWhere('users.last_name', 'LIKE', '%'.$search.'%')
-            ->orWhere('users.permissions', 'LIKE', '%'.$search.'%')
-            ->orWhere('users.country', 'LIKE', '%'.$search.'%')
-            ->orWhere('users.phone', 'LIKE', '%'.$search.'%')
-            ->orWhere('users.jobtitle', 'LIKE', '%'.$search.'%')
-            ->orWhere('users.employee_num', 'LIKE', '%'.$search.'%')
-            ->orWhere('users.username', 'LIKE', '%'.$search.'%')
-            ->orWhere('users.display_name', 'LIKE', '%'.$search.'%')
-            ->orwhereRaw('CONCAT(users.first_name,\' \',users.last_name) LIKE \''.$search.'%\'');
+        if ($countsByItem === []) {
+            return 0.0;
+        }
 
+        $items = $modelClass::query()
+            ->whereIn('id', array_keys($countsByItem))
+            ->get(['id', 'default_purchase_cost']);
+
+        $unitCosts = $modelClass::lastUnitCostsFor($items);
+
+        $total = 0.0;
+        foreach ($countsByItem as $itemId => $count) {
+            $total += (float) ($unitCosts[$itemId] ?? 0) * (int) $count;
+        }
+
+        return $total;
     }
 
-    public function scopeWithInventoryRelations($query, int $id, bool $withLicenses = true, bool $withAccessories = true, bool $withConsumables = true)
+    public function newEloquentBuilder($query): UserQueryBuilder
     {
-        $with = [
-            'assets.log' => fn ($query) => $query->withTrashed()
-                ->where('target_type', User::class)
-                ->where('target_id', $id)
-                ->where('action_type', 'accepted'),
-            'assets.defaultLoc',
-            'assets.location',
-            'assets.model.category',
-            'assets.assignedAssets.log' => fn ($query) => $query->withTrashed()
-                ->where('target_type', User::class)
-                ->where('target_id', $id)
-                ->where('action_type', 'accepted'),
-            'assets.assignedAssets.assignedTo',
-            'assets.assignedAssets.defaultLoc',
-            'assets.assignedAssets.location',
-            'assets.assignedAssets.model.category',
-            'assets.components.category',
-        ];
-
-        if ($withLicenses) {
-            $with = array_merge($with, [
-                'assets.licenses',
-                'assets.licenses.category',
-                'directLicenses.category',
-                'licenses.category',
-            ]);
-        }
-
-        if ($withAccessories) {
-            $with = array_merge($with, [
-                'assets.assignedAccessories',
-                'assets.assignedAccessories.accessory.category',
-                'accessories.log' => fn ($query) => $query->withTrashed()
-                    ->where('target_type', User::class)
-                    ->where('target_id', $id)
-                    ->where('action_type', 'accepted'),
-                'accessories.category',
-                'accessories.manufacturer',
-            ]);
-        }
-
-        if ($withConsumables) {
-            $with = array_merge($with, [
-                'consumables.log' => fn ($query) => $query->withTrashed()
-                    ->where('target_type', User::class)
-                    ->where('target_id', $id)
-                    ->where('action_type', 'accepted'),
-                'consumables.category',
-                'consumables.manufacturer',
-            ]);
-        }
-
-        return $query->where('id', $id)->with($with)->withTrashed();
+        return new UserQueryBuilder($query);
     }
 
     /**

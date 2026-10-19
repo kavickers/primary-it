@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\Helper;
 use App\Http\Requests\SetupUserRequest;
 use App\Models\Setting;
 use App\Models\User;
@@ -187,7 +188,8 @@ class SetupController extends Controller
         $settings->zerofill_count = $request->input('zerofill_count') ?: 0;
 
         if ((! $user->isValid()) || (! $settings->isValid())) {
-            return redirect()->back()->withInput()->withErrors($user->getErrors())->withErrors($settings->getErrors());
+            return redirect()->to(Helper::sameOriginUrl(url()->previous()) ?? route('setup.user'))
+                ->withInput()->withErrors($user->getErrors())->withErrors($settings->getErrors());
         } else {
             $user->save();
             Auth::login($user, true);
@@ -254,7 +256,10 @@ class SetupController extends Controller
     {
         Artisan::call('migrate', ['--force' => true]);
         $output = Artisan::output();
-        if ((! file_exists(storage_path().'/oauth-private.key')) || (! file_exists(storage_path().'/oauth-public.key'))) {
+        // The keys can outlive the database (e.g. a new database for an existing
+        // install), so also create the Passport clients if this database has none.
+        if ((! file_exists(storage_path().'/oauth-private.key')) || (! file_exists(storage_path().'/oauth-public.key'))
+            || (! DB::table('oauth_personal_access_clients')->exists())) {
             Artisan::call('migrate', ['--path' => 'vendor/laravel/passport/database/migrations', '--force' => true]);
             Artisan::call('passport:install', ['--no-interaction' => true]);
         }

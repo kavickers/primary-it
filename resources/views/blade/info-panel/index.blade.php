@@ -9,7 +9,7 @@
 <div class="box-header with-border" style="padding-top: 0;">
 
     @if (isset($buttons))
-        <div class="row hidden-print" style="padding-left: 5px;">
+        <div class="info-panel-actions hidden-print">
             {{ $buttons }}
         </div>
     @endif
@@ -42,7 +42,7 @@
             @endif
 
                 <a href="{{ $infoPanelObj->getImageUrl($img_path) }}" data-toggle="lightbox" data-type="image">
-                    <img src="{{ $infoPanelObj->getImageUrl($img_path) }}" class="img-responsive img-thumbnail" alt="{{ $infoPanelObj->name }}" style="max-width: 300px !important; max-height: 300px !important;margin-bottom: 10px;">
+                    <img src="{{ $infoPanelObj->getImageUrl($img_path) }}" class="img-responsive img-thumbnail" alt="{{ $infoPanelObj->name }}" style="max-width: min(100%, 300px); max-height: 300px; margin-bottom: 10px;">
             </a>
         </div>
         <br>
@@ -70,7 +70,7 @@
 
         @if ($infoPanelObj->notes)
             <x-info-element icon_type="notes" title="{{ trans('general.notes') }}">
-                <x-copy-to-clipboard class="pull-right" copy_what="notes">{!! nl2br(Helper::parseEscapedMarkedownInline($infoPanelObj->notes)) !!}</x-copy-to-clipboard>
+                <x-copy-to-clipboard class="pull-right" copy_what="notes">{!! (new \Parsedown)->setSafeMode(true)->setBreaksEnabled(true)->line($infoPanelObj->notes) !!}</x-copy-to-clipboard>
             </x-info-element>
         @endif
 
@@ -168,39 +168,106 @@
             </x-info-element>
         @endif
 
-        @if ($infoPanelObj->purchase_cost)
+        {{-- Bulk-fulfill entry point. Requestable::bulkFulfillmentLink()
+             gates on: (a) type is one of the five bulk-eligible ones,
+             (b) caller can checkout the type, (c) >=2 open requests,
+             (d) stock available. Returns null when any gate fails so
+             the info-panel row is skipped without a Blade-side check. --}}
+        @if (method_exists($infoPanelObj, 'bulkFulfillmentLink') && $bulkFulfillmentLink = $infoPanelObj->bulkFulfillmentLink())
+            <x-info-element icon_type="fulfill_multiple" title="{{ trans('admin/hardware/general.fulfill_multiple') }}">
+                <a href="{{ $bulkFulfillmentLink['url'] }}">
+                    {{ trans_choice('admin/hardware/general.open_requests_count', $bulkFulfillmentLink['count'], ['count' => $bulkFulfillmentLink['count']]) }}
+                </a>
+            </x-info-element>
+        @endif
+
+        @php
+            // Assets own purchase_cost as a canonical column on the parent
+            // row and Accessories / Consumables / Components moved that
+            // concept off the parent onto per-transaction OrderItem lines,
+            // so read the parent's own value first and let the
+            // Order-derived fallback fill in for the post-Orders inventory
+            // types where the parent no longer carries a purchase_cost
+            // column. See GH #19572.
+            $lastOrderInfoPanel = method_exists($infoPanelObj, 'lastOrderDefaults')
+                ? $infoPanelObj->lastOrderDefaults()
+                : null;
+            $unitCost = $infoPanelObj->purchase_cost ?? $lastOrderInfoPanel['unit_cost'] ?? null;
+            $unitCostCurrency = $lastOrderInfoPanel['currency']
+                ?? ($infoPanelObj->location->currency ?? null)
+                ?: $snipeSettings->default_currency;
+        @endphp
+        @if ($unitCost !== null && $unitCost !== '')
             <x-info-element>
                 <x-icon type="cost" class="fa-fw" title="{{ trans('general.unit_cost') }}" />
                 {{ trans('general.unit_cost') }}
-
-                @if ((isset($infoPanelObj->location)) && ($infoPanelObj->location->currency!=''))
-                    {{ $infoPanelObj->location->currency }}
-                @else
-                    {{ $snipeSettings->default_currency }}
-                @endif
-
+                {{ $unitCostCurrency }}
                 <x-copy-to-clipboard copy_what="purchase_cost" class="pull-right">
-                    {{ Helper::formatCurrencyOutput($infoPanelObj->purchase_cost) }}
+                    {{ Helper::formatCurrencyOutput($unitCost) }}
                 </x-copy-to-clipboard>
             </x-info-element>
-
-            @if (isset($infoPanelObj->qty))
-                <x-info-element>
-                    <x-icon type="cost" class="fa-fw" title="{{ trans('general.total_cost') }}" />
-                    {{ trans('general.total_cost') }}
-
-                    @if ((isset($infoPanelObj->location)) && ($infoPanelObj->location->currency!=''))
-                        {{ $infoPanelObj->location->currency }}
-                    @else
-                        {{ $snipeSettings->default_currency }}
-                    @endif
-
-                    {{ Helper::formatCurrencyOutput($infoPanelObj->totalCostSum()) }}
-                </x-info-element>
-            @endif
-
         @endif
 
+        {{-- Total cost is independent of the Last Unit Cost row. --}}
+        {{-- Historical acquisitions may have carried prices even if --}}
+        {{-- the most recent one didn't, so the total_cost row shows --}}
+        {{-- whenever totalCostSumByCurrency has anything to sum. --}}
+        @if (isset($infoPanelObj->qty) && method_exists($infoPanelObj, 'totalCostSumByCurrency'))
+            @php $totalsByCurrency = $infoPanelObj->totalCostSumByCurrency(); @endphp
+            @if (count($totalsByCurrency) === 1)
+                @php $currency = array_key_first($totalsByCurrency); @endphp
+                <x-info-element>
+                    <x-icon type="cost" class="fa-fw" title="{{ trans('general.total_cost') }}"/>
+                    {{ trans('general.total_cost') }}
+                    {{ $currency !== '' ? $currency : $snipeSettings->default_currency }}
+                    <x-copy-to-clipboard copy_what="total_cost" class="pull-right">
+                        {{ Helper::formatCurrencyOutput($totalsByCurrency[$currency]) }}
+                    </x-copy-to-clipboard>
+                </x-info-element>
+            @elseif (count($totalsByCurrency) > 1)
+                <x-info-element>
+                    <x-icon type="cost" class="fa-fw" title="{{ trans('general.total_cost') }}"/>
+                    {{ trans('general.total_cost') }}
+                    {{ count($totalsByCurrency) }} {{ trans('general.currencies') }}
+                    <a class="pull-right js-copy-link" style="font-size: 16px; margin-right: 3px;" type="button" data-toggle="collapse" data-target="#totalCostBreakdown" aria-expanded="false" aria-controls="totalCostBreakdown">
+                        <x-icon type="plus" class="fa-fw"/>
+                    </a>
+                </x-info-element>
+                <span class="collapse" id="totalCostBreakdown">
+                    <x-info-element class="subitem well well-sm">
+                        @foreach ($totalsByCurrency as $currency => $amount)
+                            <div>
+                                {{ $currency !== '' ? $currency : $snipeSettings->default_currency }}
+                                {{ Helper::formatCurrencyOutput($amount) }}
+                            </div>
+                        @endforeach
+                    </x-info-element>
+                </span>
+            @endif
+        @endif
+
+        {{-- Skip on Asset instances. An asset is 1:1 with a --}}
+        {{-- transaction, so "ordered N times" is always 1 and --}}
+        {{-- the Orders table IS the record of the acquisition. --}}
+        {{-- Applies to Accessory/Consumable/Component (multi-order --}}
+        {{-- inventory) and to AssetModel (asset TYPE, aggregating --}}
+        {{-- distinct orders across all its Asset instances). --}}
+        @if (method_exists($infoPanelObj, 'ordersCount') && ! ($infoPanelObj instanceof \App\Models\Asset))
+            @php $ordersCount = $infoPanelObj->ordersCount(); @endphp
+            @if ($ordersCount > 0)
+                <x-info-element>
+                    <x-icon type="order" class="fa-fw" title="{{ trans('general.total_orders') }}"/>
+                    {{ trans('general.total_orders') }}
+                    <span class="pull-right">{{ $ordersCount }}</span>
+                </x-info-element>
+            @endif
+        @endif
+
+        {{-- Accessory/Consumable/Component override getOrderNumberAttribute
+             to return null so this guard skips — a single order_number
+             on many-batches inventory is misleading; per-adjustment order
+             numbers live on QuantityAdjust action_log entries. Assets
+             are unaffected; a single order_number per unit is real. --}}
         @if ($infoPanelObj->order_number)
             <x-info-element icon_type="order" title="{{ trans('general.order_number') }}">
                 <x-copy-to-clipboard copy_what="order_number" class="pull-right">
@@ -297,7 +364,7 @@
         <x-info-panel.supplier :infoPanelObj="$infoPanelObj"/>
         <x-info-panel.manufacturer :infoPanelObj="$infoPanelObj" :manufacturer="($infoPanelObj->manufacturer ?? $infoPanelObj->model?->manufacturer)"/>
 
-        @if ((isset($infoPanelObj->parent)) && ($infoPanelObj->parent))
+        @if (($infoPanelObj instanceof \App\Models\Location) && (isset($infoPanelObj->parent)) && ($infoPanelObj->parent))
             @php
                 $locationAncestors = [];
                 $ancestorCursor = $infoPanelObj->parent;
@@ -317,7 +384,7 @@
         @if ($infoPanelObj->depreciation && $infoPanelObj->purchase_date)
             <x-info-element icon_type="depreciation" title="{{ trans('general.depreciation') }}">
                 {!!  $infoPanelObj->depreciation->present()->nameUrl !!}
-                ({{ $infoPanelObj->depreciation->months.' '.trans('general.months')}})
+                ({{ trans_choice('general.months_plural', $infoPanelObj->depreciation->months) }})
             </x-info-element>
 
             <x-info-element icon_type="depreciation-calendar" class="{{ $infoPanelObj->depreciationProgressPercent() > 90 ? 'text-danger' : '' }}" title="{{ trans('admin/hardware/form.fully_depreciated') }}">
@@ -361,12 +428,32 @@
             </x-info-element>
         @endif
 
+        @if (isset($infoPanelObj->support_email) && $infoPanelObj->support_email)
+            <x-info-element icon_type="email" title="{{ trans('admin/manufacturers/table.support_email') }}">
+                <x-copy-to-clipboard class="pull-right" copy_what="support_email">
+                    <x-info-element.email>
+                        {{ $infoPanelObj->support_email }}
+                    </x-info-element.email>
+                </x-copy-to-clipboard>
+            </x-info-element>
+        @endif
+
 
         @if ($infoPanelObj->phone)
             <x-info-element icon_type="phone" title="{{ trans('general.phone') }}">
                 <x-copy-to-clipboard class="pull-right" copy_what="phone">
                     <x-info-element.phone>
                     {{ $infoPanelObj->phone }}
+                    </x-info-element.phone>
+                </x-copy-to-clipboard>
+            </x-info-element>
+        @endif
+
+        @if (isset($infoPanelObj->support_phone) && $infoPanelObj->support_phone)
+            <x-info-element icon_type="phone" title="{{ trans('admin/manufacturers/table.support_phone') }}">
+                <x-copy-to-clipboard class="pull-right" copy_what="support_phone">
+                    <x-info-element.phone>
+                        {{ $infoPanelObj->support_phone }}
                     </x-info-element.phone>
                 </x-copy-to-clipboard>
             </x-info-element>
@@ -390,16 +477,42 @@
             </x-info-element>
         @endif
 
-        <x-info-element icon_type="external-link" title="{{ trans('general.url') }}">
-            <x-info-element.url>
-                {{ $infoPanelObj->url }}
-            </x-info-element.url>
-        </x-info-element>
+        @if ($infoPanelObj->url)
+            <x-info-element icon_type="external-link" title="{{ trans('general.url') }}">
+                <x-info-element.url>
+                    {{ $infoPanelObj->url }}
+                </x-info-element.url>
+            </x-info-element>
+        @endif
+
+        @if (isset($infoPanelObj->support_url) && $infoPanelObj->support_url)
+            <x-info-element icon_type="external-link" title="{{ trans('admin/manufacturers/table.support_url') }}">
+                <x-info-element.url>
+                    {{ $infoPanelObj->support_url }}
+                </x-info-element.url>
+            </x-info-element>
+        @endif
+
+        @if (isset($infoPanelObj->warranty_lookup_url) && $infoPanelObj->warranty_lookup_url)
+            <x-info-element icon_type="external-link" title="{{ trans('admin/manufacturers/table.warranty_lookup_url') }}">
+                <x-info-element.url>
+                    {{ $infoPanelObj->warranty_lookup_url }}
+                </x-info-element.url>
+            </x-info-element>
+        @endif
+
+        @if (isset($infoPanelObj->website) && $infoPanelObj->website)
+            <x-info-element icon_type="external-link" title="{{ trans('general.website') }}">
+                <x-info-element.url>
+                    {{ $infoPanelObj->website }}
+                </x-info-element.url>
+            </x-info-element>
+        @endif
 
 
         @if (($infoPanelObj->present()->displayAddress) && (config('services.google.maps_api_key')))
 
-                <x-info-element>
+                <x-info-element class="hidden-print">
                     <div class="text-center">
                         <img src="https://maps.googleapis.com/maps/api/staticmap?markers={{ urlencode($infoPanelObj->address.','.$infoPanelObj->city.' '.$infoPanelObj->state.' '.$infoPanelObj->country.' '.$infoPanelObj->zip) }}&size=500x300&maptype=roadmap&key={{ config('services.google.maps_api_key') }}" class="img-thumbnail img-responsive" style="width: 100%" alt="Map">
                     </div>
@@ -441,12 +554,27 @@
 
 
 
-        @if ($infoPanelObj->purchase_date)
+        @php
+            // Same canonical-parent-first rule as unit cost above. Assets
+            // keep purchase_date on the parent as the source of truth and
+            // the AssetObserver doesn't sync it back to Order because
+            // multiple assets can share one Order row (dedupe by
+            // order_number + supplier + company), so on that Order row
+            // purchase_date is a write-once snapshot from the first
+            // sibling asset's create. Reading the parent's canonical
+            // column keeps the info-panel in step with the edit form.
+            // Post-Orders inventory types (Accessory / Consumable /
+            // Component) have no parent purchase_date column, so their
+            // Order-derived fallback still wins. See GH #19572.
+            $displayPurchaseDate = $infoPanelObj->purchase_date
+                ?: ($lastOrderInfoPanel['purchase_date'] ?? null);
+        @endphp
+        @if ($displayPurchaseDate)
             <x-info-element>
                 <x-icon type="calendar" class="fa-fw" title="{{ trans('general.purchase_date') }}" />
                 {{ trans('general.purchased_plain') }}
-                {{ Helper::getFormattedDateObject($infoPanelObj->purchase_date, 'date', false) }} -
-                <span class="text-muted">{{ Carbon::parse($infoPanelObj->purchase_date)->diffForHumans(['parts' => 2]) }}</span>
+                {{ Helper::getFormattedDateObject($displayPurchaseDate, 'date', false) }} -
+                <span class="text-muted">{{ Carbon::parse($displayPurchaseDate)->diffForHumans(['parts' => 2]) }}</span>
             </x-info-element>
         @endif
 

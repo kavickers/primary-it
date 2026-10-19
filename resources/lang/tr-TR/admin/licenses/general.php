@@ -48,6 +48,11 @@ return [
             'log_msg' => 'Lisans GUI\'sinde toplu lisans ödemesi yoluyla teslim alındı',
 
         ],
+
+        'delete_with_checkin' => [
+            'label' => 'Koltukları Teslim Al ve Sil',
+            'log_msg' => 'Lisans dizininde toplu teslim alıp silme işlemiyle teslim alındı',
+        ],
     ],
 
     'below_threshold' => 'Bu lisans için minimum adet :min_amt olmak üzere yalnızca :remaining_count hak kaldı. Daha fazla lisans hakkı satın almayı düşünebilirsiniz.',

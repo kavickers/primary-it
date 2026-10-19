@@ -21,8 +21,15 @@ return [
         'confirm' => 'Վստա՞հ եք, որ ցանկանում եք ջնջել այս կատեգորիան։',
         'error' => 'Կատեգորիան ջնջելիս խնդիր է առաջացել։ Խնդրում ենք փորձել կրկին։',
         'success' => 'Կատեգորիան հաջողությամբ ջնջվեց։',
-        'bulk_success' => 'Կատեգորիաները հաջողությամբ ջնջվեցին։',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Կատեգորիան հաջողությամբ ջնջվեց։ Տես ստորև լրացուցիչ տեղեկությունը։ | :count կատեգորիաներ հաջողությամբ ջնջվեցին։ Տես ստորև լրացուցիչ տեղեկությունը։',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Դաշտեր չեն փոփոխվել, ուստի ոչինչ չի թարմացվել։',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

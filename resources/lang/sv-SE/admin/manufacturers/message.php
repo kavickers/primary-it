@@ -24,9 +24,9 @@ return [
     'delete' => [
         'confirm' => 'Är du säker på att du vill ta bort denna tillverkare?',
         'error' => 'Det gick inte att ta bort tillverkaren. Vänligen försök igen.',
-        'success' => 'Manufacturer deleted successfully.',
-        'bulk_success' => 'Manufacturers deleted successfully.',
-        'partial_success' => 'Manufacturer deleted successfully. See additional information below. | :count manufacturers were deleted successfully. See additional information below.',
+        'success' => 'Tillverkare raderad.',
+        'bulk_success' => 'Tillverkaren har raderats.|:count tillverkare har raderats.',
+        'partial_success' => 'Tillverkaren har raderats. Se ytterligare information nedan. |:count tillverkare har raderats. Se ytterligare information nedan.',
     ],
 
 ];

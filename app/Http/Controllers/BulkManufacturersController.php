@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Manufacturers\DeleteManufacturerAction;
+use App\Actions\Manufacturers\DestroyManufacturerAction;
+use App\Exceptions\Handler;
 use App\Exceptions\ItemStillHasAccessories;
 use App\Exceptions\ItemStillHasAssets;
 use App\Exceptions\ItemStillHasComponents;
@@ -27,7 +28,7 @@ class BulkManufacturersController extends Controller
                 continue;
             }
             try {
-                DeleteManufacturerAction::run(manufacturer: $manufacturer);
+                DestroyManufacturerAction::run(manufacturer: $manufacturer);
                 $success_count++;
             } catch (ItemStillHasAssets $e) {
                 $errors[] = trans('general.bulk_delete_associations.assoc_assets_no_count', ['item_name' => $manufacturer->name, 'item' => trans('general.manufacturer')]);
@@ -39,8 +40,8 @@ class BulkManufacturersController extends Controller
                 $errors[] = trans('general.bulk_delete_associations.assoc_components_no_count', ['item_name' => $manufacturer->name, 'item' => trans('general.manufacturer')]);
             } catch (ItemStillHasLicenses $e) {
                 $errors[] = trans('general.bulk_delete_associations.assoc_licenses_no_count', ['item_name' => $manufacturer->name, 'item' => trans('general.manufacturer')]);
-            } catch (\Exception $e) {
-                report($e);
+            } catch (\Throwable $e) {
+                Handler::reportOrRethrow($e);
                 $errors[] = trans('general.something_went_wrong');
             }
         }
@@ -51,7 +52,7 @@ class BulkManufacturersController extends Controller
 
             return redirect()->route('manufacturers.index')->with('multi_error_messages', $errors);
         } else {
-            return redirect()->route('manufacturers.index')->with('success', trans('admin/manufacturers/message.delete.bulk_success'));
+            return redirect()->route('manufacturers.index')->with('success', trans_choice('admin/manufacturers/message.delete.bulk_success', $success_count, ['count' => $success_count]));
         }
     }
 }

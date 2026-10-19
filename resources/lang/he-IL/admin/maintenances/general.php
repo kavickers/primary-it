@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'אחזקת נכסים', // not used anymore
     'maintenances' => 'אירועי תחזוקה',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'עריכת תחזוקת נכס',
     'delete' => 'מחיקת תחזוקת נכס',
     'view' => 'הצג פרטי אחזקת נכס',

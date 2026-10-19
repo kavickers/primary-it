@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name ha degli slot attualmente assegnati, e non può essere eliminata. Restituisci tutti gli slot prima di eliminare.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenze eliminate con successo dopo la restituzione di :seats slot.',
+        'partial_success' => ':count licenze eliminate con successo dopo la restituzione di :seats slot. Seguono ulteriori informazioni.',
+    ],
+
     'checkout' => [
         'error' => 'Problema durante l\'assegnazione della Licenza. Riprova.',
         'success' => 'La licenza è stata assegnata con successo',
@@ -55,6 +60,10 @@ return [
         'error' => 'C\'è stato un problema nella restituzione della licenza. Riprova.',
         'not_reassignable' => 'Licenza già utilizzata',
         'success' => 'La licenza è stata restituita con successo',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'La licenza ":license" non ha slot liberi. A ":target" non è stato assegnato nessun slot licenza.',
     ],
 
 ];

@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Cynnal a chadw Ased', // not used anymore
     'maintenances' => 'Cynnal a Chadw',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Golygu Cynnal a Chadw Ased',
     'delete' => 'Dileu Cynnal a Chadw Ased',
     'view' => 'Gweld manylder Cynnal a Chadw Ased',

@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name lisansının şu an zimmetli olan lisans hakları var ve silinemez. Lütfen silmeden önce tüm hakları geri alın.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':seats koltuk teslim alındıktan sonra :count lisans başarıyla silindi.',
+        'partial_success' => 'İade alma işleminden sonra :count lisans başarıyla silindi. Aşağıda ek bilgiler verilmiştir.',
+    ],
+
     'checkout' => [
         'error' => 'Lisans çıkışı yapılırken hata oluştu. Lütfen tekrar deneyin.',
         'success' => 'Lisans çıkışı yapıldı.',
@@ -55,6 +60,10 @@ return [
         'error' => 'Lisans girişi yapılırken hata oluştu. Lütfen tekrar deneyin.',
         'not_reassignable' => 'Lisans zaten kullanılmış',
         'success' => 'Lisans girişi yapıldı',
+    ],
+
+    'import' => [
+        'no_free_seats' => '":license" lisansında boş koltuk yok. ":target" bir koltuğa atanmadı.',
     ],
 
 ];

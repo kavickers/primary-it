@@ -17,6 +17,8 @@ return [
         'confirm' => 'Är du säker på att du vill radera den här avdelningen?',
         'error' => 'Kunde inte ta bort avdelningen. Vänligen försök igen.',
         'success' => 'Avdelning raderad.',
+        'bulk_success' => 'Avdelning borttagen.|:count avdelningar har tagits bort.',
+        'partial_success' => 'Avdelningen har raderats. Se ytterligare information nedan. | :count avdelningar har raderats. Se ytterligare information nedan.',
     ],
 
 ];

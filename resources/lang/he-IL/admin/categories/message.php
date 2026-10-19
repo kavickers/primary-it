@@ -21,8 +21,15 @@ return [
         'confirm' => 'האם אתה בטוח שברצונך למחוק קטגוריה זו?',
         'error' => 'היתה בעיה במחיקת הקטגוריה. בבקשה נסה שוב.',
         'success' => 'Category was deleted successfully.',
-        'bulk_success' => 'Categories were deleted successfully.',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Category deleted successfully. See additional information below. | :count categories were deleted successfully. See additional information below.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'לא השתנו שדות, ולכן שום דבר לא עודכן.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

@@ -14,6 +14,8 @@ return [
         'confirm' => '您確定要刪除此維護類型嗎？',
         'error' => '刪除此維護類型時發生問題，請重試。',
         'success' => '維護類型已成功刪除。',
+        'bulk_success' => 'Maintenance type deleted successfully.|:count maintenance types were deleted successfully.',
+        'partial_success' => 'Maintenance type deleted successfully. See additional information below. | :count maintenance types were deleted successfully. See additional information below.',
     ],
     'complete' => [
         'success' => '維護已標記為完成。',

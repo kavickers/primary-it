@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Održavanja imovine', // not used anymore
     'maintenances' => 'Održavanja',
+    'create' => 'Napravite zahtev za održavanje opreme',
     'edit' => 'Održavanje imovine, uredi',
     'delete' => 'Održavanje imovine, Brisanje',
     'view' => 'Prikaz pojedinosti o održavanju imovine',

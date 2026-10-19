@@ -9,4 +9,7 @@ return [
     'total' => 'Łącznie',
     'update' => 'Aktualizuj materiał eksploatacyjny',
     'inventory_warning' => 'Stan magazynowy tego materiału jest poniżej minimum :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

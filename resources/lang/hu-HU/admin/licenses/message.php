@@ -4,11 +4,11 @@ return [
 
     'does_not_exist' => 'A licenc nem létezik, vagy nincs engedélye a megtekintéséhez.',
     'user_does_not_exist' => 'A felhasználó nem létezik, vagy nincs engedélye a megtekintéséhez.',
-    'asset_does_not_exist' => 'A licencel társítani kívánt eszköz nem létezik.',
+    'asset_does_not_exist' => 'Az eszköz, amelyet ehhez az licenchez próbál társítani, nem létezik.',
     'owner_doesnt_match_asset' => 'Az ehhez a licenchez társítani kívánt eszköz tulajdonosa nem más, mint a kiválasztott legördülő menüben kiválasztott személy.',
-    'assoc_users' => 'Ez a licenc jelenleg ki van adva a felhasználónak, és nem törölhető. Kérjük, először ellenőrizze az engedélyt, majd próbálja meg újra törölni.',
+    'assoc_users' => 'Ez a licenc jelenleg egy felhasználónak van kiadva, ezért nem törölhető. Először ellenőrizze a licencet, majd próbálja meg újra a törlést. ',
     'select_asset_or_person' => 'Válasszon egy eszközt vagy egy felhasználót, de nem mindkettőt.',
-    'not_found' => 'Licensz nem található',
+    'not_found' => 'Licenc nem található',
     'seats_available' => 'seat_count szabad hely elérhető',
 
     'create' => [
@@ -17,7 +17,7 @@ return [
     ],
 
     'deletefile' => [
-        'error' => 'A fájl nem törölve. Kérlek próbáld újra.',
+        'error' => 'A fájl nem lett törölve. Próbálja újra.',
         'success' => 'A fájl sikeresen törölve.',
     ],
 
@@ -25,7 +25,7 @@ return [
         'error' => 'Fel nem töltött fájl (ok). Kérlek próbáld újra.',
         'success' => 'Fájl (ok) sikeresen feltöltve.',
         'nofiles' => 'Nem választottál fel fájlokat a feltöltéshez, vagy a fájl, amelyet feltölteni próbálsz, túl nagy',
-        'invalidfiles' => 'Egy vagy több fájl túl nagy vagy egy filetype, amely nem megengedett. Az engedélyezett fájltípusok png, gif, jpg, jpeg, doc, docx, pdf, txt, zip, rar, rtf, xml és lic.',
+        'invalidfiles' => 'Egy vagy több fájlja túl nagy, vagy olyan fájltípus, amely nem engedélyezett. A megengedett fájltípusok a következők: png, gif, jpg, jpeg, doc, docx, pdf, txt, zip, rar, rtf, xml és lic.',
     ],
 
     'update' => [
@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenses were deleted successfully after checking in :seats seats.',
+        'partial_success' => ':count licenses were deleted successfully after checking in :seats seats. See additional information below.',
+    ],
+
     'checkout' => [
         'error' => 'Hiba történt az engedély megvizsgálásakor. Kérlek próbáld újra.',
         'success' => 'Az engedélyt sikeresen kiállították',
@@ -55,6 +60,10 @@ return [
         'error' => 'Hiba történt az engedélyben. Kérlek próbáld újra.',
         'not_reassignable' => 'A licenchely már használatban van',
         'success' => 'Az engedélyt sikeresen ellenőrizték',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'License ":license" has no free seats. ":target" was not assigned to a seat.',
     ],
 
 ];

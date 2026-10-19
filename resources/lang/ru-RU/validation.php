@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => 'Поле :attribute должно быть уникальным для :table1 и :table2. ',
     'unique_undeleted' => 'Свойство :attribute должно быть уникальным.',
     'non_circular' => ':attribute не должен создавать циклическую ссылку.',
+    'parent_must_be_top_level' => 'The selected :attribute must itself be a top-level item. Only one level of nesting is allowed.',
+    'must_have_no_children' => 'This item already has children of its own, so it cannot be assigned a parent.',
+    'parent_within_scope' => 'The selected :attribute is outside your assigned scope.',
     'not_array' => ':attribute не может быть массивом.',
     'disallow_same_pwd_as_user_fields' => 'Пароль не может совпадать с именем пользователя.',
     'letters' => 'Пароль должен содержать хотя бы одну букву.',
@@ -171,10 +174,19 @@ return [
     'uploaded' => 'Атрибут: не удалось загрузить.',
     'uppercase' => 'Поле :attribute должно быть указано заглавными буквами.',
     'url' => 'Поле :attribute должно быть действительным URL-адресом.',
+    'external_url' => 'The :attribute field must be a valid external URL (http:// or https://) that does not point at a private or local address.',
+    'asset_tag_pattern_placeholder' => 'The asset tag pattern must include at least one placeholder from :placeholders, otherwise every synced asset would receive the same tag and only the first would save.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Custom Extras must be valid JSON. Parser error: :error',
+        'not_array' => 'Custom Extras must be a JSON array (starting with [ and ending with ]).',
+        'entry_not_object' => 'Custom Extras entry #:index must be a JSON object with key, label, and path fields.',
+        'missing_field' => 'Custom Extras entry #:index is missing the required ":field" field.',
+    ],
     'ulid' => 'Поле :attribute должно быть корректным значением UUID.',
     'uuid' => 'Поле :attribute должно быть корректным значением UUID.',
     'valid_css_color' => 'The :attribute field must be a valid CSS color (hex, rgb, rgba, hsl, or hsla).',
-    'fmcs_location' => 'Полная поддержка и определение местоположения нескольких компаний включены в настройках администратора, а выбранное местоположение и выбранная компания не совместимы.',
+    'fmcs_company' => 'The :attribute field is required because full multiple companies support is enabled and floaters are not allowed.',
+    'fmcs_location' => 'Location ":location" belongs to :location_company, which does not match the selected company.',
     'is_unique_across_company_and_location' => 'The :attribute must be unique within the selected company and location.',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => 'Один или несколько адресов эл. почты являются недействительным.',
     'checkboxes' => ':attribute содержит недопустимые параметры.',
     'radio_buttons' => ':attribute не верно.',
+    'image_file_too_large' => 'The :attribute may not be larger than :max.',
 
     'custom' => [
         'alpha_space' => 'Поле атрибута: содержит символ, который не разрешен.',

@@ -4,7 +4,9 @@
 {{ $introduction_line }}
 
 @if (($snipeSettings->show_images_in_email =='1') && $item->getImageUrl())
-<center><img src="{{ $item->getImageUrl() }}" alt="Asset" style="max-width: 570px;"></center>
+    {{-- @formatter:off --}}
+<img src="{{ $item->getImageUrl() }}" alt="Asset" style="display:block; height:auto; max-width:100%; max-height:400px; margin:0 auto;">
+{{-- @formatter:on --}}
 @endif
 
 @component('mail::table')
@@ -30,6 +32,9 @@
 @endif
 @if (isset($item->serial))
 | **{{ trans('mail.serial') }}** | {{ $item->serial }} |
+@endif
+@if ($location)
+| **{{ trans('general.location') }}** | {{ $location }} |
 @endif
 @if (isset($last_checkout))
 | **{{ trans('mail.checkout_date') }}** | {{ $last_checkout }} |

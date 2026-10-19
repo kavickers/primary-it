@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenses were deleted successfully after checking in :seats seats.',
+        'partial_success' => ':count licenses were deleted successfully after checking in :seats seats. See additional information below.',
+    ],
+
     'checkout' => [
         'error' => 'Có vấn đề xảy ra khi checkout bản quyền. Xin vui lòng thử lại.',
         'success' => 'Bản quyền đã được checkout thành công',
@@ -55,6 +60,10 @@ return [
         'error' => 'Có vấn đề xảy ra khi checkin bản quyền. Xin vui lòng thử lại.',
         'not_reassignable' => 'Seat has been used',
         'success' => 'Bản quyền đã được checkin thành công',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'License ":license" has no free seats. ":target" was not assigned to a seat.',
     ],
 
 ];

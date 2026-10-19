@@ -3,14 +3,16 @@
 namespace App\Models;
 
 use App\Enums\ActionType;
+use App\Enums\FileStorage;
+use App\Models\Builders\ActionlogQueryBuilder;
 use App\Models\Traits\CompanyableTrait;
 use App\Models\Traits\Searchable;
 use App\Presenters\ActionlogPresenter;
 use App\Presenters\Presentable;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Schema;
@@ -21,6 +23,7 @@ use Illuminate\Support\Str;
  * checkouts, checkins, and updates).
  *
  * @version v1.0
+ * @mixin IdeHelperActionlog
  */
 class Actionlog extends SnipeModel
 {
@@ -29,6 +32,19 @@ class Actionlog extends SnipeModel
 
     // This is to manually set the source (via setActionSource()) for determineActionSource()
     protected ?string $source = null;
+
+    /**
+     * Ambient action-source for every action_log written inside a
+     * long-running operation (LDAP sync, sync-adapter pulls) that has
+     * no HTTP context to infer `gui` / `api` from and that spawns many
+     * observer-driven writes we can't reach into individually.
+     *
+     * Set + restored around a callback via withActionSource(). The
+     * priority order in determineActionSource() is: explicit per-log
+     * $this->source first, ambient second, then the request-shape
+     * fallbacks.
+     */
+    protected static ?string $ambientSource = null;
 
     protected $with = ['adminuser'];
 
@@ -48,6 +64,7 @@ class Actionlog extends SnipeModel
         'item_id',
         'action_type',
         'note',
+        'order_item_id',
         'target_id',
         'target_type',
         'stored_eula',
@@ -88,29 +105,40 @@ class Actionlog extends SnipeModel
      */
     protected $searchableRelations = [
         'company' => ['name'],
+        'location' => ['name'],
         'adminuser' => ['first_name', 'last_name', 'username', 'email', 'employee_num'],
         'user' => ['first_name', 'last_name', 'username', 'email', 'employee_num'],
-        'assets' => ['asset_tag', 'name', 'serial', 'order_number', 'notes', 'purchase_date'],
+        // Free-text search on QuantityAdjust logs walks through the
+        // OrderItem line to its parent Order so an order-number
+        // string still finds the right log rows after the parent
+        // action_logs.order_number column moved to Orders.
+        'orderItem.order' => ['order_number'],
+        'assets' => ['asset_tag', 'name', 'serial', 'notes', 'purchase_date'],
         'assets.model' => ['name', 'model_number', 'eol', 'notes'],
         'assets.model.category' => ['name', 'notes'],
         'assets.location' => ['name'],
         'assets.defaultLoc' => ['name'],
         'assets.model.manufacturer' => ['name', 'notes'],
-        'licenses' => ['name', 'serial', 'notes', 'order_number', 'license_email', 'license_name', 'purchase_order', 'purchase_date'],
+        'licenses' => ['name', 'serial', 'notes', 'license_email', 'license_name', 'purchase_order', 'purchase_date'],
         'licenses.category' => ['name', 'notes'],
         'licenses.supplier' => ['name'],
-        'consumables' => ['name', 'notes', 'order_number', 'model_number', 'item_no', 'purchase_date'],
+        // consumables / components / accessories no longer expose a
+        // supplier() or purchase_date accessor on the parent — those
+        // moved to the Orders / OrderItems polymorphic data model per
+        // acquisition event. The "default_supplier" template lives on
+        // defaultSupplier() and is safe to walk for search.
+        'consumables' => ['name', 'notes', 'model_number', 'item_no'],
         'consumables.category' => ['name', 'notes'],
         'consumables.location' => ['name', 'notes'],
-        'consumables.supplier' => ['name', 'notes'],
-        'components' => ['name', 'notes', 'purchase_date'],
+        'consumables.defaultSupplier' => ['name', 'notes'],
+        'components' => ['name', 'notes'],
         'components.category' => ['name', 'notes'],
         'components.location' => ['name', 'notes'],
-        'components.supplier' => ['name', 'notes'],
-        'accessories' => ['name', 'purchase_date'],
+        'components.defaultSupplier' => ['name', 'notes'],
+        'accessories' => ['name'],
         'accessories.category' => ['name'],
         'accessories.location' => ['name', 'notes'],
-        'accessories.supplier' => ['name', 'notes'],
+        'accessories.defaultSupplier' => ['name', 'notes'],
     ];
 
     /**
@@ -366,6 +394,21 @@ class Actionlog extends SnipeModel
     }
 
     /**
+     * QuantityAdjust log rows carry the specific OrderItem line this
+     * replenishment produced via the order_item_id column. The parent
+     * Order (with order_number, purchase_order, supplier, currency,
+     * purchase_date) is reachable via `$log->orderItem->order`.
+     *
+     * Points at order_items rather than orders because a single Order
+     * deduped across staggered receipts carries multiple lines, and the
+     * log entry has to identify the exact line for its event.
+     */
+    public function orderItem()
+    {
+        return $this->belongsTo(OrderItem::class, 'order_item_id');
+    }
+
+    /**
      * Establishes the actionlog -> user relationship
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
@@ -395,24 +438,67 @@ class Actionlog extends SnipeModel
     }
 
     /**
-     * Eager load history relations used by the API transformer to avoid N+1 queries.
+     * Extend the Searchable trait to also LIKE-search across the
+     * polymorphic target column. The trait's built-in
+     * searchRelations walks $searchableRelations, all of which are
+     * keyed on item_id (Actionlog::assets, ::users, ::licenses etc.
+     * hasMany the related model where id = item_id). That misses
+     * every log where the row's TARGET carries the identifier the
+     * caller is searching for, notably component checkouts whose
+     * item is the Component and whose target is the Asset it was
+     * checked out to.
+     *
+     * Mirrors the trait's searchAssignedToRelation helper: iterate
+     * the same three assignee morph types (User, Asset, Location)
+     * and LIKE across each type's identifier columns.
      */
-    public function scopeForApiHistory($query)
+    public function advancedTextSearch(Builder $query, array $terms)
     {
-        return $query->with([
-            'adminuser',
-            'location',
-            'item' => function (MorphTo $morphTo) {
-                $morphTo->morphWith([
-                    Asset::class => ['model'],
-                ]);
-            },
-            'target' => function (MorphTo $morphTo) {
-                $morphTo->morphWith([
-                    Asset::class => ['model'],
-                ]);
-            },
-        ]);
+        return $query->orWhereHasMorph(
+            'target',
+            [User::class, Asset::class, Location::class],
+            function (Builder $targetQuery, string $targetType) use ($terms) {
+                $columns = match ($targetType) {
+                    User::class => ['first_name', 'last_name', 'username', 'email', 'employee_num'],
+                    Asset::class => ['asset_tag', 'name', 'serial'],
+                    Location::class => ['name'],
+                    default => [],
+                };
+
+                if (empty($columns)) {
+                    return;
+                }
+
+                $table = (new $targetType)->getTable();
+                $firstConditionAdded = false;
+
+                foreach ($columns as $column) {
+                    foreach ($terms as $term) {
+                        if (! $firstConditionAdded) {
+                            $targetQuery->where($table.'.'.$column, 'LIKE', '%'.$term.'%');
+                            $firstConditionAdded = true;
+
+                            continue;
+                        }
+
+                        $targetQuery->orWhere($table.'.'.$column, 'LIKE', '%'.$term.'%');
+                    }
+                }
+
+                // First+last concat so "John Smith" matches a
+                // targeted user split across the two columns, same
+                // treatment the trait applies for adminuser / user
+                // relations and searchAssignedToRelation.
+                if ($targetType === User::class) {
+                    foreach ($terms as $term) {
+                        $targetQuery->orWhereRaw(
+                            $this->buildMultipleColumnSearch(['users.first_name', 'users.last_name']),
+                            ["%{$term}%"]
+                        );
+                    }
+                }
+            }
+        );
     }
 
     /**
@@ -533,11 +619,37 @@ class Actionlog extends SnipeModel
      *
      * @since  v6.3.0
      */
+    /**
+     * Run $callback with every action_log it writes stamped as $source.
+     * Previous ambient value is restored on exit (including on
+     * exception) so nested wraps don't leak out of their scope. Used by
+     * LdapSync + the sync-adapter pull entry points to attribute
+     * observer-driven writes to the owning operation.
+     */
+    public static function withActionSource(string $source, callable $callback): mixed
+    {
+        $previous = self::$ambientSource;
+        self::$ambientSource = $source;
+        try {
+            return $callback();
+        } finally {
+            self::$ambientSource = $previous;
+        }
+    }
+
     public function determineActionSource(): string
     {
-        // This is a manually set source
+        // Explicit per-log override, set via setActionSource() on the
+        // Actionlog instance before save.
         if ($this->source) {
             return $this->source;
+        }
+
+        // Ambient source set by a surrounding withActionSource() wrap.
+        // Catches observer-driven writes from LDAP sync and sync-adapter
+        // pulls that we can't reach to tag individually.
+        if (self::$ambientSource !== null) {
+            return self::$ambientSource;
         }
 
         // This is an API call
@@ -607,41 +719,30 @@ class Actionlog extends SnipeModel
     {
 
         if (($this->action_type == 'accepted') || ($this->action_type == 'declined')) {
-            return 'private_uploads/eula-pdfs/'.$this->filename;
+            return FileStorage::EulaPdfs->privateStorageKey().$this->filename;
         }
 
         if ($this->action_type == 'audit') {
-            return 'private_uploads/audits/'.$this->filename;
+            return FileStorage::Audits->privateStorageKey().$this->filename;
         }
 
-        switch ($this->item_type) {
-            case Accessory::class:
-                return 'private_uploads/accessories/'.$this->filename;
-            case Asset::class:
-                return 'private_uploads/assets/'.$this->filename;
-            case AssetModel::class:
-                return 'private_uploads/models/'.$this->filename;
-            case Company::class:
-                return 'private_uploads/companies/'.$this->filename;
-            case Consumable::class:
-                return 'private_uploads/consumables/'.$this->filename;
-            case Department::class:
-                return 'private_uploads/departments/'.$this->filename;
-            case Component::class:
-                return 'private_uploads/components/'.$this->filename;
-            case License::class:
-                return 'private_uploads/licenses/'.$this->filename;
-            case Location::class:
-                return 'private_uploads/locations/'.$this->filename;
-            case Maintenance::class:
-                return 'private_uploads/maintenances/'.$this->filename;
-            case Supplier::class:
-                return 'private_uploads/suppliers/'.$this->filename;
-            case User::class:
-                return 'private_uploads/users/'.$this->filename;
-            default:
-                return null;
-        }
+        $case = match ($this->item_type) {
+            Accessory::class => FileStorage::Accessories,
+            Asset::class => FileStorage::Assets,
+            AssetModel::class => FileStorage::Models,
+            Company::class => FileStorage::Companies,
+            Consumable::class => FileStorage::Consumables,
+            Department::class => FileStorage::Departments,
+            Component::class => FileStorage::Components,
+            License::class => FileStorage::Licenses,
+            Location::class => FileStorage::Locations,
+            Maintenance::class => FileStorage::Maintenances,
+            Supplier::class => FileStorage::Suppliers,
+            User::class => FileStorage::Users,
+            default => null,
+        };
+
+        return $case ? $case->privateStorageKey().$this->filename : null;
     }
 
     // Manually sets $this->source for determineActionSource()
@@ -650,8 +751,8 @@ class Actionlog extends SnipeModel
         $this->source = $source;
     }
 
-    public function scopeOrderByCreatedBy($query, $order)
+    public function newEloquentBuilder($query): ActionlogQueryBuilder
     {
-        return $query->leftJoin('users as admin_sort', 'action_logs.created_by', '=', 'admin_sort.id')->select('action_logs.*')->orderBy('admin_sort.first_name', $order)->orderBy('admin_sort.last_name', $order);
+        return new ActionlogQueryBuilder($query);
     }
 }

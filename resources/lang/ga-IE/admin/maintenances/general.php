@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Feabhsúcháin Sócmhainní', // not used anymore
     'maintenances' => 'Maintenances',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Athraigh Cothabháil Sócmhainní',
     'delete' => 'Scrios Cothabháil Sócmhainní',
     'view' => 'Féach ar Mionsonraí Cothabhála Sócmhainní',

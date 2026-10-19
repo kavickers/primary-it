@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Account;
 
+use App\Enums\FileStorage;
 use App\Events\CheckoutAccepted;
 use App\Events\CheckoutDeclined;
 use App\Helpers\Helper;
@@ -98,6 +99,21 @@ class AcceptanceController extends Controller
             abort(403, trans('general.insufficient_permissions'));
         }
 
+        // Bound the note server-side. Unbounded notes were reaching synchronous
+        // CommonMark rendering in the acceptance notification email and
+        // consuming worker CPU on a per-request basis (defense in depth against
+        // the parser CVE, with the commonmark bump to 2.9.0 as the primary fix).
+        //
+        // Bound signature_output as well. Legitimate signaturepad canvas output
+        // is well under 100 KB base64. The 2 MB cap here keeps a crafted
+        // payload from forcing base64_decode and the downstream image
+        // flattening into very large allocations before any dimension check
+        // runs.
+        $request->validate([
+            'note' => 'nullable|string|max:1000',
+            'signature_output' => 'nullable|string|max:2097152',
+        ]);
+
         $acceptance = CheckoutAcceptance::find($id);
 
         if (! $acceptance) {
@@ -133,20 +149,6 @@ class AcceptanceController extends Controller
             return redirect()->back()->with('error', trans('admin/users/message.error.accept_or_decline'));
         }
 
-        /**
-         * Check for the signature directory
-         */
-        if (! Storage::exists('private_uploads/signatures')) {
-            Storage::makeDirectory('private_uploads/signatures', 775);
-        }
-
-        /**
-         * Check for the eula-pdfs directory
-         */
-        if (! Storage::exists('private_uploads/eula-pdfs')) {
-            Storage::makeDirectory('private_uploads/eula-pdfs', 775);
-        }
-
         $item = $acceptance->checkoutable_type::find($acceptance->checkoutable_id);
 
         $username_slug = Str::slug($assignedUser->username);
@@ -169,10 +171,50 @@ class AcceptanceController extends Controller
                     return redirect()->back()->with('error', trans('general.shitty_browser'));
                 }
 
+                // Validate the decoded bytes are a PNG and bound dimensions
+                // BEFORE allocating any pixel buffer. getimagesizefromstring
+                // reads headers only, so a crafted payload with large declared
+                // width/height is rejected without imagecreatefromstring
+                // decoding the raster or the flatten path allocating a second
+                // same-size buffer. IMAGETYPE_PNG is enforced because the
+                // signature-pad JavaScript creates only PNG files.
+                $imgInfo = @getimagesizefromstring($decoded_image);
+                if ($imgInfo === false
+                    || $imgInfo[2] !== IMAGETYPE_PNG
+                    || $imgInfo[0] > 2000
+                    || $imgInfo[1] > 2000
+                ) {
+                    return redirect()->back()->with('error', trans('general.shitty_browser'));
+                }
+
+                // Flatten the signature's transparent background onto
+                // white and canonically re-encode. Fail-closed if that
+                // round-trip does not produce bytes: the previous
+                // "keep the original bytes" fallback let header-only
+                // PNG payloads (valid IHDR, no IDAT) through
+                // getimagesizefromstring's shallow check and down to
+                // Storage::put under a .png filename. Reported by
+                // Wojciech Ciemski (WojciechCiemski) post-FD-57825 fix.
                 $decoded_image = $this->flattenSignatureBackgroundToWhite($decoded_image);
+                if ($decoded_image === null) {
+                    Log::warning('Acceptance signature re-encode failed. Rejecting the submission to avoid storing non-decodable bytes.');
+
+                    return redirect()->back()->with('error', trans('general.shitty_browser'));
+                }
                 $encodedSignatureImage = base64_encode($decoded_image);
 
-                Storage::put('private_uploads/signatures/'.$sig_filename, (string) $decoded_image);
+                // Storage::put returns false on silent write failures on
+                // non-throwing filesystem drivers. Ignoring the return let
+                // acceptance finalization proceed while the signature file
+                // was absent from disk, producing an "accepted" record whose
+                // evidence file did not exist. Refuse to advance when the
+                // write did not land. Reported by Christopher Finks
+                // (christopherfi-dev) on 2026-08-02.
+                if (! Storage::put(FileStorage::Signatures->privateStorageKey().$sig_filename, (string) $decoded_image)) {
+                    Log::warning('Acceptance signature write failed for '.$sig_filename);
+
+                    return redirect()->back()->with('error', trans('admin/users/message.accept_signature_write_failed'));
+                }
 
                 // No image data is present, kick them back.
                 // This mostly only applies to users on super-duper crapola browsers *cough* IE *cough*
@@ -181,11 +223,12 @@ class AcceptanceController extends Controller
             }
         }
 
-        // Convert PDF logo to base64 for TCPDF
-        // This is needed for TCPDF to properly embed the image if it's a png and the cache isn't writable
+        // Convert PDF logo to base64 for TCPDF. Reading via the disk (rather
+        // than file_get_contents on a local path) keeps this working when
+        // uploads live on s3 or another non-local filesystem.
         $encoded_logo = null;
         if (($settings->acceptance_pdf_logo) && (Storage::disk('public')->exists($settings->acceptance_pdf_logo))) {
-            $encoded_logo = base64_encode(file_get_contents(public_path().'/uploads/'.basename($settings->acceptance_pdf_logo)));
+            $encoded_logo = base64_encode(Storage::disk('public')->get($settings->acceptance_pdf_logo));
         }
 
         // Get the data array ready for the notifications and PDF generation
@@ -241,10 +284,31 @@ class AcceptanceController extends Controller
 
             // Generate the PDF content
             $pdf_content = $acceptance->generateAcceptancePdf($data, $acceptance);
-            Storage::put('private_uploads/eula-pdfs/'.$pdf_filename, $pdf_content);
 
-            // Log the acceptance
-            $acceptance->accept($sig_filename, $item->getEula(), $pdf_filename, $request->input('note'));
+            // Storage::put returns false on silent write failures on
+            // non-throwing filesystem drivers. Ignoring the return let
+            // acceptance finalization proceed while the acceptance PDF was
+            // absent from disk, producing an "accepted" record whose
+            // evidence file did not exist. Refuse to advance when the
+            // write did not land. Reported by Christopher Finks
+            // (christopherfi-dev) on 2026-08-02.
+            if (! Storage::put(FileStorage::EulaPdfs->privateStorageKey().$pdf_filename, $pdf_content)) {
+                Log::warning('Acceptance PDF write failed for '.$pdf_filename);
+
+                return redirect()->back()->with('error', trans('admin/users/message.accept_pdf_write_failed'));
+            }
+
+            // Log the acceptance. accept() runs a compare-and-set UPDATE
+            // under the hood, so if another request already finalized this
+            // row, we bail here before any notification, event, or follow-up
+            // side effect fires. The PDF file we just wrote is left behind
+            // (same disposition as the signature file above) rather than
+            // rolled back, since cleaning up on the loser side would race
+            // the winner reading the same file. Not ideal, but the alternative
+            // is a more complex transactional file store that can roll back on failure.
+            if (! $acceptance->accept($sig_filename, $item->getEula(), $pdf_filename, $request->input('note'))) {
+                return redirect()->route('account.accept')->with('error', trans('admin/users/message.error.asset_already_accepted'));
+            }
 
             // Send the PDF to the signing user
             if (($request->input('send_copy') === '1') && ($assignedUser->email !== '')) {
@@ -269,8 +333,12 @@ class AcceptanceController extends Controller
             // Item was declined
         } else {
 
-            for ($i = 0; $i < ($acceptance->qty ?? 1); $i++) {
-                $acceptance->decline($sig_filename, $request->input('note'));
+            // decline() does its own compare-and-set and loops the per-unit
+            // declinedCheckout side effects internally for qty > 1. If another
+            // request already finalized this row, bail before notifications
+            // and events fire.
+            if (! $acceptance->decline($sig_filename, $request->input('note'))) {
+                return redirect()->route('account.accept')->with('error', trans('admin/users/message.error.asset_already_accepted'));
             }
 
             $acceptance->notify(new AcceptanceItemDeclinedNotification($data));
@@ -423,16 +491,20 @@ class AcceptanceController extends Controller
         return [(int) $acceptance->checkoutable_id, session('sign_in_place_resource_type', 'Assets')];
     }
 
-    private function flattenSignatureBackgroundToWhite(string $signatureBinary): string
+    private function flattenSignatureBackgroundToWhite(string $signatureBinary): ?string
     {
+        // Fail-closed on every unexpected branch rather than returning
+        // the original bytes. Each branch below returns null so the
+        // the submission gets rejected instead of storing an
+        // unverified blob under a .png filename.
         if (! function_exists('imagecreatefromstring') || ! function_exists('imagecreatetruecolor')) {
-            return $signatureBinary;
+            return null;
         }
 
         $source = @imagecreatefromstring($signatureBinary);
 
         if ($source === false) {
-            return $signatureBinary;
+            return null;
         }
 
         $width = imagesx($source);
@@ -442,7 +514,7 @@ class AcceptanceController extends Controller
         if ($flattened === false) {
             imagedestroy($source);
 
-            return $signatureBinary;
+            return null;
         }
 
         $white = imagecolorallocate($flattened, 255, 255, 255);
@@ -450,12 +522,20 @@ class AcceptanceController extends Controller
         imagecopy($flattened, $source, 0, 0, 0, 0, $width, $height);
 
         ob_start();
-        imagepng($flattened);
+        $encoded = @imagepng($flattened);
         $output = ob_get_clean();
 
         imagedestroy($source);
         imagedestroy($flattened);
 
-        return is_string($output) ? $output : $signatureBinary;
+        // Fail-closed if either imagepng() reported failure or the
+        // output buffer did not produce a string. Previously fell back
+        // to the original bytes, which bypassed the canonicalization
+        // guarantee the caller is relying on.
+        if ($encoded === false || !is_string($output) || $output === '') {
+            return null;
+        }
+
+        return $output;
     }
 }

@@ -30,16 +30,12 @@
                           aria-label="asset_maintenance_type"
                       />
                   @endif
-                  {!! $errors->first('maintenance_type_id', '<span class="alert-msg" aria-hidden="true"><i class="fas fa-times" aria-hidden="true"></i> :message</span>') !!}
+                  <x-form.error name="maintenance_type_id" />
               </div>
 
               <div class="col-md-1 col-sm-1 text-left">
                   @can('create', \App\Models\MaintenanceType::class)
-                      <a href="{{ route('modal.show', 'maintenance-type') }}"
-                         data-toggle="modal"
-                         data-target="#createModal"
-                         data-select="maintenance_type_id"
-                         class="btn btn-sm btn-theme">{{ trans('button.new') }}</a>
+                      <x-button.modal-add type="maintenance-type" target="maintenance_type_id"/>
                   @endcan
               </div>
           </div>

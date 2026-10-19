@@ -17,6 +17,7 @@ use Illuminate\Auth\Passwords\PasswordResetServiceProvider;
 use Illuminate\Broadcasting\BroadcastServiceProvider;
 use Illuminate\Bus\BusServiceProvider;
 use Illuminate\Cache\CacheServiceProvider;
+use Illuminate\Concurrency\ConcurrencyServiceProvider;
 use Illuminate\Cookie\CookieServiceProvider;
 use Illuminate\Database\DatabaseServiceProvider;
 use Illuminate\Database\Eloquent\Model;
@@ -234,6 +235,43 @@ return [
 
     /*
    |--------------------------------------------------------------------------
+   | ALLOW INTERNAL WEBHOOK TARGETS
+   |--------------------------------------------------------------------------
+   |
+   | By default the webhook endpoint validator refuses URLs that resolve to
+   | loopback, link-local, RFC-1918, or otherwise-non-public IPs. This
+   | prevents a super-admin (or someone who has taken over a super-admin
+   | account) from turning the outbound notification path into an SSRF
+   | primitive against internal services or cloud metadata endpoints.
+   |
+   | Some operators legitimately run their own webhook receiver on the same
+   | private network as Snipe-IT (self-hosted Mattermost, Rocket.Chat, an
+   | internal ChatOps bot, etc.). Setting this to true re-enables outbound
+   | requests to those addresses. Scheme restrictions (http/https only) are
+   | still enforced. Leave this off unless you know you need it.
+   |
+   */
+    'webhook_allow_internal_targets' => env('WEBHOOK_ALLOW_INTERNAL_TARGETS', false),
+
+    /*
+   |--------------------------------------------------------------------------
+   | ALLOW INTERNAL SYNC ADAPTER TARGETS
+   |--------------------------------------------------------------------------
+   |
+   | Same guard as WEBHOOK_ALLOW_INTERNAL_TARGETS above, but scoped to the
+   | base URL of an HTTP sync adapter (NetBox, Zabbix, in-house MDMs, etc).
+   | Many admins legitimately point sync adapters at on-prem infrastructure
+   | sitting on the same private network as Snipe-IT, which the default
+   | ExternalUrl validator would otherwise reject.
+   |
+   | Scheme restrictions (http/https only) still apply. Leave this off
+   | unless you know you need it.
+   |
+   */
+    'sync_adapter_allow_internal_targets' => env('SYNC_ADAPTER_ALLOW_INTERNAL_TARGETS', false),
+
+    /*
+   |--------------------------------------------------------------------------
    | LOG AUTHED USER HEADER
    |--------------------------------------------------------------------------
    |
@@ -339,6 +377,66 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Allow test buttons to target private / loopback IPs
+    |--------------------------------------------------------------------------
+    |
+    | Various admin screens (LDAP wizard, Google OAuth, webhook config, etc.)
+    | expose "Test" buttons that fire a real network request to a user-
+    | supplied host. Without a guard these are SSRF / port-scanning vectors:
+    | a superadmin (compromised account, insider, or SaaS tenant) could
+    | probe internal-only services, cloud metadata endpoints (169.254.169.254),
+    | loopback, etc. and read the distinguishing error responses to
+    | enumerate them.
+    |
+    | Default: false. The test helpers resolve the hostname and reject any
+    | URL that lands on a private / loopback / link-local / reserved range.
+    |
+    | Set to true ONLY when the Snipe-IT installation is legitimately
+    | pointed at services on the same private network (self-hosted on-prem
+    | alongside internal AD/Slack/webhooks is the typical case). Never
+    | enable on hosted / multi-tenant deployments.
+    |
+    */
+
+    'test_allow_private_ips' => env('TEST_ALLOW_PRIVATE_IPS', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Superuser Impersonation
+    |--------------------------------------------------------------------------
+    |
+    | Comma-separated list of usernames allowed to impersonate other users.
+    | Users in this list must ALSO be superusers. Empty or unset means the
+    | feature is completely off. Wrap usernames that contain commas in double
+    | quotes. Example: ALLOW_USER_IMPERSONATION=admin,"jane, doe"
+    |
+    */
+
+    'user_impersonation_usernames' => (function () {
+        $raw = env('ALLOW_USER_IMPERSONATION', '');
+
+        // Reject anything that isn't a string. env() converts literal "true"/"false"/"null"/etc.
+        // to PHP bool/null, which would otherwise stringify to garbage tokens.
+        if (! is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        $usernames = [];
+        $seen = [];
+        foreach (str_getcsv($raw, ',', '"', '\\') as $token) {
+            $token = trim((string) $token);
+            $lower = mb_strtolower($token);
+            if ($token !== '' && ! isset($seen[$lower])) {
+                $usernames[] = $token;
+                $seen[$lower] = true;
+            }
+        }
+
+        return $usernames;
+    })(),
+
+    /*
+    |--------------------------------------------------------------------------
     | Minimum PHP version
     |--------------------------------------------------------------------------
     |
@@ -386,6 +484,7 @@ return [
         SnipeTranslationServiceProvider::class, // we REPLACE the default Laravel translator with our own
         ValidationServiceProvider::class,
         ViewServiceProvider::class,
+        ConcurrencyServiceProvider::class,
 
         /*
          * Package Service Providers...
@@ -531,6 +630,50 @@ return [
   | viewed without pagination. This is to prevent server timeouts.
   */
 
-    'max_unpaginated_records' => env('MAX_UNPAGINATED', '5000'),
+    'max_unpaginated_records' => env('MAX_UNPAGINATED', '10000'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Report Execution Time Limit
+    |--------------------------------------------------------------------------
+    | Seconds passed to ini_set('max_execution_time') at the top of the
+    | streaming custom-report controllers so long chunked exports don't
+    | get killed by PHP's shorter default. Default 12000 (200 minutes).
+    */
+
+    'report_time_limit' => env('REPORT_TIME_LIMIT', 12000),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Force TLS / Allow Insecure Hosts
+    |--------------------------------------------------------------------------
+    | force_tls: forces the URL generator to emit https:// links regardless
+    | of the incoming request scheme. Snipe-IT already forces https when
+    | APP_URL starts with https, this flag covers reverse-proxy setups where
+    | APP_URL is http but is actually TLS. allow_insecure_hosts skips
+    | the URL::forceRootUrl() lockdown that otherwise rejects requests whose
+    | Host header doesn't match APP_URL.
+    */
+
+    'force_tls' => env('APP_FORCE_TLS', false),
+
+    'allow_insecure_hosts' => env('APP_ALLOW_INSECURE_HOSTS', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | LDAP Execution Limits
+    |--------------------------------------------------------------------------
+    | Seconds and memory ceiling passed to ini_set() at the top of the
+    | LDAP sync command so a large directory sync doesn't get killed by
+    | PHP's shorter defaults. ldap_tls_cacert points at a custom CA
+    | bundle to trust when running LDAPS against a self-signed or
+    | private-CA-signed directory.
+    */
+
+    'ldap_time_limit' => env('LDAP_TIME_LIM', 600),
+
+    'ldap_memory_limit' => env('LDAP_MEM_LIM', '500M'),
+
+    'ldap_tls_cacert' => env('LDAPTLS_CACERT'),
 
 ];

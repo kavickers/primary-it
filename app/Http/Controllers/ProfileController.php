@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\FileStorage;
 use App\Http\Requests\ImageUploadRequest;
 use App\Models\Actionlog;
 use App\Models\Asset;
@@ -228,10 +229,17 @@ class ProfileController extends Controller
             + $show_user->assets->flatMap->licenses->count()
             + $show_user->assets->flatMap->assignedAccessories->count();
 
+        // Users printing their own inventory always see their own items,
+        // regardless of the class-level view permission for each resource.
         return view('users.print')
             ->with('users', [$show_user])
             ->with('indirectItemsCount', $indirectItemsCount)
-            ->with('settings', Setting::getSettings());
+            ->with('settings', Setting::getSettings())
+            ->with('canViewAssets', true)
+            ->with('canViewLicenses', true)
+            ->with('canViewAccessories', true)
+            ->with('canViewConsumables', true)
+            ->with('canViewComponents', true);
     }
 
     /**
@@ -265,20 +273,30 @@ class ProfileController extends Controller
     {
         $filename = basename((string) $filename);
 
-        $logentry = Actionlog::where('filename', $filename)->with('user', 'target')->first();
+        $logentry = Actionlog::where('filename', $filename)
+            ->where('action_type', 'accepted')
+            ->with('target')
+            ->first();
 
         if (! $logentry) {
             return redirect()->back()->with('error', trans('general.record_not_found'));
         }
 
-        $this->authorize('view', $logentry->target);
-        $this->authorize('view', $logentry->user);
+        // #19344: end users need to be able to download their own accepted
+        // EULA without holding users.view. Anyone else falls back to the
+        // regular view-user permission check.
+        $isOwnAcceptance = $logentry->target_type === User::class
+            && (int) $logentry->target_id === (int) auth()->id();
 
-        if (config('filesystems.default') == 's3_private') {
-            return redirect()->away(Storage::disk('s3_private')->temporaryUrl('private_uploads/eula-pdfs/'.$filename, now()->addMinutes(5)));
+        if (! $isOwnAcceptance) {
+            $this->authorize('view', $logentry->target);
         }
 
-        if (Storage::exists('private_uploads/eula-pdfs/'.$filename)) {
+        if (config('filesystems.default') == 's3_private') {
+            return redirect()->away(Storage::disk('s3_private')->temporaryUrl(FileStorage::EulaPdfs->privateStorageKey().$filename, now()->addMinutes(5)));
+        }
+
+        if (Storage::exists(FileStorage::EulaPdfs->privateStorageKey().$filename)) {
             return response()->download(config('app.private_uploads').'/eula-pdfs/'.$filename);
         }
 

@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Utrzymanie aktywów', // not used anymore
     'maintenances' => 'Utrzymanie',
+    'create' => 'Utwórz okno serwisowe środków',
     'edit' => 'Edytuj okno serwisowe środka',
     'delete' => 'Usuń okno serwisowe środka',
     'view' => 'Zobacz szczegóły serwisu środka',

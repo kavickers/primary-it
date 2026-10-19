@@ -20,6 +20,8 @@ return [
         'confirm' => 'Är du säker på att du vill radera denna statusetikett?',
         'error' => 'Det gick inte att ta bort statusetiketten. Var god försök igen.',
         'success' => 'Statusetiketten har tagits bort.',
+        'bulk_success' => 'Statusetikett togs bort.|:count statusetiketter togs bort.',
+        'partial_success' => 'Statusetikett togs bort. Se ytterligare information nedan. | :count statusetiketter togs bort. Se ytterligare information nedan.',
     ],
 
     'help' => [

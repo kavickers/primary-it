@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Laitteiden huollot', // not used anymore
     'maintenances' => 'Huollot',
+    'create' => 'Luo laitehuolto',
     'edit' => 'Muokkaa laitteen huoltoa',
     'delete' => 'Poista laitteen huolto',
     'view' => 'Näytä laitteen huoltotiedot',

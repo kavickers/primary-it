@@ -2,21 +2,31 @@
 
 namespace App\Models;
 
+use App\Enums\FileStorage;
+use App\Models\Builders\ConsumableQueryBuilder;
 use App\Models\Traits\Acceptable;
+use App\Models\Traits\AdjustsQuantity;
 use App\Models\Traits\CompanyableTrait;
+use App\Models\Traits\HasOrders;
 use App\Models\Traits\HasUploads;
 use App\Models\Traits\Loggable;
+use App\Models\Traits\Requestable;
 use App\Models\Traits\Searchable;
 use App\Presenters\ConsumablePresenter;
 use App\Presenters\Presentable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Watson\Validating\ValidatingTrait;
 
+/**
+ * @mixin IdeHelperConsumable
+ */
 class Consumable extends SnipeModel
 {
     use HasFactory;
@@ -24,19 +34,20 @@ class Consumable extends SnipeModel
     protected $presenter = ConsumablePresenter::class;
 
     use Acceptable;
+    use AdjustsQuantity;
     use CompanyableTrait;
+    use HasOrders;
     use HasUploads;
     use Loggable, Presentable;
+    use Requestable;
     use SoftDeletes;
 
     protected $table = 'consumables';
 
     protected $casts = [
-        'purchase_date' => 'datetime',
         'requestable' => 'boolean',
         'category_id' => 'integer',
         'company_id' => 'integer',
-        'supplier_id',
         'qty' => 'integer',
         'min_amt' => 'integer',
     ];
@@ -48,11 +59,14 @@ class Consumable extends SnipeModel
         'name' => 'required|max:255',
         'qty' => 'required|integer|min:0|max:99999',
         'category_id' => 'required|integer',
-        'company_id' => 'integer|nullable|exists:companies,id',
+        'company_id' => 'integer|nullable|exists:companies,id|fmcs_company',
         'location_id' => 'exists:locations,id|nullable|fmcs_location',
         'min_amt' => 'integer|min:0|max:99999|nullable',
         'purchase_cost' => 'numeric|nullable|gte:0|max:99999999999999999.99',
         'purchase_date' => 'date_format:Y-m-d|nullable',
+        'default_supplier_id' => 'nullable|integer|exists:suppliers,id',
+        'default_purchase_cost' => 'numeric|nullable|gte:0|max:99999999999999999.99',
+        'requestable' => 'nullable|boolean',
     ];
 
     /**
@@ -71,22 +85,24 @@ class Consumable extends SnipeModel
      *
      * @var array
      */
+    // supplier_id / purchase_date / purchase_cost are intentionally
+    // absent. See Accessory::$fillable for the full rationale.
+    // default_supplier_id / default_purchase_cost are parent-level
+    // "template" values that seed the adjust-quantity modal.
     protected $fillable = [
         'category_id',
         'company_id',
         'item_no',
         'location_id',
         'manufacturer_id',
-        'supplier_id',
         'name',
-        'order_number',
         'model_number',
-        'purchase_cost',
-        'purchase_date',
         'qty',
         'min_amt',
         'requestable',
         'notes',
+        'default_supplier_id',
+        'default_purchase_cost',
     ];
 
     use Searchable;
@@ -98,9 +114,6 @@ class Consumable extends SnipeModel
      */
     protected $searchableAttributes = [
         'name',
-        'order_number',
-        'purchase_cost',
-        'purchase_date',
         'item_no',
         'model_number',
         'notes',
@@ -116,24 +129,51 @@ class Consumable extends SnipeModel
         'company' => ['name'],
         'location' => ['name'],
         'manufacturer' => ['name'],
-        'supplier' => ['name'],
+        // Search by the parent's "typical supplier" template — see the
+        // Accessory model for the rationale.
+        'defaultSupplier' => ['name'],
         'adminuser' => ['first_name', 'last_name', 'display_name'],
+        // See Accessory::$searchableRelations. Search hits order_number
+        // through the HasOrders trait's orders() HasManyThrough into
+        // the Orders table so historical order references still match.
+        'orders' => ['order_number'],
     ];
 
     /**
-     * Sets the attribute of whether or not the consumable is requestable
-     *
-     * This isn't really implemented yet, as you can't currently request a consumable
-     * however it will be implemented in the future, and we needed to include
-     * this method here so all of our polymorphic methods don't break.
-     *
-     * @todo Update this comment once it's been implemented
-     *
-     * @author [A. Gianotto] [<snipe@snipe.net>]
-     *
-     * @since  [v3.0]
-     *
-     * @return Relation
+     * On hard-delete, wipe the image file and Files-tab attachments.
+     * Soft-delete leaves everything alone so a restore comes back with
+     * the image + files intact. The attachment action_log rows get
+     * soft-deleted (not hard-deleted) so the audit trail of what was
+     * attached-and-when survives even after the parent is gone.
+     */
+    protected static function booted(): void
+    {
+        static::forceDeleted(function (self $consumable) {
+            if ($consumable->image) {
+                try {
+                    Storage::disk('public')->delete(FileStorage::Consumables->publicPath().$consumable->image);
+                } catch (\Exception $e) {
+                    Log::info($e->getMessage());
+                }
+            }
+
+            foreach ($consumable->uploads as $upload) {
+                if (($path = $upload->uploads_file_path()) !== null) {
+                    try {
+                        Storage::delete($path);
+                    } catch (\Exception $e) {
+                        Log::info($e->getMessage());
+                    }
+                }
+                $upload->delete();
+            }
+        });
+    }
+
+    /**
+     * Normalize the requestable form input so an empty string from an
+     * unchecked checkbox lands as false rather than a truthy "0" cast
+     * (matches Accessory::setRequestableAttribute).
      */
     public function setRequestableAttribute($value)
     {
@@ -260,11 +300,11 @@ class Consumable extends SnipeModel
     {
         // If there is a consumable image, use that
         if ($this->image) {
-            return Storage::disk('public')->url(app('consumables_upload_path').$this->image);
+            return Storage::disk('public')->url(FileStorage::Consumables->publicPath().$this->image);
 
             // Otherwise check for a category image
         } elseif (($this->category) && ($this->category->image)) {
-            return Storage::disk('public')->url(app('categories_upload_path').e($this->category->image));
+            return Storage::disk('public')->url(FileStorage::Categories->publicPath().e($this->category->image));
         }
 
         return false;
@@ -277,7 +317,7 @@ class Consumable extends SnipeModel
      *
      * @since  [v3.0]
      */
-    public function users(): Relation
+    public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'consumables_users', 'consumable_id', 'assigned_to')->withPivot('created_by')->withTrashed()->withTimestamps();
     }
@@ -291,9 +331,16 @@ class Consumable extends SnipeModel
      *
      * @return Relation
      */
-    public function supplier()
+    // No `supplier()` relation, no `supplier_id` / `purchase_date` /
+    // `purchase_cost` accessors — see Accessory model for rationale.
+    // Callers use `$consumable->orders` or `$consumable->lastOrderDefaults()`.
+
+    /**
+     * Parent-level "typical supplier" template — see Accessory model.
+     */
+    public function defaultSupplier(): BelongsTo
     {
-        return $this->belongsTo(Supplier::class, 'supplier_id');
+        return $this->belongsTo(Supplier::class, 'default_supplier_id');
     }
 
     /**
@@ -340,6 +387,16 @@ class Consumable extends SnipeModel
     }
 
     /**
+     * AdjustsQuantity trait hook: units currently distributed to users.
+     * The adjust-quantity modal uses this to reject decrements that
+     * would leave the on-hand qty below what's already handed out.
+     */
+    public function currentlyInUseCount(): int
+    {
+        return (int) $this->numCheckedOut();
+    }
+
+    /**
      * Checks the number of available consumables
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
@@ -355,12 +412,6 @@ class Consumable extends SnipeModel
         $remaining = $total - $checkedout;
 
         return $remaining;
-    }
-
-    public function totalCostSum()
-    {
-
-        return $this->purchase_cost !== null ? $this->qty * $this->purchase_cost : null;
     }
 
     /**
@@ -403,96 +454,8 @@ class Consumable extends SnipeModel
         $this->attributes['qty'] = (! $value) ? 0 : intval($value);
     }
 
-    /**
-     * -----------------------------------------------
-     * BEGIN QUERY SCOPES
-     * -----------------------------------------------
-     **/
-
-    /**
-     * Query builder scope to search on text filters for complex Bootstrap Tables API
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  text  $filter  JSON array of search keys and terms
-     * @return Builder Modified query builder
-     */
-
-    /**
-     * Query builder scope to order on company
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderCategory($query, $order)
+    public function newEloquentBuilder($query): ConsumableQueryBuilder
     {
-        return $query->join('categories', 'consumables.category_id', '=', 'categories.id')->orderBy('categories.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on location
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderLocation($query, $order)
-    {
-        return $query->leftJoin('locations', 'consumables.location_id', '=', 'locations.id')->orderBy('locations.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on manufacturer
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderManufacturer($query, $order)
-    {
-        return $query->leftJoin('manufacturers', 'consumables.manufacturer_id', '=', 'manufacturers.id')->orderBy('manufacturers.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on company
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderCompany($query, $order)
-    {
-        return $query->leftJoin('companies', 'consumables.company_id', '=', 'companies.id')->orderBy('companies.name', $order);
-    }
-
-    /**
-     * Query builder scope to order on remaining
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  string  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderRemaining($query, $order)
-    {
-        $order_by = 'consumables.qty - consumables_users_count '.$order;
-
-        return $query->orderByRaw($order_by);
-    }
-
-    /**
-     * Query builder scope to order on supplier
-     *
-     * @param  Builder  $query  Query builder instance
-     * @param  text  $order  Order
-     * @return Builder Modified query builder
-     */
-    public function scopeOrderSupplier($query, $order)
-    {
-        return $query->leftJoin('suppliers', 'consumables.supplier_id', '=', 'suppliers.id')->orderBy('suppliers.name', $order);
-    }
-
-    public function scopeOrderByCreatedBy($query, $order)
-    {
-        return $query->leftJoin('users as users_sort', 'consumables.created_by', '=', 'users_sort.id')->select('consumables.*')->orderBy('users_sort.first_name', $order)->orderBy('users_sort.last_name', $order);
+        return new ConsumableQueryBuilder($query);
     }
 }

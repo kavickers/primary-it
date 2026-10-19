@@ -3,7 +3,7 @@
 {{-- Page title --}}
 @section('title')
 
-    {{ trans('general.depreciation') }}: {{ $depreciation->name }} ({{ $depreciation->months }} {{ trans('general.months') }})
+    {{ trans('general.depreciation') }}: {{ $depreciation->name }} ({{ trans_choice('general.months_plural', $depreciation->months) }})
 
     @parent
 @stop
@@ -27,21 +27,24 @@
 
                     <!-- start assets tab pane -->
                     <x-tabs.pane name="assets">
-                        <x-table.assets name="assets" :route="route('api.assets.index', ['depreciation_id' => $depreciation->id])"/>
+                        <x-table.assets name="depreciationAssets" :route="route('api.assets.index', ['depreciation_id' => $depreciation->id])"/>
                     </x-tabs.pane>
                     <!-- end assets tab pane -->
 
 
                     <!-- start licenses tab pane -->
                     <x-tabs.pane name="licenses">
-                        <x-table.licenses name="licenses" :route="route('api.licenses.index', ['depreciation_id' => $depreciation->id])"/>
+                        <x-slot:bulkactions>
+                            <x-table.bulk-licenses />
+                        </x-slot:bulkactions>
+                        <x-table.licenses name="depreciationLicenses" :export_name="$depreciation->name" :route="route('api.licenses.index', ['depreciation_id' => $depreciation->id])"/>
                     </x-tabs.pane>
                     <!-- end licenses tab pane -->
 
                     <!-- start models tab pane -->
                     @can('view', \App\Models\AssetModel::class)
                         <x-tabs.pane name="models">
-                            <x-table.models :route="route('api.models.index', ['status' => e(request('status')), 'depreciation_id' => $depreciation->id])"/>
+                            <x-table.models name="depreciationModels" :route="route('api.models.index', ['status' => e(request('status')), 'depreciation_id' => $depreciation->id])"/>
                         </x-tabs.pane>
                     @endcan
                     <!-- end licenses tab pane -->

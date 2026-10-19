@@ -40,6 +40,16 @@ class IndexSetupTest extends TestCase
 
     }
 
+    public function test_migration_creates_passport_clients()
+    {
+        $this->assertDatabaseEmpty('oauth_personal_access_clients');
+
+        $this->post(route('setup.migrate'))
+            ->assertOk();
+
+        $this->assertDatabaseCount('oauth_personal_access_clients', 1);
+    }
+
     public function test_create_first_user_page_renders()
     {
 

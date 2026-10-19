@@ -39,6 +39,6 @@ return [
     'signed_by_asset_auditor' => 'Signed By (Asset Auditor):',
     'signed_by_finance_auditor' => 'Signed By (Finance Auditor):',
     'signed_by_location_manager' => 'Signed By (Location Manager):',
-    'signed_by' => 'Signed Off By:',
+    'signed_by' => 'Preuzeo:',
     'clone' => 'Clone Location',
 ];

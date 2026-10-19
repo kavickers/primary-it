@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenses were deleted successfully after checking in :seats seats.',
+        'partial_success' => ':count licenses were deleted successfully after checking in :seats seats. See additional information below.',
+    ],
+
     'checkout' => [
         'error' => 'Cillad ayaa dhacday intii la hubinayay shatiga. Fadlan isku day markale.',
         'success' => 'Shatiga si guul leh ayaa loo hubiyay',
@@ -55,6 +60,10 @@ return [
         'error' => 'Cillad ayaa dhacday intii la hubinayay shatiga. Fadlan kuceli markale.',
         'not_reassignable' => 'Seat has been used',
         'success' => 'Shatiga si guul leh ayaa loo hubiyay',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'License ":license" has no free seats. ":target" was not assigned to a seat.',
     ],
 
 ];

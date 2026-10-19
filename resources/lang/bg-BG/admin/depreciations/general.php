@@ -6,15 +6,16 @@ return [
     'asset_depreciations' => 'Амортизация на активи',
     'create' => 'Създаване на амортизация',
     'depreciation_name' => 'Амортизация',
-    'depreciation_min' => 'Минимална амортизационна стойност',
     'number_of_months' => 'Брой месеци',
+    'rate_multiplier' => 'Rate Multiplier',
     'update' => 'Обновяване на амортизация',
-    'depreciation_min' => 'Минимална стойност след амортизация',
+    'fiscal_year_start_month' => 'Fiscal Year Start Month',
     'no_depreciations_warning' => '<strong>Внимание: </strong>
                       Нямате нагласена амортизация.
                       Моля настройте поне една амортизация за да видите справката.',
     'depreciation_method' => 'Справка за амортизации',
     'linear_depreciation' => 'Линеен (по подразбиране)',
+    'diminishing_depreciation' => 'Diminishing Value Depreciation',
     'half_1' => 'Полугодишна, винаги се приложена',
     'half_2' => 'Полугодишна, приложена с условие',
 ];

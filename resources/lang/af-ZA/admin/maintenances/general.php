@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Asset Maintenances', // not used anymore
     'maintenances' => 'Maintenances',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Wysig bateonderhoud',
     'delete' => 'Verwyder Bate Onderhoud',
     'view' => 'Bekyk Bate Onderhoud Besonderhede',

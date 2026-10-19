@@ -48,6 +48,11 @@ return [
             'log_msg' => 'Assegnazione effettuato tramite GUI di assegnazione massiva di licenze',
 
         ],
+
+        'delete_with_checkin' => [
+            'label' => 'Restituisci slot ed elimina',
+            'log_msg' => 'Restituzione effettuata tramite "eliminazione con restituzione" massiva dall\'indice delle Licenze',
+        ],
     ],
 
     'below_threshold' => 'Ci sono solo :remaining_count installazioni disponibili rimaste per questa licenza con una quantità minima di :min_amt. Si consiglia di acquistarne altre.',

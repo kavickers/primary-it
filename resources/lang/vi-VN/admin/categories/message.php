@@ -21,8 +21,15 @@ return [
         'confirm' => 'Bạn có chắc chắn muốn xoá hạng mục này?',
         'error' => 'Có vấn đề xảy ra khi xoá hạng mục này. Bạn hãy thử lại.',
         'success' => 'Category was deleted successfully.',
-        'bulk_success' => 'Categories were deleted successfully.',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Category deleted successfully. See additional information below. | :count categories were deleted successfully. See additional information below.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Không có trường nào được thay đổi, vì vậy không có gì được cập nhật.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

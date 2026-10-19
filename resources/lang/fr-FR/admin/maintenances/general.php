@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Entretien d\'actifs', // not used anymore
     'maintenances' => 'Maintenances',
+    'create' => 'Création de maintenance de la ressource',
     'edit' => 'Modification d\'entretiens d\'actifs',
     'delete' => 'Supprimer des entretiens d\'actif',
     'view' => 'Voir les détails de la maintenance d\'actif',

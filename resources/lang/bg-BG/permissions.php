@@ -36,11 +36,12 @@ return [
 
     'assets' => [
         'name' => 'Активи',
-        'note' => 'Дава достъп до раздел активи в програмата.',
+        'note' => 'Дава достъп до раздел активи в програмата. ',
     ],
 
     'assetsview' => [
         'name' => 'Преглед на активи',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the asset model as well. This is to make it easier to share common documents like user manuals across assets without having to upload them to every asset, and to avoid having to grant the user permission to modify asset files. Users with this permission will also be able to view edit and checkin history.',
     ],
 
     'assetscreate' => [
@@ -71,8 +72,8 @@ return [
     ],
 
     'assetsviewrequestable' => [
-        'name' => 'Вижда активите за поискване',
-        'note' => 'Дава достъп на потребителя да вижда активите, които са разрешени за поискване.',
+        'name' => 'View Requestable Items',
+        'note' => 'Allows the user to view items that are marked as requestable.',
     ],
 
     'assetsviewencrypted-custom-fields' => [
@@ -255,6 +256,7 @@ return [
     ],
     'usersview' => [
         'name' => 'Преглед на потребителите',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the user as well. Users with this permission will also be able to view edit and checkin history.',
     ],
     'userscreate' => [
         'name' => 'Създава нови потребители',

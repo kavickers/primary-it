@@ -31,4 +31,15 @@ return [
         'success' => 'Vieta sėkmingai panaikinta.',
     ],
 
+    'bulkedit' => [
+        'error' => 'Jokie laukai nebuvo pakeisti, todėl niekas nebuvo atnaujinta.',
+        'success' => 'Vieta sėkmingai atnaujinta. |Vietos (:count) sėkmingai atnaujintos.',
+        'warn' => 'Redaguokite žemiau pateiktus laukus, kad atnaujintumėte šią vietą. Laukai, kuriuos paliksite tuščius, nebus pakeisti šiai vietai.|Redaguokite žemiau pateiktus laukus, kad atnaujintumėte visas pasirinktas vietas (:count). Laukai, kuriuos paliksite tuščius, nebus pakeisti nė vienai iš jų.',
+        'show_selected' => '1 pasirinkta vieta|:count pasirinktos vietos',
+        'company_scope_mismatch_partial' => 'Įmonė nebuvo pakeista 1 vietai, nes toje vietoje esantys daiktai ar naudotojai priklauso kitoms įmonėms. Pirmiau juos atnaujinkite arba perkelkite.|Įmonė nebuvo pakeista (:count) vietoms, nes tose vietose esantys daiktai ar naudotojai priklauso kitoms įmonėms. Pirmiau juos atnaujinkite arba perkelkite.',
+        'company_scope_mismatch_all' => 'Nė viena vieta nebuvo perkelta. Užklausos įmonė nesutampa su daiktais ar naudotojais pasirinktoje vietoje.|Nė viena vieta nebuvo perkelta. Užklausos įmonė nesutampa su objektais ar naudotojais nė vienoje iš pasirinktų (:count) vietų.',
+        'parent_company_mismatch_partial' => 'Pagrindinė įmonė arba įmonė nebuvo pakeista 1 vietai, nes dėl to vieta liktų kitoje įmonėje nei jos pagrindinė įmonė.|Pagrindinė įmonė arba įmonė nebuvo pakeista vietoms (:count), nes dėl to vietos liktų kitoje įmonėje nei jų pagrindinė įmonė.',
+        'parent_company_mismatch_all' => 'Pakeitimai nebuvo išsaugoti. Nurodyta pagrindinė įmonė arba įmonė paliktų vietą kitoje įmonėje nei jos pagrindinė įmonė.|Pakeitimai nebuvo išsaugoti. Nurodyta pagrindinė įmonė arba įmonė paliktų visas pasirinktas vietas (:count) kitoje įmonėje nei jų pagrindinė įmonė.',
+    ],
+
 ];

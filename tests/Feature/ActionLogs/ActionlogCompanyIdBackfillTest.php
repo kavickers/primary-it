@@ -54,6 +54,17 @@ class ActionlogCompanyIdBackfillTest extends TestCase
                   AND al.company_id IS NULL
                   AND al.deleted_at IS NULL
             ', [self::AUDIT_ACTION, self::ASSET_CLASS]);
+        } elseif ($driver === 'sqlsrv') {
+            DB::statement('
+                UPDATE al
+                SET al.company_id = src.company_id
+                FROM action_logs al
+                INNER JOIN assets src ON src.id = al.item_id AND src.company_id IS NOT NULL
+                WHERE al.action_type = ?
+                  AND al.item_type = ?
+                  AND al.company_id IS NULL
+                  AND al.deleted_at IS NULL
+            ', [self::AUDIT_ACTION, self::ASSET_CLASS]);
         } else {
             DB::statement('
                 UPDATE action_logs

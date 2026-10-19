@@ -19,8 +19,8 @@ return [
         'confirm' => 'Är du säker på att du vill radera denna leverantör?',
         'error' => 'Det uppstod ett problem vid radering av leverantör. Var god försök igen.',
         'success' => 'Leverantör raderad.',
-        'not_found' => 'Supplier not found.',
-        'bulk_success' => 'Suppliers were deleted successfully.',
+        'not_found' => 'Leverantör hittades inte.',
+        'bulk_success' => 'Leverantör raderad.|:count leverantörer har raderats.',
         'partial_success' => '.',
     ],
 

@@ -36,11 +36,12 @@ return [
 
     'assets' => [
         'name' => 'Ativos',
-        'note' => 'Grants access to the Assets section of the application.',
+        'note' => 'Grants access to the Assets section of the application. ',
     ],
 
     'assetsview' => [
         'name' => 'View Assets',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the asset model as well. This is to make it easier to share common documents like user manuals across assets without having to upload them to every asset, and to avoid having to grant the user permission to modify asset files. Users with this permission will also be able to view edit and checkin history.',
     ],
 
     'assetscreate' => [
@@ -62,17 +63,17 @@ return [
 
     'assetscheckout' => [
         'name' => 'Check Out',
-        'note' => 'Assign assets in inventory by checking them out.',
+        'note' => '',
     ],
 
     'assetsaudit' => [
-        'name' => 'Audit Assets',
-        'note' => 'Allows the user to mark an asset as physically inventoried.',
+        'name' => '',
+        'note' => 'Permite ao usuário marcar um ativo como fisicamente inventariado.',
     ],
 
     'assetsviewrequestable' => [
-        'name' => 'View Requestable Assets',
-        'note' => 'Allows the user to view assets that are marked as requestable.',
+        'name' => 'Ver itens requisitáveis',
+        'note' => 'Allows the user to view items that are marked as requestable.',
     ],
 
     'assetsviewencrypted-custom-fields' => [
@@ -255,6 +256,7 @@ return [
     ],
     'usersview' => [
         'name' => 'Ver Usuários',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the user as well. Users with this permission will also be able to view edit and checkin history.',
     ],
     'userscreate' => [
         'name' => 'Create New Users',

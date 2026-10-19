@@ -21,8 +21,15 @@ return [
         'confirm' => 'Da li ste sigurni da želite izbrisati ovu kategoriju?',
         'error' => 'Došlo je do problema s brisanjem kategorije. Molim pokušaj te ponovo.',
         'success' => 'Kategorija je uspešno izbrisana.',
-        'bulk_success' => 'Kategorije su uspešno izbrisane.',
+        'bulk_success' => 'Kategorija je uspešno izbrisana.|:count kategorije su uspešno izbrisane.',
         'partial_success' => 'Kategorija je uspešno izbrisana. Detaljne informacije pogledajte ispod. | :count kategorija je uspešno izbrisano. Detaljne informacije pogledajte ispod.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Polja nisu menjana, tako da ništa nije ažurirano.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

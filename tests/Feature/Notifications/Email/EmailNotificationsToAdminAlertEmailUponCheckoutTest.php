@@ -7,9 +7,12 @@ use App\Mail\CheckoutAssetMail;
 use App\Models\Asset;
 use App\Models\AssetModel;
 use App\Models\Category;
+use App\Models\Location;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 #[Group('notifications')]
@@ -110,11 +113,39 @@ class EmailNotificationsToAdminAlertEmailUponCheckoutTest extends TestCase
         });
     }
 
-    private function fireCheckoutEvent(): void
+    #[Test]
+    public function admin_alert_email_sent_when_checked_out_to_an_asset_with_no_assigned_user()
+    {
+        $this->settings
+            ->enableAdminCC('cc@example.com')
+            ->enableAdminCCAlways();
+
+        $this->fireCheckoutEvent(Asset::factory()->create());
+
+        Mail::assertSent(CheckoutAssetMail::class, function (CheckoutAssetMail $mail) {
+            return $mail->hasTo('cc@example.com');
+        });
+    }
+
+    #[Test]
+    public function admin_alert_email_sent_when_checked_out_to_a_location_with_no_manager()
+    {
+        $this->settings
+            ->enableAdminCC('cc@example.com')
+            ->enableAdminCCAlways();
+
+        $this->fireCheckoutEvent(Location::factory()->create(['manager_id' => null]));
+
+        Mail::assertSent(CheckoutAssetMail::class, function (CheckoutAssetMail $mail) {
+            return $mail->hasTo('cc@example.com');
+        });
+    }
+
+    private function fireCheckoutEvent(?Model $target = null): void
     {
         event(new CheckoutableCheckedOut(
             $this->asset,
-            $this->user,
+            $target ?? $this->user,
             User::factory()->superuser()->create(),
             '',
         ));

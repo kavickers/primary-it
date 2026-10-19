@@ -14,6 +14,8 @@ return [
         'confirm' => 'Ar tikrai norite ištrinti šį turto aptarnavimo tipą?',
         'error' => 'Bandant ištrinti aptarnavimo tipą įvyko klaida. Bandykite dar kartą.',
         'success' => 'Aptarnavimo tipas sėkmingai ištrintas.',
+        'bulk_success' => 'Aptarnavimo tipas sėkmingai ištrintas.|Aptarnavimo tipai (:count) sėkmingai ištrinti.',
+        'partial_success' => 'Aptarnavimo tipas sėkmingai ištrintas. Daugiau informacijos rasite žemiau. | Aptarnavimo tipai (:count) buvo sėkmingai ištrinti. Daugiau informacijos rasite žemiau.',
     ],
     'complete' => [
         'success' => 'Aptarnavimas pažymėtas kaip užbaigtas.',

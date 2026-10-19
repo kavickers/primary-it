@@ -160,6 +160,9 @@ return [
     'two_column_unique_undeleted' => ':attribute ត្រូវតែមានតែមួយគត់នៅទូទាំង :table1 និង :table2។ ',
     'unique_undeleted' => 'គុណលក្ខណៈ : ត្រូវតែមានតែមួយគត់។',
     'non_circular' => ':attribute មិនត្រូវបង្កើតសេចក្តីយោងរាងជារង្វង់ទេ។',
+    'parent_must_be_top_level' => 'The selected :attribute must itself be a top-level item. Only one level of nesting is allowed.',
+    'must_have_no_children' => 'This item already has children of its own, so it cannot be assigned a parent.',
+    'parent_within_scope' => 'The selected :attribute is outside your assigned scope.',
     'not_array' => ':attribute មិនអាចជាអារេបានទេ។',
     'disallow_same_pwd_as_user_fields' => 'ពាក្យ​សម្ងាត់​មិន​អាច​ដូច​គ្នា​នឹង​ឈ្មោះ​អ្នក​ប្រើ​ទេ។',
     'letters' => 'ពាក្យសម្ងាត់ត្រូវតែមានយ៉ាងហោចណាស់មួយអក្សរ។',
@@ -171,10 +174,19 @@ return [
     'uploaded' => ':attribute បរាជ័យក្នុងការបង្ហោះ។',
     'uppercase' => 'វាល :attribute ត្រូវតែជាអក្សរធំ។',
     'url' => 'វាល :attribute ត្រូវតែជា URL ត្រឹមត្រូវ។',
+    'external_url' => 'The :attribute field must be a valid external URL (http:// or https://) that does not point at a private or local address.',
+    'asset_tag_pattern_placeholder' => 'The asset tag pattern must include at least one placeholder from :placeholders, otherwise every synced asset would receive the same tag and only the first would save.',
+    'custom_http_extras_json' => [
+        'not_json' => 'Custom Extras must be valid JSON. Parser error: :error',
+        'not_array' => 'Custom Extras must be a JSON array (starting with [ and ending with ]).',
+        'entry_not_object' => 'Custom Extras entry #:index must be a JSON object with key, label, and path fields.',
+        'missing_field' => 'Custom Extras entry #:index is missing the required ":field" field.',
+    ],
     'ulid' => 'វាល :attribute ត្រូវតែជា ULID ត្រឹមត្រូវ។',
     'uuid' => 'វាល :attribute ត្រូវតែជា UUID ត្រឹមត្រូវ។',
     'valid_css_color' => 'The :attribute field must be a valid CSS color (hex, rgb, rgba, hsl, or hsla).',
-    'fmcs_location' => 'Full multiple company support and location scoping is enabled in the Admin Settings, and the selected location and selected company are not compatible.',
+    'fmcs_company' => 'The :attribute field is required because full multiple companies support is enabled and floaters are not allowed.',
+    'fmcs_location' => 'Location ":location" belongs to :location_company, which does not match the selected company.',
     'is_unique_across_company_and_location' => 'The :attribute must be unique within the selected company and location.',
 
     /*
@@ -191,6 +203,7 @@ return [
     'email_array' => 'អាសយដ្ឋានអ៊ីមែលមួយ ឬច្រើនមិនត្រឹមត្រូវទេ។',
     'checkboxes' => ':attribute contains invalid options.',
     'radio_buttons' => ':attribute is invalid.',
+    'image_file_too_large' => 'The :attribute may not be larger than :max.',
 
     'custom' => [
         'alpha_space' => 'វាល :attribute មានតួអក្សរដែលមិនត្រូវបានអនុញ្ញាត។',

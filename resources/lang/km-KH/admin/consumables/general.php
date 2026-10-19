@@ -9,4 +9,7 @@ return [
     'total' => 'សរុប',
     'update' => 'ធ្វើបច្ចុប្បន្នភាពឧបករណ៍ប្រើប្រាស់',
     'inventory_warning' => 'សារពើភ័ណ្ឌនៃសម្ភារៈប្រើប្រាស់នេះគឺទាបជាងចំនួនអប្បបរមានៃ :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

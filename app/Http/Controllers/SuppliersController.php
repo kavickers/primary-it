@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Suppliers\DestroySupplierAction;
+use App\Exceptions\Handler;
 use App\Exceptions\ItemStillHasAccessories;
 use App\Exceptions\ItemStillHasAssets;
 use App\Exceptions\ItemStillHasComponents;
@@ -80,8 +81,6 @@ class SuppliersController extends Controller
 
     /**
      * Supplier update.
-     *
-     * @param  int  $supplierId
      */
     public function edit(Supplier $supplier): View|RedirectResponse
     {
@@ -92,8 +91,6 @@ class SuppliersController extends Controller
 
     /**
      * Supplier update form processing page.
-     *
-     * @param  int  $supplierId
      */
     public function update(ImageUploadRequest $request, Supplier $supplier): RedirectResponse
     {
@@ -124,8 +121,6 @@ class SuppliersController extends Controller
 
     /**
      * Delete the given supplier.
-     *
-     * @param  int  $supplierId
      */
     public function destroy(Supplier $supplier): RedirectResponse
     {
@@ -156,8 +151,8 @@ class SuppliersController extends Controller
             return redirect()->route('suppliers.index')->with('error', trans('general.bulk_delete_associations.assoc_components', [
                 'components_count' => (int) $supplier->components_count, 'item' => trans('general.supplier'),
             ]));
-        } catch (\Exception $e) {
-            report($e);
+        } catch (\Throwable $e) {
+            Handler::reportOrRethrow($e);
 
             return redirect()->route('suppliers.index')->with('error', trans('admin/suppliers/message.delete.error'));
         }
@@ -168,7 +163,6 @@ class SuppliersController extends Controller
     /**
      *  Get the asset information to present to the supplier view page
      *
-     * @param  null  $supplierId
      *
      * @internal param int $assetId
      */

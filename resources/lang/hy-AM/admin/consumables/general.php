@@ -9,4 +9,7 @@ return [
     'total' => 'Ընդհանուր',
     'update' => 'Թարմացնել սպառվող նյութ',
     'inventory_warning' => 'Այս սպառվող նյութի պաշարը նվազ է նվազագույն՝ :min_count քանակից։',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

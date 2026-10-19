@@ -42,6 +42,11 @@ return [
         'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
     ],
 
+    'delete_with_checkin' => [
+        'bulk_success' => ':count licenses were deleted successfully after checking in :seats seats.',
+        'partial_success' => ':count licenses were deleted successfully after checking in :seats seats. See additional information below.',
+    ],
+
     'checkout' => [
         'error' => '签出许可证的过程中出现了一些问题，请重试。',
         'success' => '许可证已经成功签出',
@@ -55,6 +60,10 @@ return [
         'error' => '归还许可证的过程中出现了一些问题，请重试。',
         'not_reassignable' => '席位已被使用',
         'success' => '许可证已经成功归还。',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'License ":license" has no free seats. ":target" was not assigned to a seat.',
     ],
 
 ];

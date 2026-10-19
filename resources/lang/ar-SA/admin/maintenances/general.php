@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'صيانة الأصول', // not used anymore
     'maintenances' => 'الصيانة',
+    'create' => 'إنشاء صيانة الأصول',
     'edit' => 'تعديل صيانة الأصل',
     'delete' => 'حذف صيانة الأصل',
     'view' => 'عرض تفاصيل صيانة الأصل',

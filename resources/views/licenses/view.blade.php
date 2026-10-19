@@ -49,7 +49,8 @@
                         @can('checkin', $license)
                         <x-slot:bulkactions>
                             <x-table.bulk-actions
-                                action_route="{{ route('licenses.bulkcheckin.selected') }}"
+                                name="licenseAssignedSeats"
+                                action_route="{{ route('licenses.bulkcheckin.show') }}"
                                 model_name="seat"
                             >
                                 <option value="checkin">{{ trans('general.checkin') }}</option>
@@ -58,6 +59,7 @@
                         @endcan
 
                         <x-table
+                            name="licenseAssignedSeats"
                             fixed_right_number="1"
                             fixed_number="1"
                             api_url="{{ route('api.licenses.seats.index', [$license->id, 'status' => 'assigned']) }}"
@@ -75,6 +77,7 @@
                         </x-slot:table_header>
 
                         <x-table
+                            name="licenseAvailableSeats"
                             show_search="false"
                             api_url="{{ route('api.licenses.seats.index', [$license->id, 'status' => 'available']) }}"
                             :presenter="\App\Presenters\LicensePresenter::dataTableLayoutSeats(false)"
@@ -87,7 +90,7 @@
 
                     <!-- start history tab pane -->
                     <x-tabs.pane name="history">
-                        <x-table.history :model="$license" :route="route('api.licenses.history', $license)"/>
+                        <x-table.history name="licenseHistory" :model="$license" :route="route('api.licenses.history', $license)"/>
                     </x-tabs.pane>
                     <!-- end history tab pane -->
 
@@ -161,30 +164,30 @@
     </x-container>
 
 @can('checkin', \App\Models\License::class)
-    @include ('modals.confirm-action',
-          [
-              'modal_name' => 'checkinFromAllModal',
-              'route' => route('licenses.bulkcheckin', $license->id),
-              'title' => trans('general.modal_confirm_generic'),
-              'body' => trans_choice('admin/licenses/general.bulk.checkin_all.modal', 2, ['checkedout_seats_count' => $checkedout_seats_count])
-          ])
+    <x-modals.confirm-action
+        modal-name="checkinFromAllModal"
+        :route="route('licenses.bulkcheckin', $license->id)"
+        :title="trans('general.modal_confirm_generic')"
+    >
+        {{ trans_choice('admin/licenses/general.bulk.checkin_all.modal', 2, ['checkedout_seats_count' => $checkedout_seats_count]) }}
+    </x-modals.confirm-action>
 @endcan
 
 @can('checkout', \App\Models\License::class)
-    @include ('modals.confirm-action',
-          [
-              'modal_name' => 'checkoutFromAllModal',
-              'route' => route('licenses.bulkcheckout', $license->id),
-              'title' => trans('general.modal_confirm_generic'),
-              'body' => trans_choice('admin/licenses/general.bulk.checkout_all.modal', 2, ['available_seats_count' => $available_seats_count])
-          ])
+    <x-modals.confirm-action
+        modal-name="checkoutFromAllModal"
+        :route="route('licenses.bulkcheckout', $license->id)"
+        :title="trans('general.modal_confirm_generic')"
+    >
+        {{ trans_choice('admin/licenses/general.bulk.checkout_all.modal', 2, ['available_seats_count' => $available_seats_count]) }}
+    </x-modals.confirm-action>
 @endcan
 
 @endsection
 
 @section('moar_scripts')
     @can('files', $license)
-        @include ('modals.upload-file', ['item_type' => 'licenses', 'item_id' => $license->id])
+        <x-modals.upload-file item-type="licenses" :item-id="$license->id" />
     @endcan
 
     @include ('partials.bootstrap-table')

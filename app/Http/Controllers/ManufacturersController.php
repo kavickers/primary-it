@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Manufacturers\DeleteManufacturerAction;
+use App\Actions\Manufacturers\DestroyManufacturerAction;
+use App\Exceptions\Handler;
 use App\Exceptions\ItemStillHasChildren;
 use App\Http\Requests\ImageUploadRequest;
 use App\Models\Actionlog;
@@ -112,9 +113,6 @@ class ManufacturersController extends Controller
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
      * @see ManufacturersController::update()
-     *
-     * @param  int  $manufacturerId
-     *
      * @since [v1.0]
      */
     public function edit(Manufacturer $manufacturer): View|RedirectResponse
@@ -132,7 +130,6 @@ class ManufacturersController extends Controller
      * @see ManufacturersController::getEdit()
      *
      * @param  Request  $request
-     * @param  int  $manufacturerId
      *
      * @since [v1.0]
      */
@@ -168,19 +165,17 @@ class ManufacturersController extends Controller
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
-     * @param  int  $manufacturerId
-     *
      * @since [v1.0]
      */
     public function destroy(Manufacturer $manufacturer): RedirectResponse
     {
         $this->authorize('delete', $manufacturer);
         try {
-            DeleteManufacturerAction::run($manufacturer);
+            DestroyManufacturerAction::run($manufacturer);
         } catch (ItemStillHasChildren $e) {
             return redirect()->route('manufacturers.index')->with('error', trans('general.bulk_delete_associations.general_assoc_warning', ['item' => trans('general.manufacturer')]));
-        } catch (\Exception $e) {
-            report($e);
+        } catch (\Throwable $e) {
+            Handler::reportOrRethrow($e);
 
             return redirect()->route('manufacturers.index')->with('error', trans('general.something_went_wrong'));
         }
@@ -194,8 +189,6 @@ class ManufacturersController extends Controller
      * This data contains a listing of all assets that belong to that manufacturer.
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
-     *
-     * @param  int  $manufacturerId
      *
      * @since [v1.0]
      */
@@ -212,8 +205,6 @@ class ManufacturersController extends Controller
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
      * @since [v4.1.15]
-     *
-     * @param  int  $manufacturers_id
      */
     public function restore($id): RedirectResponse
     {

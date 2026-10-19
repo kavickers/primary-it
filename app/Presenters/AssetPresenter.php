@@ -2,6 +2,7 @@
 
 namespace App\Presenters;
 
+use App\Enums\FileStorage;
 use App\Models\CustomField;
 use Carbon\CarbonImmutable;
 use DateTime;
@@ -9,6 +10,12 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Class AssetPresenter
+ *
+ * @property \App\Models\Asset $model Concrete-typed override of the base
+ *                                    Presenter's $model so PHPStan can resolve Asset-specific
+ *                                    properties (supplier, model relation, tag_color, etc)
+ *                                    without falling back to SnipeModel and flagging every
+ *                                    access as property.notFound.
  */
 class AssetPresenter extends Presenter
 {
@@ -22,12 +29,14 @@ class AssetPresenter extends Presenter
         $layout = [
             [
                 'field' => 'checkbox',
+                'scope' => 'col',
                 'checkbox' => true,
                 'titleTooltip' => trans('general.select_all_none'),
                 'printIgnore' => true,
                 'class' => 'hidden-print',
             ], [
                 'field' => 'id',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -35,6 +44,7 @@ class AssetPresenter extends Presenter
                 'visible' => false,
             ],  [
                 'field' => 'asset_tag',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => false,
@@ -43,13 +53,18 @@ class AssetPresenter extends Presenter
                 'formatter' => 'hardwareLinkFormatter',
             ],  [
                 'field' => 'name',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
-                'title' => trans('admin/hardware/form.name'),
+                // Match the import wizard's Name target label so the
+                // asset datatable export round-trips through the
+                // importer's auto-mapper on every locale.
+                'title' => trans('general.item_name_var', ['item' => trans('general.asset')]),
                 'visible' => true,
                 'formatter' => 'hardwareLinkFormatter',
             ], [
                 'field' => 'company',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -58,6 +73,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'companiesLinkObjFormatter',
             ], [
                 'field' => 'image',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -66,6 +82,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'imageFormatter',
             ], [
                 'field' => 'serial',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/form.serial'),
@@ -73,6 +90,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'hardwareLinkFormatter',
             ],  [
                 'field' => 'model',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/form.model'),
@@ -80,12 +98,14 @@ class AssetPresenter extends Presenter
                 'formatter' => 'modelsLinkObjFormatter',
             ], [
                 'field' => 'model_number',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/models/table.modelnumber'),
                 'visible' => false,
             ], [
                 'field' => 'category',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.category'),
@@ -93,6 +113,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'categoriesLinkObjFormatter',
             ], [
                 'field' => 'status',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/table.status'),
@@ -101,6 +122,7 @@ class AssetPresenter extends Presenter
             ],
             [
                 'field' => 'assigned_to',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/form.checkedout_to'),
@@ -108,6 +130,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'polymorphicItemFormatter',
             ], [
                 'field' => 'employee_number',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'title' => trans('general.employee_number'),
@@ -115,6 +138,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'employeeNumFormatter',
             ], [
                 'field' => 'jobtitle',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/users/table.title'),
@@ -122,6 +146,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'jobtitleFormatter',
             ], [
                 'field' => 'location',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/table.location'),
@@ -129,6 +154,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'deployedLocationFormatter',
             ], [
                 'field' => 'rtd_location',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/hardware/form.default_location'),
@@ -136,6 +162,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'deployedLocationFormatter',
             ], [
                 'field' => 'manufacturer',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.manufacturer'),
@@ -143,6 +170,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'manufacturersLinkObjFormatter',
             ], [
                 'field' => 'supplier',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.supplier'),
@@ -150,6 +178,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'suppliersLinkObjFormatter',
             ], [
                 'field' => 'purchase_date',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => false,
@@ -165,13 +194,24 @@ class AssetPresenter extends Presenter
             //                'formatter' => 'dateDisplayFormatter',
             //            ],
             [
+                'field' => 'last_checkout',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'visible' => false,
+                'title' => trans('general.last_checkout'),
+                'formatter' => 'dateDisplayFormatter',
+            ],
+            [
                 'field' => 'age',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'visible' => false,
                 'title' => trans('general.age'),
             ], [
                 'field' => 'purchase_cost',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('general.purchase_cost'),
@@ -179,6 +219,7 @@ class AssetPresenter extends Presenter
                 'class' => 'text-right',
             ], [
                 'field' => 'book_value',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'title' => trans('admin/hardware/table.book_value'),
@@ -186,6 +227,7 @@ class AssetPresenter extends Presenter
                 'class' => 'text-right',
             ], [
                 'field' => 'order_number',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => false,
@@ -193,6 +235,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'orderNumberObjFilterFormatter',
             ], [
                 'field' => 'eol',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -200,6 +243,7 @@ class AssetPresenter extends Presenter
             ],
             [
                 'field' => 'asset_eol_date',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => false,
@@ -207,12 +251,14 @@ class AssetPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'warranty_months',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => false,
                 'title' => trans('admin/hardware/form.warranty'),
             ], [
                 'field' => 'warranty_expires',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'visible' => false,
@@ -220,6 +266,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'requestable',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -228,6 +275,7 @@ class AssetPresenter extends Presenter
 
             ], [
                 'field' => 'notes',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => false,
@@ -235,6 +283,7 @@ class AssetPresenter extends Presenter
 
             ], [
                 'field' => 'checkout_counter',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -242,6 +291,7 @@ class AssetPresenter extends Presenter
 
             ], [
                 'field' => 'checkin_counter',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -249,6 +299,7 @@ class AssetPresenter extends Presenter
 
             ], [
                 'field' => 'requests_counter',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -256,6 +307,7 @@ class AssetPresenter extends Presenter
 
             ], [
                 'field' => 'created_by',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'title' => trans('general.created_by'),
@@ -264,6 +316,7 @@ class AssetPresenter extends Presenter
             ],
             [
                 'field' => 'created_at',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -272,6 +325,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'updated_at',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
@@ -284,6 +338,7 @@ class AssetPresenter extends Presenter
         if (! in_array('deleted_at', $hide_fields)) {
             $layout[] = [
                 'field' => 'deleted_at',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
@@ -296,6 +351,7 @@ class AssetPresenter extends Presenter
         $layout = array_merge($layout, [
             [
                 'field' => 'last_checkout',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -303,6 +359,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'last_checkin',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -310,6 +367,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'expected_checkin',
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => false,
@@ -317,6 +375,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'last_audit_date',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -324,6 +383,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'next_audit_date',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -331,6 +391,7 @@ class AssetPresenter extends Presenter
                 'formatter' => 'dateDisplayFormatter',
             ], [
                 'field' => 'byod',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => true,
                 'visible' => false,
@@ -352,16 +413,14 @@ class AssetPresenter extends Presenter
             $query->whereHas('models');
         })->get();
 
-        // Note: We do not need to e() escape the field names here, as they are already escaped when
-        // they are presented in the blade view. If we escape them here, custom fields with quotes in their
-        // name can break the listings page. - snipe
         foreach ($fields as $field) {
             $layout[] = [
                 'field' => $field->db_column,
+                'scope' => 'col',
                 'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
-                'title' => $field->name,
+                'title' => e($field->name),
                 'formatter' => 'customFieldsFormatter',
                 'escape' => true,
                 'class' => ($field->field_encrypted == '1') ? 'css-padlock' : '',
@@ -369,8 +428,63 @@ class AssetPresenter extends Presenter
             ];
         }
 
+        // Sync-adapter side-table columns. Hidden by default, exposable
+        // via the column picker for admins syncing from an MDM / RMM.
+        // Sort routed through Asset::scopeOrderExternalSource (leftJoin
+        // on asset_external_sources) and search routed through the
+        // externalSource relation in $searchableRelations. last_seen
+        // sortable but not searchable (datetime substring match is
+        // nonsensical for the top search bar).
+        $layout[] = [
+            'field' => 'primary_mac',
+            'scope' => 'col',
+            'searchable' => true,
+            'sortable' => true,
+            'switchable' => true,
+            'title' => trans('admin/settings/sync_adapters.field_mac'),
+            'visible' => false,
+        ];
+        $layout[] = [
+            'field' => 'primary_ip',
+            'scope' => 'col',
+            'searchable' => true,
+            'sortable' => true,
+            'switchable' => true,
+            'title' => trans('admin/settings/sync_adapters.field_ip'),
+            'visible' => false,
+        ];
+        $layout[] = [
+            'field' => 'external_os',
+            'scope' => 'col',
+            'searchable' => true,
+            'sortable' => true,
+            'switchable' => true,
+            'title' => trans('admin/settings/sync_adapters.field_os'),
+            'visible' => false,
+        ];
+        $layout[] = [
+            'field' => 'external_os_version',
+            'scope' => 'col',
+            'searchable' => true,
+            'sortable' => true,
+            'switchable' => true,
+            'title' => trans('admin/settings/sync_adapters.field_os_version'),
+            'visible' => false,
+        ];
+        $layout[] = [
+            'field' => 'last_seen',
+            'scope' => 'col',
+            'searchable' => false,
+            'sortable' => true,
+            'switchable' => true,
+            'title' => trans('admin/settings/sync_adapters.field_last_seen'),
+            'visible' => false,
+            'formatter' => 'dateDisplayFormatter',
+        ];
+
         $layout[] = [
             'field' => 'checkincheckout',
+            'scope' => 'col',
             'searchable' => false,
             'sortable' => false,
             'switchable' => false,
@@ -383,6 +497,7 @@ class AssetPresenter extends Presenter
 
         $layout[] = [
             'field' => 'actions',
+            'scope' => 'col',
             'searchable' => false,
             'sortable' => false,
             'switchable' => false,
@@ -400,6 +515,7 @@ class AssetPresenter extends Presenter
         $layout = [
             [
                 'field' => 'id',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => true,
@@ -408,6 +524,7 @@ class AssetPresenter extends Presenter
             ],
             [
                 'field' => 'accessory',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => true,
@@ -417,6 +534,7 @@ class AssetPresenter extends Presenter
             ],
             [
                 'field' => 'image',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => true,
@@ -426,6 +544,7 @@ class AssetPresenter extends Presenter
             ],
             [
                 'field' => 'note',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => true,
@@ -434,6 +553,7 @@ class AssetPresenter extends Presenter
             ],
             [
                 'field' => 'created_at',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => true,
@@ -443,6 +563,7 @@ class AssetPresenter extends Presenter
             ],
             [
                 'field' => 'created_by',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'title' => trans('general.created_by'),
@@ -451,6 +572,7 @@ class AssetPresenter extends Presenter
             ],
             [
                 'field' => 'available_actions',
+                'scope' => 'col',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => false,
@@ -486,6 +608,15 @@ class AssetPresenter extends Presenter
         return '<span class="'.(($this->deleted_at != '') ? 'deleted' : '').'">'.e($this->display_name).'</span>';
     }
 
+    public function formattedTagLink()
+    {
+        if (auth()->user()->can('view', ['\App\Models\Asset', $this])) {
+            return '<a href="'.route('hardware.show', e($this->id)).'" class="'.(($this->deleted_at != '') ? 'deleted' : '').'">'.e($this->asset_tag).'</a>';
+        }
+
+        return '<span class="'.(($this->deleted_at != '') ? 'deleted' : '').'">'.e($this->asset_tag).'</span>';
+    }
+
     public function modelUrl()
     {
         if ($this->model->model) {
@@ -512,7 +643,7 @@ class AssetPresenter extends Presenter
             $imageAlt = $this->model->name;
         }
         if (! empty($imagePath)) {
-            $url = Storage::disk('public')->url(app('assets_upload_path').e($imagePath));
+            $url = Storage::disk('public')->url(FileStorage::Assets->publicPath().e($imagePath));
             $imagePath = '<img src="'.$url.'" height="50" width="50" alt="'.e($imageAlt).'">';
         }
 
@@ -533,7 +664,7 @@ class AssetPresenter extends Presenter
             $imagePath = $this->model->image;
         }
         if (! empty($imagePath)) {
-            return Storage::disk('public')->url(app('assets_upload_path').e($imagePath));
+            return Storage::disk('public')->url(FileStorage::Assets->publicPath().e($imagePath));
         }
 
         return $imagePath;
@@ -711,5 +842,155 @@ class AssetPresenter extends Presenter
     public function glyph()
     {
         return '<x-icon type="assets" />';
+    }
+
+    public function calendarUrl(): ?string
+    {
+        return route('hardware.show', $this->model->id);
+    }
+
+    public function calendarColor(): ?string
+    {
+        // Trailing `?->tag_color` (right before the ??) is stylistically
+        // redundant per PHPStan since if the left-hand relation is
+        // null the ?-> short-circuits already and the ?? catches the
+        // null. Drop the trailing nullsafe on the last hop only;
+        // keep it on intermediate relation hops that really can be
+        // null at runtime (model->category, supplier).
+        return $this->model->tag_color
+            ?? $this->model->model?->category?->tag_color
+            ?? $this->model->supplier?->tag_color;
+    }
+
+    /**
+     * Column layout for the assets tab on /account/requestable. Feeds
+     * <x-table> via api.assets.requestable. Row shape comes from
+     * AssetsTransformer with available_actions.request/cancel
+     * populated so the assetRequestActionsFormatter JS helper can
+     * render the request/cancel button-swap. Custom fields flagged
+     * show_in_requestable_list=1 append as extra columns so admin-
+     * defined per-asset attributes surface here without a code
+     * change.
+     */
+    public static function dataTableLayoutRequestable(): string
+    {
+        $layout = [
+            [
+                'field' => 'image',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => true,
+                'title' => trans('general.image'),
+                'formatter' => 'imageFormatter',
+            ], [
+                'field' => 'asset_tag',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'title' => trans('general.asset_tag'),
+            ], [
+                'field' => 'model',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'title' => trans('admin/hardware/table.asset_model'),
+            ], [
+                'field' => 'model_number',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'title' => trans('admin/models/table.modelnumber'),
+            ], [
+                'field' => 'name',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                // Use the same trans key the import wizard uses for the
+                // Name target label so the assets datatable download
+                // round-trips through the importer's auto-mapper on
+                // every locale. See ReportsController::postCustom for
+                // the sibling change and the rationale.
+                'title' => trans('general.item_name_var', ['item' => trans('general.asset')]),
+            ], [
+                'field' => 'serial',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'title' => trans('admin/hardware/table.serial'),
+            ], [
+                // Full object (not .name) so the formatter can read
+                // tag_color for the color-square icon prefix.
+                // Not searchable because Asset::$searchableRelations
+                // doesn't include category (Asset's category lives
+                // through the model relation, not a direct join),
+                // so a `search=` query wouldn't hit it.
+                'field' => 'category',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => false,
+                'title' => trans('general.category'),
+                'formatter' => 'categoriesLinkObjFormatter',
+            ], [
+                'field' => 'company.name',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => false,
+                'title' => trans('general.company'),
+            ], [
+                'field' => 'location',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'title' => trans('admin/hardware/table.location'),
+            ], [
+                'field' => 'status',
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'title' => trans('admin/hardware/table.status'),
+            ], [
+                'field' => 'expected_checkin',
+                'scope' => 'col',
+                'searchable' => false,
+                'sortable' => true,
+                'title' => trans('admin/hardware/form.expected_checkin'),
+                'formatter' => 'dateDisplayFormatter',
+            ],
+        ];
+
+        // Custom fields flagged for the requestable list. Same
+        // fieldset-must-be-attached-to-a-model guard as the standard
+        // asset layout uses (see dataTableLayout above) so the JS
+        // side doesn't ask for row properties that never travel over
+        // the REST API.
+        $fields = CustomField::whereHas('fieldset', function ($query) {
+            $query->whereHas('models');
+        })->where('field_encrypted', 0)
+            ->where('show_in_requestable_list', 1)
+            ->get();
+
+        foreach ($fields as $field) {
+            $layout[] = [
+                'field' => 'custom_fields.'.$field->db_column,
+                'scope' => 'col',
+                'searchable' => true,
+                'sortable' => true,
+                'title' => e($field->name),
+            ];
+        }
+
+        $layout[] = [
+            'field' => 'actions',
+            'scope' => 'col',
+            'searchable' => false,
+            'sortable' => false,
+            'switchable' => false,
+            'title' => trans('table.actions'),
+            'formatter' => 'assetRequestActionsFormatter',
+            'printIgnore' => true,
+            'class' => 'hidden-print',
+        ];
+
+        return json_encode($layout);
     }
 }

@@ -21,8 +21,15 @@ return [
         'confirm' => 'Apakah Anda yakin ingin menghapus kategori ini?',
         'error' => 'Ada masalah saat menghapus kategori. Silakan coba lagi.',
         'success' => 'Category was deleted successfully.',
-        'bulk_success' => 'Categories were deleted successfully.',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Category deleted successfully. See additional information below. | :count categories were deleted successfully. See additional information below.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Tidak ada bidang yang berubah, jadi tidak ada yang diperbarui.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

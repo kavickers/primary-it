@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Eszköz karbantartások', // not used anymore
     'maintenances' => 'Karbantartások',
+    'create' => 'Eszköz karbantartás létrehozása',
     'edit' => 'Az eszköz karbantartás szerkesztése',
     'delete' => 'Az eszköz karbantartás törlése',
     'view' => 'Az eszköz karbantartás részletei',

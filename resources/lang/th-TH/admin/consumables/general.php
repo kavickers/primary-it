@@ -9,4 +9,7 @@ return [
     'total' => 'รวมทั้งหมด',
     'update' => 'ปรับปรุงวัสดุสิ้นเปลือง',
     'inventory_warning' => 'วัสดุสิ้นเปลืองนี้มีจำนวนต่ำกว่า :min_count ซึ่งเป็นจำนวนต่ำสุด',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

@@ -6,15 +6,16 @@ return [
     'asset_depreciations' => 'Износ активов',
     'create' => 'Создать амортизацию',
     'depreciation_name' => 'Название амортизации',
-    'depreciation_min' => 'Минимальная стоимость амортизации',
     'number_of_months' => 'Количество месяцев',
+    'rate_multiplier' => 'Rate Multiplier',
     'update' => 'Обновить амортизацию',
-    'depreciation_min' => 'Минимальное значение после амортизации',
+    'fiscal_year_start_month' => 'Fiscal Year Start Month',
     'no_depreciations_warning' => '<strong>Предупреждение: </strong>
                       В настоящее время у вас нет настроенных амортизаций.
                       Пожалуйста, установите хотя бы одну амортизацию для просмотра отчета об амортизации.',
     'depreciation_method' => 'Отчет по амортизации',
     'linear_depreciation' => 'Линейный (по умолчанию)',
+    'diminishing_depreciation' => 'Diminishing Value Depreciation',
     'half_1' => 'Полугодовой амортизация',
     'half_2' => 'Полугодовая амортизация, с учетом условий',
 ];

@@ -40,8 +40,19 @@ return [
 
     'bulkdelete' => [
         'error' => 'គ្មាន​ម៉ូដែល​ត្រូវ​បាន​ជ្រើសរើស ដូច្នេះ​មិន​មាន​អ្វី​ត្រូវ​បាន​លុប។',
+        'nothing_deletable' => 'None of the selected models can be deleted because they still have assets associated with them.',
         'success' => 'បានលុបម៉ូដែល!|:success_count model ត្រូវបានលុប!',
         'success_partial' => ':success_count model(s) ត្រូវបានលុប ទោះយ៉ាងណាក៏ដោយ :fail_count មិនអាចលុបបានទេ ដោយសារពួកគេនៅតែមានទ្រព្យសកម្មដែលពាក់ព័ន្ធជាមួយពួកគេ។',
+    ],
+
+    'merge' => [
+        'min_two' => 'Select at least two models to merge.',
+        'no_target' => 'Select which model to keep before merging.',
+        'not_found' => 'One or more of the selected models could not be loaded. Refresh the models list and try again.',
+        'information' => 'You are about to merge :count models. Pick the model you want to keep. Every asset attached to the other models will be reassigned to the model you pick, then the source models will be deleted.',
+        'warning' => 'This cannot be undone. Reassigned assets will inherit the surviving model\'s category, fieldset, and depreciation settings.',
+        'pick_target' => 'Which model do you want to keep?',
+        'success' => 'Merged :source_count model(s) into ":target". :asset_count asset(s) were reassigned.',
     ],
 
 ];

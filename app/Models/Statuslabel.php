@@ -3,16 +3,22 @@
 namespace App\Models;
 
 use App\Http\Traits\UniqueUndeletedTrait;
+use App\Models\Builders\StatuslabelQueryBuilder;
 use App\Models\Traits\Searchable;
 use App\Presenters\Presentable;
 use App\Presenters\StatusLabelPresenter;
+use App\Rules\CssColor;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Watson\Validating\ValidatingTrait;
 
+/**
+ * @mixin IdeHelperStatuslabel
+ */
 class Statuslabel extends SnipeModel
 {
     use HasFactory;
@@ -46,6 +52,61 @@ class Statuslabel extends SnipeModel
     ];
 
     use Searchable;
+
+    /**
+     * Sanitize of the color column on read.
+     */
+    protected function color(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => CssColor::sanitize($value, ''),
+        );
+    }
+
+    /**
+     * Per-request memo of the ID lists used by Asset's status-driven scopes
+     * (RTD / Pending / Undeployable / Archived / NotArchived). Each scope
+     * fired a separate `SELECT id FROM status_labels WHERE …` query on every
+     * call before this was introduced, which under withCount + transformer
+     * loops (see AssetModelsTransformer) added dozens of redundant queries
+     * per page or API hit.
+     *
+     * Cleared on save/delete via model events below, and reset between tests
+     * in InitializesSettings (alongside Setting::$_cache).
+     */
+    protected static array $statusIdCache = [];
+
+    /**
+     * Return the cached set of status_label IDs matching the requested
+     * "kind" — one of: deployable, pending, undeployable, archived,
+     * not_archived. Each call after the first in a single request reads
+     * from memory.
+     */
+    public static function idsFor(string $type): Collection
+    {
+        return self::$statusIdCache[$type] ??= match ($type) {
+            'deployable' => self::where('deployable', 1)->where('pending', 0)->where('archived', 0)->whereNull('deleted_at')->pluck('id'),
+            'pending' => self::where('deployable', 0)->where('pending', 1)->where('archived', 0)->whereNull('deleted_at')->pluck('id'),
+            'undeployable' => self::where('deployable', 0)->where('pending', 0)->where('archived', 0)->whereNull('deleted_at')->pluck('id'),
+            'archived' => self::where('deployable', 0)->where('pending', 0)->where('archived', 1)->whereNull('deleted_at')->pluck('id'),
+            'not_archived' => self::where('archived', 0)->whereNull('deleted_at')->pluck('id'),
+            default => throw new \InvalidArgumentException('Unknown status type: '.$type),
+        };
+    }
+
+    public static function clearIdCache(): void
+    {
+        self::$statusIdCache = [];
+    }
+
+    protected static function booted(): void
+    {
+        // Any mutation to a status label invalidates the cached ID lists.
+        $invalidate = fn () => self::clearIdCache();
+        static::saved($invalidate);
+        static::deleted($invalidate);
+        static::restored($invalidate);
+    }
 
     /**
      * The attributes that should be included when searching the model.
@@ -110,54 +171,6 @@ class Statuslabel extends SnipeModel
     }
 
     /**
-     * Query builder scope to for pending status types
-     *
-     * @return Builder Modified query builder
-     */
-    public function scopePending()
-    {
-        return $this->where('pending', '=', 1)
-            ->where('archived', '=', 0)
-            ->where('deployable', '=', 0);
-    }
-
-    /**
-     * Query builder scope for archived status types
-     *
-     * @return Builder Modified query builder
-     */
-    public function scopeArchived()
-    {
-        return $this->where('pending', '=', 0)
-            ->where('archived', '=', 1)
-            ->where('deployable', '=', 0);
-    }
-
-    /**
-     * Query builder scope for deployable status types
-     *
-     * @return Builder Modified query builder
-     */
-    public function scopeDeployable()
-    {
-        return $this->where('pending', '=', 0)
-            ->where('archived', '=', 0)
-            ->where('deployable', '=', 1);
-    }
-
-    /**
-     * Query builder scope for undeployable status types
-     *
-     * @return Builder Modified query builder
-     */
-    public function scopeUndeployable()
-    {
-        return $this->where('pending', '=', 0)
-            ->where('archived', '=', 0)
-            ->where('deployable', '=', 0);
-    }
-
-    /**
      * Helper function to determine type attributes
      *
      * @author A. Gianotto <snipe@snipe.net>
@@ -189,8 +202,8 @@ class Statuslabel extends SnipeModel
         return $statustype;
     }
 
-    public function scopeOrderByCreatedBy($query, $order)
+    public function newEloquentBuilder($query): StatuslabelQueryBuilder
     {
-        return $query->leftJoin('users as admin_sort', 'status_labels.created_by', '=', 'admin_sort.id')->select('status_labels.*')->orderBy('admin_sort.first_name', $order)->orderBy('admin_sort.last_name', $order);
+        return new StatuslabelQueryBuilder($query);
     }
 }

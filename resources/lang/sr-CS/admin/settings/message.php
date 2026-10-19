@@ -13,9 +13,14 @@ return [
         'file_not_found' => 'Sigurnosna kopija datoteke nije na serveru.',
         'restore_warning' => 'Da, vrati. Potvrđujem da će ovo zameniti sve postojeće podatke koji se trenutno nalaze u bazi podataka. Ovo će takođe odjaviti sve vaše postojeće korisnike (uključujući i Vas).',
         'restore_confirm' => 'Da li ste sigurni da želite da vratite svoju bazu podataka sa :filename?',
+        'delete_disabled_help' => 'Brisanje rezervnih kopija ja onemogućeno. Kontaktirajte vašeg administratora ako želite da omogućite brisanje kopija.',
     ],
     'restore' => [
         'success' => 'Rezervna kopija vašeg sistema je povraćena. Molim vas prijavite se ponovo.',
+        'archive_invalid' => 'Izabrana datoteka rezervne kopije (:filename) nije ispravna zip arhiva. Oporavak je prekinut pre dodirivanja baze podataka.',
+        'zip_extension_missing' => 'PHP zip proširenje nije učitano na ovom serveru. Nije moguća potvrda arhive rezervne kopije, i oporavak je prekinut da bi se izbegao gubitak podataka. Zamolite administratora servera da instalira ext-zip.',
+        'pre_backup_failed' => 'Nije moguće napraviti bezbednosnu kopiju pre oporavka. Oporavak je prekinut kako postojeća baza ne bi bila uništena bez mogućnosti oporavka.',
+        'failed_with_backup' => 'Oporavak nije uspeo. Postojeća baza je obrisana tokom pokušaja oporavka, ali je kopija za oporavak sačuvana u :backup i može se iskoristiti za oporavak.',
     ],
     'purge' => [
         'error' => 'Došlo je do pogreške prilikom brisanja. ',

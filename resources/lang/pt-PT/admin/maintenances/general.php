@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Manutenções de Artigos', // not used anymore
     'maintenances' => 'Manutenções',
+    'create' => 'Criar Manutenção do Artigo',
     'edit' => 'Editar Manutenção de Artigo',
     'delete' => 'Remover Manutenção do Artigo',
     'view' => 'Ver Detalhes da Manutenção do Artigo',

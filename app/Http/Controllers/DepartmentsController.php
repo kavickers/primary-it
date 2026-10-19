@@ -8,7 +8,6 @@ use App\Models\Department;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class DepartmentsController extends Controller
@@ -72,8 +71,6 @@ class DepartmentsController extends Controller
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
-     * @param  int  $id
-     *
      * @since [v4.0]
      */
     public function show(Department $department): View|RedirectResponse
@@ -103,8 +100,6 @@ class DepartmentsController extends Controller
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
-     * @param  int  $locationId
-     *
      * @since [v4.0]
      */
     public function destroy(Department $department): RedirectResponse
@@ -115,13 +110,11 @@ class DepartmentsController extends Controller
             return redirect()->to(route('departments.index'))->with('error', trans('admin/departments/message.assoc_users'));
         }
 
-        if ($department->image) {
-            try {
-                Storage::disk('public')->delete('departments'.'/'.$department->image);
-            } catch (\Exception $e) {
-                Log::debug($e);
-            }
-        }
+        // Note: the image file is deliberately preserved across this
+        // soft-delete. Snipe-IT's `snipeit:purge` command permanently
+        // removes it later when the row is force-deleted. Keeping the
+        // file here means a restored soft-deleted row still has its
+        // image.
         $department->delete();
 
         return redirect()->back()->with('success', trans('admin/departments/message.delete.success'));
@@ -133,9 +126,6 @@ class DepartmentsController extends Controller
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
      * @see LocationsController::postCreate() method that validates and stores
-     *
-     * @param  int  $departmentId
-     *
      * @since [v1.0]
      */
     public function edit(Department $department): View|RedirectResponse
@@ -151,9 +141,6 @@ class DepartmentsController extends Controller
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
      * @see LocationsController::postCreate() method that validates and stores
-     *
-     * @param  int  $departmentId
-     *
      * @since [v1.0]
      */
     public function update(ImageUploadRequest $request, Department $department): RedirectResponse

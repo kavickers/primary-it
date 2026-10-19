@@ -11,7 +11,7 @@ class CategoryFactory extends Factory
     /**
      * The name of the factory's corresponding model.
      *
-     * @var string
+     * @var class-string<Category>
      */
     protected $model = Category::class;
 
@@ -204,6 +204,13 @@ class CategoryFactory extends Factory
     {
         return $this->state([
             'category_type' => 'consumable',
+        ]);
+    }
+
+    public function requiresAcceptance()
+    {
+        return $this->state([
+            'require_acceptance' => true,
         ]);
     }
 

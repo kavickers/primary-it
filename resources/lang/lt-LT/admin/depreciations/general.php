@@ -6,15 +6,16 @@ return [
     'asset_depreciations' => 'Turto nusidėvėjimas',
     'create' => 'Sukurti nusidėvėjimą',
     'depreciation_name' => 'Nusidėvėjimo pavadinimas',
-    'depreciation_min' => 'Minimali nusidėvėjimo reikšmė',
     'number_of_months' => 'Mėnesių skaičius',
+    'rate_multiplier' => 'Koeficientas',
     'update' => 'Atnaujinti nusidėvėjimą',
-    'depreciation_min' => 'Minimali nusidėvėjimo reikšmė',
+    'fiscal_year_start_month' => 'Finansinių metų pradžios mėnuo',
     'no_depreciations_warning' => '<strong>Įspėjimas: </strong>
                       Neturite nustatyto nusidėvėjimo.
                       Norėdami pamatyti nusidėvėjimo ataskaitą, nustatykite bent vieną nusidėvėjimą.',
     'depreciation_method' => 'Nusidėvėjimo ataskaita',
     'linear_depreciation' => 'Linijinis (numatytasis)',
+    'diminishing_depreciation' => 'Nuvertėjimo nusidėvėjimas',
     'half_1' => 'Pusmečio konvencija, visada taikoma',
     'half_2' => 'Pusmečio konvencija, taikoma su sąlyga',
 ];

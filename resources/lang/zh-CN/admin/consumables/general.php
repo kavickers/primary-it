@@ -9,4 +9,7 @@ return [
     'total' => '总计',
     'update' => '更新耗材',
     'inventory_warning' => '该耗材的库存低于最低数量 :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

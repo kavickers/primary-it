@@ -17,7 +17,7 @@ return [
     'last_login' => 'Letzte Anmeldung',
     'last_name' => 'Nachname',
     'location' => 'Standort',
-    'lock_passwords' => 'Anmeldedaten können in der Demo nicht geändert werden.',
+    'lock_passwords' => 'Einige Benutzerdetails können auf der Demo nicht geändert werden. Versuchen Sie stattdessen einen neuen Benutzer zu erstellen.',
     'manager' => 'Manager',
     'managed_locations' => 'Verwaltete Standorte',
     'managed_users' => 'Verwaltete Benutzer',

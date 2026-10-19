@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Asset Wartungen', // not used anymore
     'maintenances' => 'Wartungen',
+    'create' => 'Wartung erstellen',
     'edit' => 'Wartung bearbeiten',
     'delete' => 'Wartung löschen',
     'view' => 'Wartungsdetails anzeigen',
@@ -14,10 +15,10 @@ return [
     'hardware_support' => 'Hardware Support',
     'configuration_change' => 'Änderungen an der Konfiguration',
     'pat_test' => 'DGUV-Prüfung',
-    'checked_out_to_help' => 'The user, etc that the asset was checked out to at the time of maintenance creation. This is for historical reference and does not affect the current checkout status of the asset.',
-    'show_completed' => 'Show Completed',
-    'show_active' => 'Show Active',
-    'due' => 'Due',
-    'overdue' => 'Overdue',
+    'checked_out_to_help' => 'Der Benutzer, etc., dem das Asset während der Erstellung der Wartung zugewiesen war. Dies dient der historischen Referenzierung und beeinflusst nicht den derzeitigen Herausgabe-Status des Assets.',
+    'show_completed' => 'Abgeschlossene anzeigen',
+    'show_active' => 'Aktive anzeigen',
+    'due' => 'Fällig',
+    'overdue' => 'Überfällig',
     'completed' => 'Fertigstellungstermin',
 ];

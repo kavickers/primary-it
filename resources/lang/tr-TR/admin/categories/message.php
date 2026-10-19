@@ -21,8 +21,15 @@ return [
         'confirm' => 'Bu kategoriyi silmek istediğinize emin misiniz?',
         'error' => 'Bu kategoriyi silerken bir hata ile karşılaşıldı. Lütfen tekrar deneyin.',
         'success' => 'Kategori başarıyla silindi.',
-        'bulk_success' => 'Kategoriler başarıyla silindi.',
+        'bulk_success' => 'Kategori başarıyla silindi.|:count kategori başarıyla silindi.',
         'partial_success' => 'Kategori başarıyla silindi. Aşağıda ek bilgileri görebilirsiniz. | :count kategori başarıyla silindi. Aşağıda ek bilgileri görebilirsiniz.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'Aşağıdaki kategorinin özelliklerini düzenlemek üzeresiniz:|Aşağıdaki :count kategorinin özelliklerini düzenlemek üzeresiniz:',
+        'no_selection' => 'Düzenlenecek en az bir kategori seçmelisiniz.',
+        'no_changes' => 'Hiçbir alan değiştirilmedi, dolayısıyla hiç bir alan güncellenmedi.',
+        'success' => 'Kategori başarıyla güncellendi.|:count kategori başarıyla güncellendi.',
     ],
 
 ];

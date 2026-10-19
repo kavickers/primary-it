@@ -4,14 +4,18 @@ return [
 
     'accepted' => 'Vous avez accepté cet élément avec succès.',
     'declined' => 'Vous avez refusé cet élément avec succès.',
+    'accept_signature_write_failed' => 'Votre signature d\'acceptation n\'a pas pu être enregistrée dans le stockage. L\'acceptation n\'a pas été enregistrée. Veuillez contacter votre administrateur.',
+    'accept_pdf_write_failed' => 'Le PDF d\'acceptation n\'a pas pu être enregistré dans le stockage. L\'acceptation n\'a pas été enregistrée. Veuillez contacter votre administrateur.',
     'bulk_manager_warn' => 'Vos utilisateurs ont été mis à jour avec succès, mais votre entrée de gestionnaire n\'a pas été enregistrée, car le gestionnaire que vous avez sélectionné était également dans la liste d\'utilisateurs à éditer, et les utilisateurs peuvent ne pas être leur propre gestionnaire. Sélectionnez à nouveau vos utilisateurs, à l\'exclusion du gestionnaire.',
     'user_exists' => 'L\'utilisateur existe déjà !',
     'cannot_delete' => 'L\'utilisateur n\'existe pas ou vous n\'avez pas la permission de les supprimer.',
     'user_not_found' => 'L\'utilisateur n\'existe pas ou vous n\'avez pas la permission de les voir.',
     'user_login_required' => 'Le champ identifiant est obligatoire',
     'user_has_no_assets_assigned' => 'Aucun actif actuellement assigné à l\'utilisateur·trice.',
+    'nothing_currently_assigned' => 'Rien n\'est actuellement attribué.',
     'user_password_required' => 'Le mot de passe est obligatoire.',
     'insufficient_permissions' => 'Droits insuffisants.',
+    'auth_fields_denied' => 'Vous n\'avez pas la permission de modifier les identifiants ou les champs d\'activation sur cet utilisateur. Les champs demandés ne sont pas mis à jour: :fields',
     'user_deleted_warning' => 'Cet utilisateur a été supprimé. Vous devez le restaurer pour pouvoir l\'éditer ou lui assigner de nouveaux actifs.',
     'ldap_not_configured' => 'L\'intégration LDAP n\'a pas été configuré pour cette installation .',
     'password_resets_sent' => 'Les utilisateurs sélectionnés qui sont activés et ont une adresse e-mail valide ont reçu un lien de réinitialisation du mot de passe.',
@@ -19,6 +23,15 @@ return [
     'password_reset_sent' => 'Un lien de réinitialisation du mot de passe a été envoyé à :email!',
     'user_has_no_email' => 'Cet utilisateur n\'a pas renseigné d\'adresse e-mail dans son profil.',
     'log_record_not_found' => 'Impossible de trouver un enregistrement de log correspondant à cet utilisateur.',
+
+    'impersonate' => [
+        'started' => 'Vous êtes maintenant connecté en tant que :name.',
+        'stopped' => 'Vous êtes de retour sur votre propre compte.',
+        'cannot_impersonate_self' => 'Vous ne pouvez pas vous connecter vous-même.',
+        'cannot_impersonate_superuser' => 'Vous ne pouvez pas vous connecter en tant qu\'un autre super-utilisateur.',
+        'target_not_active' => 'Cet utilisateur est désactivé ou supprimé et ne peut pas être connecté.',
+        'impersonator_missing' => 'Le compte original pour cette session d\'usurpation d\'identité n\'existe plus. Veuillez vous reconnecter.',
+    ],
 
     'success' => [
         'create' => 'L’utilisateur a été créé avec succès.',
@@ -57,6 +70,7 @@ return [
         'password_ldap' => 'Le mot de passe de ce compte est géré par LDAP / Active Directory. Veuillez contacter votre service informatique pour changer votre mot de passe.',
         'multi_company_items_assigned' => 'Cet utilisateur a des actifs assignés qui appartiennent à une autre société. Veuillez les vérifier ou modifier leur société.',
         'no_pending_acceptances' => 'Cet utilisateur n\'a pas d\'approbation en attente pour le rappeler.',
+        'company_not_permitted' => 'Une ou plusieurs affectations de la société sont en dehors de la portée de votre entreprise autorisée.',
     ],
 
     'deletefile' => [

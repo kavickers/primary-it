@@ -9,4 +9,7 @@ return [
     'total' => 'Total',
     'update' => 'Memperbarui Barang Habis Pakai',
     'inventory_warning' => 'Stok barang habis pakai ini di bawah jumlah minimum :min_count',
+    'exclude_deleted' => 'Exclude Deleted Consumables',
+    'include_deleted' => 'Include Deleted Consumables',
+    'only_deleted' => 'Only Deleted Consumables',
 ];

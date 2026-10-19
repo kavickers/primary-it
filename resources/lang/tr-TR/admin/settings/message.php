@@ -13,9 +13,14 @@ return [
         'file_not_found' => 'Bu yedek dosyası sunucuda bulunamadı.',
         'restore_warning' => 'Evet, geri yükleyin. Bunun, şu anda veritabanında bulunan mevcut verilerin üzerine yazılacağını kabul ediyorum. Bu aynı zamanda (siz dahil) tüm mevcut kullanıcılarınızın oturumunu kapatacaktır.',
         'restore_confirm' => 'Veritabanınızı :filename\'den geri yüklemek istediğinizden emin misiniz?',
+        'delete_disabled_help' => 'Yedekleri silme devre dışı. Yedekleri silmeyi etkinleştirmek için yöneticinizle iletişime geçin.',
     ],
     'restore' => [
         'success' => 'Sistem yedeğiniz geri yüklendi. Lütfen tekrar giriş yapın.',
+        'archive_invalid' => 'Seçilen yedek dosyası (:filename) geçerli bir ZIP arşivi değil. Geri yükleme, veritabanına dokunulmadan iptal edildi.',
+        'zip_extension_missing' => 'Bu sunucuda PHP zip uzantısı yüklü değil. Veri kaybını önlemek için yedek arşivi doğrulanamadı ve geri yükleme iptal edildi. Sunucu yöneticinizden ext-zip\'i yüklemesini isteyin.',
+        'pre_backup_failed' => 'Geri yükleme öncesi güvenlik yedeği oluşturulamadı. Mevcut veritabanını kurtarma olanağı olmadan silmemek için geri yükleme iptal edildi.',
+        'failed_with_backup' => 'Geri yükleme başarısız oldu. Deneme sırasında mevcut veritabanı silindi; ancak kurtarma için kullanılabilecek geri yükleme öncesi yedek :backup konumuna kaydedildi.',
     ],
     'purge' => [
         'error' => 'Temizleme sırasında bir hata oluştu. ',

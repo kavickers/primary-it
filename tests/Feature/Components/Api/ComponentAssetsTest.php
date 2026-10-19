@@ -19,6 +19,19 @@ class ComponentAssetsTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_components_viewer_without_asset_view_can_load_assigned_tab()
+    {
+        // The component show page's default "Assigned" tab hits
+        // this endpoint. A components-only viewer must be allowed
+        // through or the show page they can already reach 403s on
+        // first paint.
+        $component = Component::factory()->create();
+
+        $this->actingAsForApi(User::factory()->viewComponents()->create())
+            ->getJson(route('api.components.assets', $component))
+            ->assertOk();
+    }
+
     public function test_can_search_assets_assigned_to_specific_component()
     {
         $component = Component::factory()->create();

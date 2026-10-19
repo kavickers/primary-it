@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\FileStorage;
 use App\Events\CheckoutableCheckedIn;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AssetCheckoutRequest;
+use App\Http\Requests\BulkUpdateAssetsRequest;
 use App\Http\Requests\FilterRequest;
 use App\Http\Requests\ImageUploadRequest;
 use App\Http\Requests\StoreAssetRequest;
 use App\Http\Requests\UpdateAssetRequest;
+use App\Http\Requests\UploadFileRequest;
 use App\Http\Traits\MigratesLegacyAssetLocations;
 use App\Http\Transformers\ActionlogsTransformer;
 use App\Http\Transformers\AssetsTransformer;
@@ -27,7 +30,6 @@ use App\Models\LicenseSeat;
 use App\Models\Location;
 use App\Models\Setting;
 use App\Models\User;
-use App\Observers\AssetObserver;
 use App\View\Label;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -57,8 +59,6 @@ class AssetsController extends Controller
      * Returns JSON listing of all assets
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
-     *
-     * @param  int  $assetId
      *
      * @since [v4.0]
      */
@@ -136,6 +136,13 @@ class AssetsController extends Controller
             'assigned_to',
             'created_by',
 
+            // Sync-adapter side-table columns (asset_external_sources).
+            'primary_mac',
+            'primary_ip',
+            'external_os',
+            'external_os_version',
+            'last_seen',
+
         ];
 
         $all_custom_fields = CustomField::all(); // used as a 'cache' of custom fields throughout this page load
@@ -167,7 +174,8 @@ class AssetsController extends Controller
                 'model.manufacturer',
                 'model.fieldset',
                 'model.depreciation',
-                'supplier'
+                'supplier',
+                'externalSource',
             ); // it might be tempting to add 'assetlog' here, but don't. It blows up update-heavy users.
 
         if ($filter_non_deprecable_assets) {
@@ -212,6 +220,10 @@ class AssetsController extends Controller
                         break;
                 }
                 break;
+        }
+
+        if ($request->boolean('past_eol')) {
+            $assets->PastEol();
         }
 
         /**
@@ -352,7 +364,13 @@ class AssetsController extends Controller
         }
 
         if ($request->filled('company_id')) {
-            $assets->where('assets.company_id', '=', $request->input('company_id'));
+            // expand_company_hierarchy=1 opts the company show-page tabs into the
+            // parent/child rollup so a child shows items inherited from its parent.
+            if ($request->boolean('expand_company_hierarchy')) {
+                $assets->whereIn('assets.company_id', Company::reachableCompanyIds($request->input('company_id')));
+            } else {
+                $assets->where('assets.company_id', '=', $request->input('company_id'));
+            }
         }
 
         if ($request->filled('manufacturer_id')) {
@@ -380,11 +398,16 @@ class AssetsController extends Controller
         // This is kinda gross, but we need to do this because the Bootstrap Tables
         // API passes custom field ordering as custom_fields.fieldname, and we have to strip
         // that out to let the default sorter below order them correctly on the assets table.
-        $sort_override = str_replace('custom_fields.', '', $request->input('sort'));
+        // Cast to string so a missing sort param (null from input()) doesn't hit the PHP 8+
+        // deprecation on str_replace, and so downstream comparisons are always string vs string.
+        $sort_override = str_replace('custom_fields.', '', (string) $request->input('sort'));
 
-        // This handles all of the pivot sorting (versus the assets.* fields
-        // in the allowed_columns array)
-        $column_sort = in_array($sort_override, $allowed_columns) ? $sort_override : 'assets.created_at';
+        // Strict in_array is deliberate: a loose match would let an empty $sort_override
+        // (no sort param sent) equal any null value in $allowed_columns and produce an
+        // empty ORDER BY column downstream.
+        $column_sort = ($sort_override !== '' && in_array($sort_override, $allowed_columns, true))
+            ? $sort_override
+            : 'assets.created_at';
 
         $order = $request->input('order') === 'asc' ? 'asc' : 'desc';
 
@@ -406,6 +429,7 @@ class AssetsController extends Controller
                 break;
             case 'location':
                 $assets->OrderLocation($order);
+                break;
             case 'rtd_location':
                 $assets->OrderRtdLocation($order);
                 break;
@@ -426,6 +450,22 @@ class AssetsController extends Controller
                 break;
             case 'eol':
                 $assets->orderBy('assets.asset_eol_date', $order);
+                break;
+                // Sync-adapter side-table sorts.
+            case 'primary_mac':
+                $assets->OrderExternalSource($order, 'primary_mac');
+                break;
+            case 'primary_ip':
+                $assets->OrderExternalSource($order, 'primary_ip');
+                break;
+            case 'external_os':
+                $assets->OrderExternalSource($order, 'os');
+                break;
+            case 'external_os_version':
+                $assets->OrderExternalSource($order, 'os_version');
+                break;
+            case 'last_seen':
+                $assets->OrderExternalSource($order, 'last_seen');
                 break;
             default:
                 $numeric_sort = false;
@@ -452,20 +492,41 @@ class AssetsController extends Controller
                             $assets->orderByRaw($column.' * 1 '.$order);
                         }
                     } else {
-                        $assets->orderBy($sort_override, $order);
+                        $assets->orderBy('assets.'.$sort_override, $order);
                     }
                 } else {
-                    $assets->orderBy($column_sort, $order);
+                    $qualifiedSort = str_contains($column_sort, '.') ? $column_sort : 'assets.'.$column_sort;
+                    $assets->orderBy($qualifiedSort, $order);
                 }
                 break;
         }
 
         // Make sure the offset and limit are actually integers and do not exceed system limits
-        $offset = ($request->input('offset') > $assets->count()) ? $assets->count() : app('api_offset_value');
+        $total = $assets->count();
+        $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
         $limit = app('api_limit_value');
 
-        $total = $assets->count();
-        $assets = $assets->skip($offset)->take($limit)->get();
+        // Deferred-join pagination. Instead of running the full query
+        // with all its joins and eager loads through OFFSET / LIMIT
+        // (which forces MySQL to pull entire row bodies for the
+        // (offset + limit) rows it walks before returning the last
+        // `limit` of them), pluck only the primary-key ids on the
+        // fully-joined + sorted + filtered query, then re-hydrate the
+        // limited set of ids with their eager loads on a separate query.
+        $ids = (clone $assets)->select('assets.id')->skip($offset)->take($limit)->pluck('id')->all();
+
+        if (empty($ids)) {
+            $assets = Asset::query()->whereRaw('1 = 0')->get();
+        } else {
+            $order = array_flip($ids);
+            $assets = Asset::query()
+                ->withTrashed()
+                ->whereIn('assets.id', $ids)
+                ->setEagerLoads($assets->getEagerLoads())
+                ->get()
+                ->sortBy(fn ($model) => $order[$model->getKey()] ?? PHP_INT_MAX)
+                ->values();
+        }
 
         /**
          * Include additional associated relationships
@@ -498,17 +559,17 @@ class AssetsController extends Controller
             $assets = $assets->withTrashed();
         }
 
-        if (($assets = $assets->get()) && ($assets->count()) > 0) {
+        if (($assets = $assets->get()) && ($total = $assets->count()) > 0) {
 
             // If there is exactly one result and the deleted parameter is not passed, we should pull the first (and only)
             // asset from the returned collection, since transformAsset() expects an Asset object, NOT a collection
-            if (($assets->count() == 1) && ($request->input('deleted') != 'true')) {
+            if (($total == 1) && ($request->input('deleted') != 'true')) {
                 return (new AssetsTransformer)->transformAsset($assets->first());
 
                 // If there is more than one result OR if the endpoint is requesting deleted items (even if there is only one
                 // match, return the normal collection transformed.
             } else {
-                return (new AssetsTransformer)->transformAssets($assets, $assets->count());
+                return (new AssetsTransformer)->transformAssets($assets, $total);
             }
         }
 
@@ -548,10 +609,10 @@ class AssetsController extends Controller
             $assets = $assets->withTrashed();
         }
 
-        $offset = ($request->input('offset') > $assets->count()) ? $assets->count() : app('api_offset_value');
+        $total = $assets->count();
+        $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
         $limit = app('api_limit_value');
 
-        $total = $assets->count();
         $assets = $assets->skip($offset)->take($limit)->get();
 
         if (($assets) && ($assets->count()) > 0) {
@@ -566,8 +627,6 @@ class AssetsController extends Controller
      * Returns JSON with information about an asset for detail view.
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
-     *
-     * @param  int  $assetId
      *
      * @since [v4.0]
      *
@@ -633,12 +692,39 @@ class AssetsController extends Controller
             && ! auth()->user()->isSuperUser()) {
             $companyIds = array_values(array_filter(array_map('intval', explode(',', $request->input('companyId')))));
             if (! empty($companyIds)) {
-                $assets->whereIn('assets.company_id', $companyIds);
+                if (Setting::getSettings()->null_company_is_floater) {
+                    // Floater mode: include null-company (floater) assets too,
+                    // matching the "items from any company can be checked out
+                    // to targets with no company assignment" policy. Without
+                    // this the whereIn below hid all floaters from the
+                    // checkout dropdown while server-side canCheckoutTo still
+                    // permitted the checkout (#19394).
+                    $assets->where(function ($q) use ($companyIds) {
+                        $q->whereIn('assets.company_id', $companyIds)
+                            ->orWhereNull('assets.company_id');
+                    });
+                } else {
+                    $assets->whereIn('assets.company_id', $companyIds);
+                }
             }
         }
 
         if ($request->filled('excludeId')) {
             $assets->where('assets.id', '!=', (int) $request->input('excludeId'));
+        }
+
+        // Pre-scope the picker to a specific user's assigned assets.
+        // Used by the components-checkout screen when reached via a
+        // /requests row: an admin fulfilling a component request wants
+        // to install the part into one of the requester's existing
+        // assets, not hunt across the whole fleet. Empty result is the
+        // honest answer here - if the requester has nothing assigned,
+        // there's no valid install target and the admin should see
+        // that instead of a fallback to the full fleet.
+        if ($request->filled('assignedTo')) {
+            $assignedUserId = (int) $request->input('assignedTo');
+            $assets->where('assets.assigned_to', $assignedUserId)
+                ->where('assets.assigned_type', User::class);
         }
 
         if ($request->filled('statusType') && $request->input('statusType') === 'RTD') {
@@ -750,6 +836,20 @@ class AssetsController extends Controller
             return response()->json(Helper::formatStandardApiResponse('error', null, trans('admin/hardware/message.does_not_exist')));
         }
 
+        // The create payload may include assigned_user / assigned_asset /
+        // assigned_location and normally triggers a real checkOut() alongside
+        // the create. A role with only assets.create (and an explicit deny on
+        // assets.checkout) would otherwise land a checkout event on the
+        // newly-fabricated asset, bypassing the checkout permission entirely.
+        // Rather than reject the whole request, drop the checkout side of the
+        // operation and keep the create. The response message flags the skipped checkout so they
+        // can detect the partial success.
+        $checkoutSkippedForPermission = $requestedCheckout && ! Gate::allows('checkout', $asset);
+        if ($checkoutSkippedForPermission) {
+            $requestedCheckout = false;
+            $target = null;
+        }
+
         if ($requestedCheckout) {
             $companyMismatchResponse = $this->checkoutCompanyMismatchResponse($asset, $target);
             if ($companyMismatchResponse) {
@@ -776,7 +876,11 @@ class AssetsController extends Controller
                 $asset->image = $asset->getImageUrl();
             }
 
-            return response()->json(Helper::formatStandardApiResponse('success', $asset, trans('admin/hardware/message.create.success')));
+            $message = $checkoutSkippedForPermission
+                ? trans('admin/hardware/message.create.success_no_checkout')
+                : trans('admin/hardware/message.create.success');
+
+            return response()->json(Helper::formatStandardApiResponse('success', $asset, $message));
 
             // below is what we want the _eventual_ return to look like - in a more standardized format.
             // return response()->json(Helper::formatStandardApiResponse('success', (new AssetsTransformer)->transformAsset($asset), trans('admin/hardware/message.create.success')));
@@ -787,7 +891,10 @@ class AssetsController extends Controller
     }
 
     /**
-     * Accepts a POST request to update an asset
+     * Update a single asset. Route-model-binding on {asset} guarantees the
+     * caller is either operating on a real Asset or 404'd at routing.
+     * Response shape is the legacy `{status, messages, payload}` body every
+     * integration already knows.
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
@@ -795,25 +902,172 @@ class AssetsController extends Controller
      */
     public function update(UpdateAssetRequest $request, Asset $asset): JsonResponse
     {
-        $asset->fill($request->validated());
+        $result = $this->applyAssetUpdate($asset, $request);
+
+        return response()->json($this->formatSingleAssetResponse($result));
+    }
+
+    /**
+     * Bulk update: `ids` in the request body names which assets to touch,
+     * every other field is the update payload applied to each of them.
+     * Per-row envelope response so callers can see which ids succeeded and
+     * which failed without looping the endpoint themselves.
+     */
+    public function bulkUpdate(BulkUpdateAssetsRequest $request): JsonResponse
+    {
+        $ids = array_values(array_unique(array_map('intval', (array) $request->input('ids', []))));
+
+        $assets = Asset::whereIn('id', $ids)->get()->keyBy('id');
+
+        $results = [];
+        $success_count = 0;
+        $error_count = 0;
+
+        foreach ($ids as $id) {
+            if (! $assets->has($id)) {
+                $results[] = [
+                    'id' => $id,
+                    'status' => 'error',
+                    'messages' => trans('admin/hardware/message.does_not_exist'),
+                    'payload' => null,
+                ];
+                $error_count++;
+
+                continue;
+            }
+
+            $asset = $assets->get($id);
+
+            // Per-row auth: a caller who can update one asset may not be able
+            // to update another (FMCS, tightened policy). Deny one row rather
+            // than 403ing the whole batch.
+            if (! Gate::allows('update', $asset)) {
+                $results[] = [
+                    'id' => $id,
+                    'status' => 'error',
+                    'messages' => trans('general.unauthorized'),
+                    'payload' => null,
+                ];
+                $error_count++;
+
+                continue;
+            }
+
+            $result = $this->applyAssetUpdate($asset, $request);
+            $row = $this->buildRowResult($id, $result);
+            $results[] = $row;
+
+            $row['status'] === 'success' ? $success_count++ : $error_count++;
+        }
+
+        return response()->json($this->assembleBulkResponse($results, $success_count, $error_count));
+    }
+
+    /**
+     * Turn a single applyAssetUpdate() result into the per-row shape used by the
+     * bulk response. Reuses formatSingleAssetResponse() so the row's payload +
+     * error handling stays byte-identical to the legacy singular response.
+     */
+    private function buildRowResult(int $id, array $result): array
+    {
+        $formatted = $this->formatSingleAssetResponse($result);
+
+        return [
+            'id' => $id,
+            'status' => $formatted['status'],
+            'messages' => $formatted['messages'],
+            'payload' => $formatted['payload'],
+        ];
+    }
+
+    /**
+     * Compute the overall status + summary message for a batch and return the
+     * full bulk response envelope. Used by bulkUpdate() and by update() when
+     * the caller opts into the bulk shape via `?response=bulk`.
+     */
+    private function assembleBulkResponse(array $results, int $success_count, int $error_count): array
+    {
+        $overall_status = match (true) {
+            $error_count === 0 => 'success',
+            $success_count === 0 => 'error',
+            default => 'partial',
+        };
+
+        $message = match ($overall_status) {
+            'success' => trans_choice('admin/hardware/message.bulk_update.success', $success_count, ['count' => $success_count]),
+            'partial' => trans('admin/hardware/message.bulk_update.partial', ['success' => $success_count, 'failed' => $error_count]),
+            'error' => trans('admin/hardware/message.bulk_update.error'),
+        };
+
+        return [
+            'status' => $overall_status,
+            'messages' => $message,
+            'results' => $results,
+        ];
+    }
+
+    /**
+     * Format an applyAssetUpdate() result into the legacy single-asset API
+     * response body. Used by update() (default shape) and by buildRowResult()
+     * to shape each row of a bulk response.
+     *
+     * Kept as a flat asset payload (not through AssetsTransformer) so the
+     * response continues to match the shape existing integrations rely on.
+     */
+    private function formatSingleAssetResponse(array $result): array
+    {
+        if (! empty($result['error_response_key'])) {
+            return Helper::formatStandardApiResponse('error', null, trans($result['error_response_key']));
+        }
+
+        if (! $result['success']) {
+            return Helper::formatStandardApiResponse('error', null, $result['errors']);
+        }
+
+        return Helper::formatStandardApiResponse('success', $result['asset'], trans($result['message']));
+    }
+
+    /**
+     * Apply a validated UpdateAssetRequest payload to a single Asset.
+     *
+     * Shared between update() and bulkUpdate(), so the transaction, checkout
+     * side-effects, and encrypted-custom-field gating live in one place.
+     * Returns the neutral result shape that formatSingleAssetResponse() /
+     * buildRowResult() turn into the legacy or bulk-envelope response body.
+     *
+     * @return array{
+     *   success: bool,
+     *   asset: Asset|null,
+     *   message: string|null,
+     *   errors: mixed,
+     *   encrypted_field_warning: bool,
+     *   error_response_key: string|null,
+     * }
+     *
+     * `error_response_key` is set for early-exit conditions that need a
+     * specific translation key rather than a validation-errors payload
+     * (e.g. an unresolvable checkout target). Callers translate.
+     */
+    private function applyAssetUpdate(Asset $asset, UpdateAssetRequest $request): array
+    {
+        $validated = $request->validated();
+
+        $asset->fill($validated);
 
         if ($request->has('model_id')) {
-            $asset->model()->associate(AssetModel::find($request->validated()['model_id']));
+            $asset->model()->associate(AssetModel::find($validated['model_id']));
         }
         if ($request->has('company_id')) {
-            $asset->company_id = Company::getIdForCurrentUser($request->validated()['company_id']);
+            $asset->company_id = Company::getIdForCurrentUser($validated['company_id']);
         }
         if ($request->has('rtd_location_id') && ! $request->has('location_id')) {
-            $asset->location_id = $request->validated()['rtd_location_id'];
+            $asset->location_id = $validated['rtd_location_id'];
         }
         if ($request->input('last_audit_date')) {
             $asset->last_audit_date = Carbon::parse($request->input('last_audit_date'))->startOfDay()->format('Y-m-d H:i:s');
         }
 
-        /**
-         * this is here just legacy reasons. Api\AssetController
-         * used image_source  once to allow encoded image uploads.
-         */
+        // Legacy shim: an older release accepted image_source in place of image.
         if ($request->has('image_source')) {
             $request->offsetSet('image', $request->offsetGet('image_source'));
         }
@@ -821,43 +1075,95 @@ class AssetsController extends Controller
         $asset = $request->handleImages($asset);
         $model = $asset->model;
 
-        // Update custom fields
         $problems_updating_encrypted_custom_fields = false;
-        if (($model) && (isset($model->fieldset))) {
+        if ($model && isset($model->fieldset)) {
             foreach ($model->fieldset->fields as $field) {
+                if (! $request->has($field->db_column)) {
+                    continue;
+                }
+
                 $field_val = $request->input($field->db_column, null);
 
-                if ($request->has($field->db_column)) {
-                    if ($field->element == 'checkbox') {
-                        if (is_array($field_val)) {
-                            $field_val = implode(',', $field_val);
-                        }
-                    }
-                    if ($field->field_encrypted == '1') {
-                        if (Gate::allows('assets.view.encrypted_custom_fields')) {
-                            $field_val = Crypt::encrypt($field_val);
-                        } else {
-                            $problems_updating_encrypted_custom_fields = true;
-
-                            continue;
-                        }
-                    }
-                    $asset->{$field->db_column} = $field_val;
+                if ($field->element === 'checkbox' && is_array($field_val)) {
+                    $field_val = implode(',', $field_val);
                 }
+
+                if ($field->field_encrypted == '1') {
+                    if (Gate::allows('assets.view.encrypted_custom_fields')) {
+                        $field_val = Crypt::encrypt($field_val);
+                    } else {
+                        // Skip encrypted-field updates for callers without the
+                        // permission, but flag it so the response can nudge them.
+                        $problems_updating_encrypted_custom_fields = true;
+
+                        continue;
+                    }
+                }
+
+                $asset->{$field->db_column} = $field_val;
             }
         }
+
         $target = $this->resolveCheckoutTargetForAssetMutation($request, $asset->id);
         $requestedCheckout = $request->filled('assigned_user') || $request->filled('assigned_asset') || $request->filled('assigned_location');
 
-        if ($requestedCheckout && (! $target)) {
-            return response()->json(Helper::formatStandardApiResponse('error', null, trans('admin/hardware/message.does_not_exist')));
+        if ($requestedCheckout && ! $target) {
+            return [
+                'success' => false,
+                'asset' => null,
+                'message' => null,
+                'errors' => null,
+                'encrypted_field_warning' => false,
+                'error_response_key' => 'admin/hardware/message.does_not_exist',
+            ];
         }
 
-        if ($requestedCheckout) {
-            $companyMismatchResponse = $this->checkoutCompanyMismatchResponse($asset, $target);
-            if ($companyMismatchResponse) {
-                return $companyMismatchResponse;
-            }
+        if ($requestedCheckout && ! $asset->canCheckoutTo($target)) {
+            return [
+                'success' => false,
+                'asset' => null,
+                'message' => null,
+                'errors' => null,
+                'encrypted_field_warning' => false,
+                'error_response_key' => 'general.error_user_company',
+            ];
+        }
+
+        // The PATCH/PUT update path accepts assigned_user / assigned_asset /
+        // assigned_location for backwards compatibility with older callers,
+        // but that meant a role with only assets.edit (and an explicit deny
+        // on assets.checkout) could still trigger $asset->checkOut() and
+        // record a checkout event, bypassing the permission entirely.
+        // Enforce the same authorization the dedicated checkout endpoint
+        // requires whenever the update payload asks for a checkout.
+        if ($requestedCheckout && ! Gate::allows('checkout', $asset)) {
+            return [
+                'success' => false,
+                'asset' => null,
+                'message' => null,
+                'errors' => null,
+                'encrypted_field_warning' => false,
+                'error_response_key' => 'general.unauthorized',
+            ];
+        }
+
+        // Same as the dedicated checkout endpoint: an asset is only eligible
+        // for checkout when it is not currently assigned to anyone and its
+        // status is deployable / not archived. Rejecting here blocks
+        //   (a) reassigning an already-checked-out asset without an
+        //       intervening checkin (which the pre-fix code allowed and
+        //       recorded as two consecutive checkout events), and
+        //   (b) checking out an asset in a Pending / non-deployable status.
+        // availableForCheckout() covers both. See App\Models\Asset::availableForCheckout.
+        if ($requestedCheckout && ! $asset->availableForCheckout()) {
+            return [
+                'success' => false,
+                'asset' => null,
+                'message' => null,
+                'errors' => null,
+                'encrypted_field_warning' => false,
+                'error_response_key' => 'admin/hardware/message.checkout.not_available',
+            ];
         }
 
         $updated = DB::transaction(function () use ($asset, $request, $target, $requestedCheckout): bool {
@@ -866,8 +1172,21 @@ class AssetsController extends Controller
             }
 
             if ($requestedCheckout) {
-                // Using `->has` preserves the asset name if the name parameter was not included in request.
-                $asset_name = request()->has('name') ? request('name') : $asset->name;
+                // Concurrency guard, same shape as Api\AssetsController::checkout.
+                // availableForCheckout() at line 1067 ran outside the transaction;
+                // without a row lock, two racing PATCH requests that both include
+                // assigned_user / assigned_asset / assigned_location could each
+                // pass that check and both proceed through checkOut(), producing
+                // duplicate checkout-history rows and a doubled checkout_counter.
+                // Re-fetch the row under lockForUpdate and re-check availability
+                // against the locked snapshot before invoking checkOut.
+                $locked = Asset::whereKey($asset->id)->lockForUpdate()->first();
+                if (! $locked || ! $locked->availableForCheckout()) {
+                    return false;
+                }
+
+                // Preserve the asset name if the name wasn't in the payload.
+                $asset_name = $request->has('name') ? $request->input('name') : $asset->name;
 
                 $location = null;
                 if ($request->filled('assigned_user')) {
@@ -878,13 +1197,13 @@ class AssetsController extends Controller
                     $location = $target->id;
                 }
 
-                // Keep update + optional checkout side effects atomic.
                 if (! $asset->checkOut($target, auth()->user(), date('Y-m-d H:i:s'), '', 'Checked out on asset update', $asset_name, $location)) {
                     return false;
                 }
 
                 if ($request->filled('assigned_asset')) {
-                    Asset::where('assigned_type', Asset::class)->where('assigned_to', $asset->id)
+                    Asset::where('assigned_type', Asset::class)
+                        ->where('assigned_to', $asset->id)
                         ->update(['location_id' => $target->location_id]);
                 }
             }
@@ -892,26 +1211,37 @@ class AssetsController extends Controller
             return true;
         });
 
-        if ($updated) {
-
-            if ($asset->image) {
-                $asset->image = $asset->getImageUrl();
-            }
-
-            if ($problems_updating_encrypted_custom_fields) {
-                return response()->json(Helper::formatStandardApiResponse('success', $asset, trans('admin/hardware/message.update.encrypted_warning')));
-                // Below is the *correct* return since it uses the transformer, but we have to use the old, flat return for now until we can update Jamf2Snipe and Kanji2Snipe
-                // return response()->json(Helper::formatStandardApiResponse('success', (new AssetsTransformer)->transformAsset($asset), trans('admin/hardware/message.update.encrypted_warning')));
-            } else {
-                return response()->json(Helper::formatStandardApiResponse('success', $asset, trans('admin/hardware/message.update.success')));
-                // Below is the *correct* return since it uses the transformer, but we have to use the old, flat return for now until we can update Jamf2Snipe and Kanji2Snipe
-                // / return response()->json(Helper::formatStandardApiResponse('success', (new AssetsTransformer)->transformAsset($asset), trans('admin/hardware/message.update.success')));
-            }
+        if (! $updated) {
+            return [
+                'success' => false,
+                'asset' => null,
+                'message' => null,
+                'errors' => $asset->getErrors(),
+                'encrypted_field_warning' => false,
+                'error_response_key' => null,
+            ];
         }
 
-        return response()->json(Helper::formatStandardApiResponse('error', null, $asset->getErrors()), 200);
+        if ($asset->image) {
+            $asset->image = $asset->getImageUrl();
+        }
+
+        return [
+            'success' => true,
+            'asset' => $asset,
+            'message' => $problems_updating_encrypted_custom_fields
+                ? 'admin/hardware/message.update.encrypted_warning'
+                : 'admin/hardware/message.update.success',
+            'errors' => null,
+            'encrypted_field_warning' => $problems_updating_encrypted_custom_fields,
+            'error_response_key' => null,
+        ];
     }
 
+    /**
+     * Resolve the assignee target from the request payload. Used by
+     * applyAssetUpdate() as well as store() and checkout().
+     */
     private function resolveCheckoutTargetForAssetMutation(Request $request, ?int $assetId = null): User|Asset|Location|null
     {
         if ($request->filled('assigned_user')) {
@@ -929,6 +1259,11 @@ class AssetsController extends Controller
         return null;
     }
 
+    /**
+     * Company-mismatch check used by store() and checkout(). applyAssetUpdate()
+     * inlines the equivalent check because it needs to return the neutral
+     * result shape (not a JsonResponse) so the bulk envelope can wrap it.
+     */
     private function checkoutCompanyMismatchResponse(Asset $asset, User|Asset|Location $target): ?JsonResponse
     {
         if (! $asset->canCheckoutTo($target)) {
@@ -942,8 +1277,6 @@ class AssetsController extends Controller
      * Delete a given asset (mark as deleted).
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
-     *
-     * @param  int  $assetId
      *
      * @since [v4.0]
      */
@@ -1027,8 +1360,6 @@ class AssetsController extends Controller
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
-     * @param  int  $assetId
-     *
      * @since [v4.0]
      */
     public function checkout(AssetCheckoutRequest $request, $asset_id): JsonResponse
@@ -1071,6 +1402,14 @@ class AssetsController extends Controller
             $error_payload['target_type'] = 'user';
         }
 
+        // withoutGlobalScopes above bypasses the SoftDeletes scope so we
+        // can distinguish "target not found" from "target in another company"
+        // for FMCS error messaging. Trashed targets must not be treated as
+        // valid checkout destinations though, so exclude them here.
+        if (isset($target) && ! empty($target->deleted_at)) {
+            $target = null;
+        }
+
         if ($request->filled('status_id')) {
             $asset->status_id = $request->input('status_id');
         }
@@ -1103,8 +1442,23 @@ class AssetsController extends Controller
         //            $asset->location_id = $target->rtd_location_id;
         //        }
 
-        // Keep checkout mutation + checkout logging/event side effects atomic.
+        // Concurrency guard. availableForCheckout() above ran on an
+        // unlocked read, so two simultaneous checkout requests can both
+        // observe the asset as available and both proceed through
+        // checkOut(), producing duplicate checkout-history rows and
+        // double-incrementing checkout_counter on a single-assignment
+        // asset. Re-fetch the row under lockForUpdate INSIDE the
+        // transaction and re-check availability against the locked
+        // snapshot. Any concurrent checkout blocks on the row lock until
+        // this transaction commits, then sees the asset as no longer
+        // available. Mirrors the pattern in ConsumablesController::store
+        // (GHSA-x4g2-87xc-m5jm).
         $wasCheckedOut = DB::transaction(function () use ($asset, $target, $checkout_at, $expected_checkin, $note, $asset_name): bool {
+            $locked = Asset::whereKey($asset->id)->lockForUpdate()->first();
+            if (! $locked || ! $locked->availableForCheckout()) {
+                return false;
+            }
+
             return $asset->checkOut($target, auth()->user(), $checkout_at, $expected_checkin, $note, $asset_name, $asset->location_id);
         });
 
@@ -1120,8 +1474,6 @@ class AssetsController extends Controller
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
-     * @param  int  $assetId
-     *
      * @since [v4.0]
      */
     public function checkin(Request $request, $asset_id): JsonResponse
@@ -1129,8 +1481,92 @@ class AssetsController extends Controller
         $asset = Asset::with('model')->findOrFail($asset_id);
         $this->authorize('checkin', $asset);
 
-        $target = $asset->assignedTo;
-        if (is_null($target)) {
+        // Concurrency guard.
+        $outcome = DB::transaction(function () use ($asset, $request): array {
+            $locked = Asset::with(['model', 'licenseseats'])
+                ->whereKey($asset->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $locked) {
+                return ['status' => 'already_checked_in', 'asset' => $asset];
+            }
+
+            $target = $locked->assignedTo;
+            if (is_null($target)) {
+                return ['status' => 'already_checked_in', 'asset' => $locked];
+            }
+
+            $locked->expected_checkin = null;
+            // $locked->last_checkout = null;
+            $locked->last_checkin = now();
+            $locked->assignedTo()->disassociate($locked);
+            $locked->accepted = null;
+
+            if ($request->input('clear_name') == '1') {
+                $locked->name = null;
+            } elseif ($request->has('name')) {
+                $locked->name = $request->input('name');
+            }
+
+            $this->migrateLegacyLocations($locked);
+
+            $locked->location_id = $locked->rtd_location_id;
+
+            if ($request->filled('location_id')) {
+                $locked->location_id = $request->input('location_id');
+
+                if ($request->input('update_default_location')) {
+                    $locked->rtd_location_id = $request->input('location_id');
+                }
+            }
+
+            if ($request->filled('status_id')) {
+                $locked->status_id = $request->input('status_id');
+            }
+
+            $checkin_at = $request->filled('checkin_at') ? $request->input('checkin_at').' '.date('H:i:s') : date('Y-m-d H:i:s');
+            $originalValues = $locked->getRawOriginal();
+
+            if (($request->filled('checkin_at')) && ($request->input('checkin_at') != date('Y-m-d'))) {
+                $originalValues['action_date'] = $checkin_at;
+            }
+
+            $locked->licenseseats->each(function (LicenseSeat $seat) {
+                $seat->update(['assigned_to' => null]);
+            });
+
+            // Get all pending Acceptances for this asset and delete them
+            CheckoutAcceptance::pending()
+                ->whereHasMorph(
+                    'checkoutable',
+                    [Asset::class],
+                    function (Builder $query) use ($locked) {
+                        $query->where('id', $locked->id);
+                    }
+                )
+                ->get()
+                ->map(function ($acceptance) {
+                    $acceptance->delete();
+                });
+
+            if (! $locked->save()) {
+                return ['status' => 'save_failed', 'asset' => $locked];
+            }
+
+            // Update the location of any child assets
+            Asset::where('assigned_type', Asset::class)
+                ->where('assigned_to', $locked->id)
+                ->update(['location_id' => $locked->location_id]);
+
+            event(new CheckoutableCheckedIn($locked, $target, auth()->user(), $request->input('note'), $checkin_at, $originalValues));
+
+            return ['status' => 'success', 'asset' => $locked];
+        });
+
+        $asset = $outcome['asset'];
+
+        if ($outcome['status'] === 'already_checked_in') {
             return response()->json(Helper::formatStandardApiResponse('error', [
                 'asset_tag' => e($asset->asset_tag),
                 'model' => e($asset->model->name),
@@ -1138,68 +1574,7 @@ class AssetsController extends Controller
             ], trans('admin/hardware/message.checkin.already_checked_in')));
         }
 
-        $asset->expected_checkin = null;
-        // $asset->last_checkout = null;
-        $asset->last_checkin = now();
-        $asset->assignedTo()->disassociate($asset);
-        $asset->accepted = null;
-
-        if ($request->input('clear_name') == '1') {
-            $asset->name = null;
-        } elseif ($request->has('name')) {
-            $asset->name = $request->input('name');
-        }
-
-        $this->migrateLegacyLocations($asset);
-
-        $asset->location_id = $asset->rtd_location_id;
-
-        if ($request->filled('location_id')) {
-            $asset->location_id = $request->input('location_id');
-
-            if ($request->input('update_default_location')) {
-                $asset->rtd_location_id = $request->input('location_id');
-            }
-        }
-
-        if ($request->filled('status_id')) {
-            $asset->status_id = $request->input('status_id');
-        }
-
-        $checkin_at = $request->filled('checkin_at') ? $request->input('checkin_at').' '.date('H:i:s') : date('Y-m-d H:i:s');
-        $originalValues = $asset->getRawOriginal();
-
-        if (($request->filled('checkin_at')) && ($request->input('checkin_at') != date('Y-m-d'))) {
-            $originalValues['action_date'] = $checkin_at;
-        }
-
-        $asset->licenseseats->each(function (LicenseSeat $seat) {
-            $seat->update(['assigned_to' => null]);
-        });
-
-        // Get all pending Acceptances for this asset and delete them
-        CheckoutAcceptance::pending()
-            ->whereHasMorph(
-                'checkoutable',
-                [Asset::class],
-                function (Builder $query) use ($asset) {
-                    $query->where('id', $asset->id);
-                }
-            )
-            ->get()
-            ->map(function ($acceptance) {
-                $acceptance->delete();
-            });
-
-        if ($asset->save()) {
-
-            // Update the location of any child assets
-            Asset::where('assigned_type', Asset::class)
-                ->where('assigned_to', $asset->id)
-                ->update(['location_id' => $asset->location_id]);
-
-            event(new CheckoutableCheckedIn($asset, $target, auth()->user(), $request->input('note'), $checkin_at, $originalValues));
-
+        if ($outcome['status'] === 'success') {
             return response()->json(Helper::formatStandardApiResponse('success', [
                 'asset_tag' => e($asset->asset_tag),
                 'model' => e($asset->model->name),
@@ -1220,18 +1595,56 @@ class AssetsController extends Controller
     public function checkinByTag(Request $request, $tag = null): JsonResponse
     {
         $this->authorize('checkin', Asset::class);
-        if ($tag == null && null !== ($request->input('asset_tag'))) {
-            $tag = $request->input('asset_tag');
-        }
-        $asset = Asset::where('asset_tag', $tag)->first();
+
+        $asset = $this->resolveCheckinAssetFromBody($request, $tag);
 
         if ($asset) {
             return $this->checkin($request, $asset->id);
         }
 
+        $displayKey = $tag
+            ?? $request->input('checkin_key')
+            ?? $request->input('asset_tag');
+
         return response()->json(Helper::formatStandardApiResponse('error', [
-            'asset' => e($tag),
-        ], 'Asset with tag '.e($tag).' not found'));
+            'asset' => e($displayKey),
+        ], 'Asset with tag '.e($displayKey).' not found'));
+    }
+
+    /**
+     * Body-based asset lookup for the quickscan-checkin path. Mirrors the
+     * audit-side resolveAuditAssetFromBody: prefer checkin_key +
+     * checkin_by_field (serial gated on unique_serial), fall back to the
+     * legacy `asset_tag` field, otherwise return null. The URL-bound tag
+     * path still wins when the caller uses the /bytag/{tag}/checkin route.
+     */
+    private function resolveCheckinAssetFromBody(Request $request, ?string $tag): ?Asset
+    {
+        if ($tag !== null) {
+            return Asset::where('asset_tag', $tag)->first();
+        }
+
+        $settings = Setting::getSettings();
+        $checkin_by_field = $request->input('checkin_by_field', 'asset_tag');
+        $checkin_key = $request->input('checkin_key', null);
+
+        if ($settings->unique_serial == '1' && $checkin_by_field === 'serial' && $checkin_key) {
+            return Asset::where('serial', '=', trim($checkin_key))->first();
+        }
+
+        if ($checkin_by_field === 'asset_tag' && $checkin_key) {
+            return Asset::where('asset_tag', '=', trim($checkin_key))->first();
+        }
+
+        // Legacy body-based lookup: kept so callers that still send
+        // `asset_tag` (e.g. the pre-serial quickscan-checkin blade, third-
+        // party integrations built against the older API shape) continue
+        // to work without change.
+        if ($request->filled('asset_tag')) {
+            return Asset::where('asset_tag', '=', $request->input('asset_tag'))->first();
+        }
+
+        return null;
     }
 
     /**
@@ -1239,14 +1652,125 @@ class AssetsController extends Controller
      *
      * @author [A. Gianotto] [<snipe@snipe.net>]
      *
-     * @param  int  $id
-     *
      * @since [v4.0]
      */
-    public function audit(Request $request, Asset $asset): JsonResponse
+    public function audit(UploadFileRequest $request, ?Asset $asset = null): JsonResponse
     {
         $this->authorize('audit', Asset::class);
 
+        // On the legacy route the URL has no {asset} — resolve from the body
+        // via audit_key + audit_by_field (or the fallback asset_tag field).
+        // On the newer route the Asset is bound by RMB, so body-based lookup
+        // is skipped entirely.
+        $resolvedAsset = $asset ?: $this->resolveAuditAssetFromBody($request);
+
+        if (! $resolvedAsset) {
+            return response()->json(Helper::formatStandardApiResponse(
+                'error',
+                $this->auditFailPayload($request),
+                trans('admin/hardware/message.does_not_exist')
+            ), 200);
+        }
+
+        // Per-instance authorize so the policy layer independently
+        // enforces FMCS scoping on the resolved asset, regardless of
+        // whether it came from route-model binding or body lookup.
+        // Without this, FMCS enforcement depends solely on
+        // CompanyableScope firing on the underlying Asset::where /
+        // route-binding lookup.
+        $this->authorize('audit', $resolvedAsset);
+
+        $result = $this->applyAssetAudit($resolvedAsset, $request);
+
+        return response()->json($this->formatSingleAuditResponse($result));
+    }
+
+    /**
+     * Bulk audit: `ids` in the request body names which assets to audit,
+     * everything else on the request body is the shared audit payload
+     * (note, next_audit_date, location, uploaded image, etc.) applied to
+     * each. Per-row envelope response.
+     */
+    public function bulkAudit(UploadFileRequest $request): JsonResponse
+    {
+        $this->authorize('audit', Asset::class);
+
+        $ids = array_values(array_unique(array_map('intval', (array) $request->input('ids', []))));
+
+        if ($ids === []) {
+            return response()->json([
+                'status' => 'error',
+                'messages' => ['ids' => [trans('validation.required', ['attribute' => 'ids'])]],
+                'results' => [],
+            ]);
+        }
+
+        $assets = Asset::whereIn('id', $ids)->get()->keyBy('id');
+
+        $results = [];
+        $success_count = 0;
+        $error_count = 0;
+
+        foreach ($ids as $id) {
+            if (! $assets->has($id)) {
+                $results[] = [
+                    'id' => $id,
+                    'status' => 'error',
+                    'messages' => trans('admin/hardware/message.does_not_exist'),
+                    'payload' => null,
+                ];
+                $error_count++;
+
+                continue;
+            }
+
+            $asset = $assets->get($id);
+
+            // Per-row FMCS/authorization gate. The class-level authorize()
+            // above is only a coarse "you have assets.audit" check. This
+            // catches FMCS mismatches and any policy tightening that lands
+            // later, surfacing them as row errors rather than a whole 403.
+            if (! Gate::allows('audit', $asset)) {
+                $results[] = [
+                    'id' => $id,
+                    'status' => 'error',
+                    'messages' => trans('general.unauthorized'),
+                    'payload' => null,
+                ];
+                $error_count++;
+
+                continue;
+            }
+
+            $result = $this->applyAssetAudit($asset, $request);
+            $row = $this->buildAuditRowResult($id, $result);
+            $results[] = $row;
+
+            $row['status'] === 'success' ? $success_count++ : $error_count++;
+        }
+
+        return response()->json($this->assembleBulkResponse($results, $success_count, $error_count));
+    }
+
+    /**
+     * Apply an audit to a single Asset.
+     *
+     * Shared between audit() and bulkAudit(), so validation, the observer
+     * bypass, and the logAudit side-effect live in one place. Returns the
+     * neutral result shape that formatSingleAuditResponse() /
+     * buildAuditRowResult() turn into the legacy or bulk-envelope response
+     * body.
+     *
+     * @return array{
+     *   success: bool,
+     *   asset: Asset|null,
+     *   payload: array,
+     *   message: string|null,
+     *   errors: mixed,
+     * }
+     */
+    private function applyAssetAudit(Asset $asset, UploadFileRequest $request): array
+    {
         $settings = Setting::getSettings();
 
         $dt = null;
@@ -1257,130 +1781,183 @@ class AssetsController extends Controller
         $audit_by_field = $request->input('audit_by_field', 'asset_tag');
         $audit_key = $request->input('audit_key', null);
 
-        // If they have selected to scan by serial, use that
-        if (($settings->unique_serial == '1') && ($audit_by_field == 'serial') && ($audit_key)) {
-            $asset = Asset::where('serial', '=', trim($audit_key))->first();
+        $originalValues = $asset->getRawOriginal();
 
-            // If they have selected by asset tag, use that
-        } elseif (($audit_by_field == 'asset_tag') && ($audit_key)) {
-            $asset = Asset::where('asset_tag', '=', trim($audit_key))->first();
+        $asset->next_audit_date = $dt;
 
-            // Allow the asset tag to be passed in the payload (legacy method)
-        } elseif ($request->filled('asset_tag')) {
-            $asset = Asset::where('asset_tag', '=', $request->input('asset_tag'))->first();
+        if ($request->filled('next_audit_date')) {
+            $asset->next_audit_date = $request->input('next_audit_date');
         }
 
-        // If none of the above were selected, fall back to the route-model-binding
-        if ($asset) {
-
-            $originalValues = $asset->getRawOriginal();
-
-            $asset->next_audit_date = $dt;
-
-            if ($request->filled('next_audit_date')) {
-                $asset->next_audit_date = $request->input('next_audit_date');
-            }
-
-            // Check to see if they checked the box to update the physical location,
-            // not just note it in the audit notes
-            if ($request->input('update_location') == '1') {
-                $asset->location_id = $request->input('location_id');
-            }
-
-            $asset->last_audit_date = date('Y-m-d H:i:s');
-
-            if ($request->input('clear_name') == '1') {
-                $asset->name = null;
-            }
-
-            // Set up the payload for re-display in the API response
-            $payload = [
-                'id' => $asset->id,
-                'asset_tag' => e($asset->asset_tag),
-                'audit_by_field' => e(Str::headline($audit_by_field)),
-                'audit_key' => e($audit_key),
-                'note' => $request->filled('note') ? e($request->input('note')) : null,
-                'status_label' => e($asset->status?->display_name),
-                'status_type' => $asset->status?->getStatuslabelType(),
-                'next_audit_date' => Helper::getFormattedDateObject($asset->next_audit_date),
-            ];
-
-            /**
-             * Update custom fields in the database.
-             * Validation for these fields is handled through the AssetRequest form request
-             * $model = AssetModel::find($request->input('model_id'));
-             */
-            if (($asset->model) && ($asset->model->fieldset)) {
-                $payload['custom_fields'] = [];
-                foreach ($asset->model->fieldset->fields as $field) {
-                    if (($field->display_audit == '1') && ($request->has($field->db_column))) {
-                        if ($field->field_encrypted == '1') {
-                            if (Gate::allows('assets.view.encrypted_custom_fields')) {
-                                if (is_array($request->input($field->db_column))) {
-                                    $asset->{$field->db_column} = Crypt::encrypt(implode(', ', $request->input($field->db_column)));
-                                } else {
-                                    $asset->{$field->db_column} = Crypt::encrypt($request->input($field->db_column));
-                                }
-                            }
-                        } else {
-                            if (is_array($request->input($field->db_column))) {
-                                $asset->{$field->db_column} = implode(', ', $request->input($field->db_column));
-                            } else {
-                                $asset->{$field->db_column} = $request->input($field->db_column);
-                            }
-                        }
-                        $payload['custom_fields'][$field->db_column] = $request->input($field->db_column);
-                    }
-
-                }
-            }
-
-            // Invoke the validation to see if the audit will complete successfully
-            $asset->setRules($asset->getRules() + $asset->customFieldValidationRules());
-
-            // Validate the rest of the data before we turn off the event dispatcher
-            if ($asset->isInvalid()) {
-                return response()->json(Helper::formatStandardApiResponse('error', $payload, $asset->getErrors()));
-            }
-
-            /**
-             * Even though we do a save() further down, we don't want to log this as a "normal" asset update,
-             * which would trigger the Asset Observer and would log an asset *update* log entry (because the
-             * de-normed fields like next_audit_date on the asset itself will change on save()) *in addition* to
-             * the audit log entry we're creating through this controller.
-             *
-             * To prevent this double-logging (one for update and one for audit), we skip the observer and bypass
-             * that de-normed update log entry by using unsetEventDispatcher(), BUT invoking unsetEventDispatcher()
-             * will bypass normal model-level validation that's usually handled at the observer)
-             *
-             * We handle validation on the save() by checking if the asset is valid via the ->isValid() method,
-             * which manually invokes Watson Validating to make sure the asset's model is valid.
-             *
-             * @see AssetObserver::updating()
-             * @see Asset::save()
-             */
-            $asset->unsetEventDispatcher();
-
-            /**
-             * Invoke Watson Validating to check the asset itself and check to make sure it saved correctly.
-             * We have to invoke this manually because of the unsetEventDispatcher() above.)
-             */
-            if ($asset->isValid() && $asset->save()) {
-                $asset->logAudit(request('note'), request('location_id'), null, $originalValues);
-
-                return response()->json(Helper::formatStandardApiResponse('success', $payload, trans('admin/hardware/message.audit.success')));
-            }
-
+        // "update_location" flag actually writes the location instead of
+        // only recording it in the audit notes.
+        if ($request->input('update_location') == '1') {
+            $asset->location_id = $request->input('location_id');
         }
 
-        $fail_payload = [
+        $asset->last_audit_date = date('Y-m-d H:i:s');
+
+        if ($request->input('clear_name') == '1') {
+            $asset->name = null;
+        }
+
+        $payload = [
+            'id' => $asset->id,
+            'asset_tag' => e($asset->asset_tag),
             'audit_by_field' => e(Str::headline($audit_by_field)),
             'audit_key' => e($audit_key),
+            'note' => $request->filled('note') ? e($request->input('note')) : null,
+            'status_label' => e($asset->status?->display_name),
+            'status_type' => $asset->status?->getStatuslabelType(),
+            'next_audit_date' => Helper::getFormattedDateObject($asset->next_audit_date),
         ];
 
-        // No matching asset for the asset tag that was passed.
-        return response()->json(Helper::formatStandardApiResponse('error', $fail_payload, trans('admin/hardware/message.does_not_exist')), 200);
+        if ($asset->model && $asset->model->fieldset) {
+            $payload['custom_fields'] = [];
+            foreach ($asset->model->fieldset->fields as $field) {
+                if ($field->display_audit != '1' || ! $request->has($field->db_column)) {
+                    continue;
+                }
 
+                $value = $request->input($field->db_column);
+                $stored = is_array($value) ? implode(', ', $value) : $value;
+
+                if ($field->field_encrypted == '1') {
+                    // Only writers with the encrypted-view permission can
+                    // set encrypted fields. Other callers get the payload
+                    // echo but no persisted change.
+                    if (Gate::allows('assets.view.encrypted_custom_fields')) {
+                        $asset->{$field->db_column} = Crypt::encrypt($stored);
+                    }
+                } else {
+                    $asset->{$field->db_column} = $stored;
+                }
+
+                $payload['custom_fields'][$field->db_column] = $value;
+            }
+        }
+
+        // Merge the model-level base rules with the custom-field rules so
+        // uploaded audit data is checked before we bypass the observer below.
+        $asset->setRules($asset->getRules() + $asset->customFieldValidationRules());
+
+        if ($asset->isInvalid()) {
+            return [
+                'success' => false,
+                'asset' => $asset,
+                'payload' => $payload,
+                'message' => null,
+                'errors' => $asset->getErrors(),
+            ];
+        }
+
+        // We save() further down but don't want an "update" log entry (the
+        // observer would emit one because de-normed fields like
+        // next_audit_date change here) in addition to the "audit" log entry
+        // we create below. unsetEventDispatcher() bypasses the observer;
+        // isValid() above already ran the Watson validation manually.
+        //
+        // @see \App\Observers\AssetObserver::updating()
+        // @see \App\Models\Asset::save()
+        $asset->unsetEventDispatcher();
+
+        if ($asset->isValid() && $asset->save()) {
+            // Persist an audit image if the caller uploaded one, matching
+            // the web audit form's behavior. Filename is stored on the
+            // action log so it renders in the audit history.
+            $file_name = null;
+            // Legacy `image` posts are aliased to `file[0]` in UploadFileRequest::prepareForValidation.
+            if ($request->hasFile('file.0')) {
+                $file_name = $request->handleFile(FileStorage::Audits->privateStorageKey(), 'audit-'.$asset->id, $request->file('file.0'));
+                $payload['image'] = $file_name;
+            }
+
+            $asset->logAudit($request->input('note'), $request->input('location_id'), $file_name, $originalValues);
+
+            return [
+                'success' => true,
+                'asset' => $asset,
+                'payload' => $payload,
+                'message' => 'admin/hardware/message.audit.success',
+                'errors' => null,
+            ];
+        }
+
+        return [
+            'success' => false,
+            'asset' => $asset,
+            'payload' => $payload,
+            'message' => null,
+            'errors' => $asset->getErrors(),
+        ];
+    }
+
+    /**
+     * Body-based asset lookup for the legacy audit path. Mirrors the pre-
+     * refactor behavior: prefer audit_key + audit_by_field (serial or
+     * asset_tag), fall back to the legacy `asset_tag` field, otherwise
+     * return null so the caller can try the URL-bound id.
+     */
+    private function resolveAuditAssetFromBody(Request $request): ?Asset
+    {
+        $settings = Setting::getSettings();
+        $audit_by_field = $request->input('audit_by_field', 'asset_tag');
+        $audit_key = $request->input('audit_key', null);
+
+        if ($settings->unique_serial == '1' && $audit_by_field === 'serial' && $audit_key) {
+            return Asset::where('serial', '=', trim($audit_key))->first();
+        }
+
+        if ($audit_by_field === 'asset_tag' && $audit_key) {
+            return Asset::where('asset_tag', '=', trim($audit_key))->first();
+        }
+
+        if ($request->filled('asset_tag')) {
+            return Asset::where('asset_tag', '=', $request->input('asset_tag'))->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * The "no matching asset" fail payload the legacy audit response emits.
+     */
+    private function auditFailPayload(Request $request): array
+    {
+        return [
+            'audit_by_field' => e(Str::headline($request->input('audit_by_field', 'asset_tag'))),
+            'audit_key' => e($request->input('audit_key', null)),
+        ];
+    }
+
+    /**
+     * Format an applyAssetAudit() result into the legacy single-asset audit
+     * response body. `payload` here is the audit-specific structure
+     * (asset_tag, audit_by_field, custom_fields, ...) built inside
+     * applyAssetAudit(), NOT the full Asset model.
+     */
+    private function formatSingleAuditResponse(array $result): array
+    {
+        if (! $result['success']) {
+            return Helper::formatStandardApiResponse('error', $result['payload'], $result['errors']);
+        }
+
+        return Helper::formatStandardApiResponse('success', $result['payload'], trans($result['message']));
+    }
+
+    /**
+     * Turn an applyAssetAudit() result into a per-row bulk-envelope entry.
+     */
+    private function buildAuditRowResult(int $id, array $result): array
+    {
+        $formatted = $this->formatSingleAuditResponse($result);
+
+        return [
+            'id' => $id,
+            'status' => $formatted['status'],
+            'messages' => $formatted['messages'],
+            'payload' => $formatted['payload'],
+        ];
     }
 
     /**
@@ -1436,11 +2013,14 @@ class AssetsController extends Controller
         }
 
         $order = $request->input('order') === 'asc' ? 'asc' : 'desc';
-        $sort_override = str_replace('custom_fields.', '', $request->input('sort'));
+        $sort_override = str_replace('custom_fields.', '', (string) $request->input('sort'));
 
         // This handles all the pivot sorting (versus the assets.* fields
-        // in the allowed_columns array)
-        $column_sort = in_array($sort_override, $allowed_columns) ? $sort_override : 'assets.created_at';
+        // in the allowed_columns array). Strict in_array + non-empty gate so a missing
+        // sort param can't loose-match a null in $allowed_columns and produce ORDER BY ''.
+        $column_sort = ($sort_override !== '' && in_array($sort_override, $allowed_columns, true))
+            ? $sort_override
+            : 'assets.created_at';
 
         switch ($request->input('sort')) {
             case 'model':
@@ -1457,13 +2037,13 @@ class AssetsController extends Controller
                 break;
         }
 
-        $assets->requestableAssets();
+        $assets->requestable();
 
         // Make sure the offset and limit are actually integers and do not exceed system limits
-        $offset = ($request->input('offset') > $assets->count()) ? $assets->count() : app('api_offset_value');
+        $total = $assets->count();
+        $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
         $limit = app('api_limit_value');
 
-        $total = $assets->count();
         $assets = $assets->skip($offset)->take($limit)->get();
 
         return (new AssetsTransformer)->transformRequestedAssets($assets, $total);
@@ -1494,10 +2074,10 @@ class AssetsController extends Controller
             ->with('adminuser')
             ->with('accessories');
 
-        $offset = ($request->input('offset') > $accessory_checkouts->count()) ? $accessory_checkouts->count() : app('api_offset_value');
+        $total = $accessory_checkouts->count();
+        $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
         $limit = app('api_limit_value');
 
-        $total = $accessory_checkouts->count();
         $accessory_checkouts = $accessory_checkouts->skip($offset)->take($limit)->get();
 
         return (new AssetsTransformer)->transformCheckedoutAccessories($accessory_checkouts, $total);
@@ -1516,8 +2096,10 @@ class AssetsController extends Controller
 
         $component_checkouts = ComponentAssignment::where('asset_id', $asset->id)->with('adminuser')->with('component');
 
-        $sort_override = $request->input('sort');
-        $column_sort = in_array($sort_override, $allowed_columns) ? $sort_override : 'created_at';
+        $sort_override = (string) $request->input('sort');
+        $column_sort = ($sort_override !== '' && in_array($sort_override, $allowed_columns, true))
+            ? $sort_override
+            : 'created_at';
         $order = $request->input('order') === 'asc' ? 'asc' : 'desc';
 
         switch ($sort_override) {
@@ -1532,8 +2114,8 @@ class AssetsController extends Controller
                 break;
         }
 
-        $offset = ($request->input('offset') > $component_checkouts->count()) ? $component_checkouts->count() : app('api_offset_value');
         $total = $component_checkouts->count();
+        $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
         $limit = app('api_limit_value');
         $component_checkouts = $component_checkouts->skip($offset)->take($limit)->get();
 

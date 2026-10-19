@@ -1,11 +1,11 @@
 <?php
 
 return [
-    'app_version' => 'v8.6.3',
-    'full_app_version' => 'v8.6.3 - build 23252-gfffcfd2a3a',
-    'build_version' => '23252',
+    'app_version' => 'v8.8.0',
+    'full_app_version' => 'v8.8.0 - build 25378-g8d10063af9',
+    'build_version' => '25378',
     'prerelease_version' => '',
-    'hash_version' => 'gfffcfd2a3a',
-    'full_hash' => 'v8.6.3-32-gfffcfd2a3a',
+    'hash_version' => 'g8d10063af9',
+    'full_hash' => 'v8.8.0-736-g8d10063af9',
     'branch' => 'master',
 ];

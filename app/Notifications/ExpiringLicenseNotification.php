@@ -3,30 +3,26 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Symfony\Component\Mime\Email;
 
-#[AllowDynamicProperties]
-class ExpiringLicenseNotification extends Notification
+class ExpiringLicenseNotification extends Notification implements ShouldQueue
 {
     use Queueable;
-
-    private $params;
 
     /**
      * Create a new notification instance.
      */
-    public function __construct($params, $threshold)
-    {
-        $this->licenses = $params;
-        $this->threshold = $threshold;
-    }
+    public function __construct(
+        public $params,
+        public $threshold
+    ) {}
 
     /**
      * Get the notification's delivery channels.
      *
-     * @param  mixed  $notifiable
      * @return array
      */
     public function via()
@@ -40,7 +36,6 @@ class ExpiringLicenseNotification extends Notification
     /**
      * Get the mail representation of the notification.
      *
-     * @param  mixed  $asset
      * @return MailMessage
      */
     public function toMail()

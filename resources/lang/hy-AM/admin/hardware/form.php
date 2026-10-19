@@ -11,7 +11,7 @@ return [
     'bulk_update' => 'Ակտիվների զանգվածային թարմացում',
     'bulk_update_help' => 'Այս ձևը թույլ է տալիս միաժամանակ թարմացնել մի քանի ակտիվ։ Լրացրեք միայն այն դաշտերը, որոնք անհրաժեշտ է փոխել։ Դատարկ թողած դաշտերը կմնան անփոփոխ։',
     'bulk_update_warn' => 'Դուք պատրաստվում եք խմբագրել մեկ ակտիվի հատկությունները։|Դուք պատրաստվում եք խմբագրել :asset_count ակտիվի հատկությունները։',
-    'bulk_update_with_custom_field' => 'Նշենք, որ ակտիվները :asset_model_count տարբեր տեսակի մոդելներ են։',
+    'bulk_update_with_custom_field' => 'Your selection spans :asset_model_count different asset models. Custom fields below are grouped by model.',
     'bulk_update_model_prefix' => 'Մոդելների վրա
 ',
     'bulk_update_custom_field_unique' => 'Սա եզակի դաշտ է և հնարավոր չէ զանգվածային խմբագրել։Sonnet 4.6',
@@ -45,6 +45,7 @@ return [
     'redirect_to_type' => 'Անցնել :type
 ',
     'redirect_to_checked_out_to' => 'Անցնել հանձնված՝',
+    'redirect_to_bulk_checkout' => 'Return to Bulk Checkout',
     'select_statustype' => 'Ընտրել կարգավճակ',
     'serial' => 'Սերիական համար',
     'serial_required' => ':number ակտիվը պահանջում է սերիական համար',
@@ -53,6 +54,7 @@ return [
     'tag' => 'Ակտիվի պիտակ',
     'update' => 'Թարմացնել ակտիվը',
     'warranty' => 'Երաշխիքային ժամկետ',
+    'warranty_months' => 'Warranty Months',
     'warranty_expires' => 'Ժամկետի ավարտ',
     'years' => 'տարիներ',
     'asset_location' => 'Թարմացնել ակտիվի տեղադիրքը',

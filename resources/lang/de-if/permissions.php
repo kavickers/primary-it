@@ -36,11 +36,12 @@ return [
 
     'assets' => [
         'name' => 'Assets',
-        'note' => 'Gewährt Zugriff auf den Abschnitt Assets der Anwendung.',
+        'note' => 'Gewährt Zugriff auf den Abschnitt Assets der Anwendung. ',
     ],
 
     'assetsview' => [
         'name' => 'Asset ansehen',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the asset model as well. This is to make it easier to share common documents like user manuals across assets without having to upload them to every asset, and to avoid having to grant the user permission to modify asset files. Users with this permission will also be able to view edit and checkin history.',
     ],
 
     'assetscreate' => [
@@ -72,7 +73,7 @@ return [
 
     'assetsviewrequestable' => [
         'name' => 'Anforderbare Assets anzeigen',
-        'note' => 'Ermöglicht dem Benutzer, Assets anzuzeigen, die als anforderbar markiert sind.',
+        'note' => 'Ermöglicht dem Benutzer, Assets anzusehen, die als anforderbar markiert sind.',
     ],
 
     'assetsviewencrypted-custom-fields' => [
@@ -107,47 +108,47 @@ return [
     ],
     'accessoriesfiles' => [
         'name' => 'Zubehördateien verwalten',
-        'note' => 'Allows the user to upload, download, and delete files associated with accessories. (This only makes sense with view privileges or higher.)',
+        'note' => 'Ermöglicht dem Benutzer, mit Zubehör verbundene Dateien hochzuladen, herunterzuladen und zu löschen. (Dies ist nur bei Zugriffsrechten oder höher sinnvoll.)',
     ],
 
     'assetsfiles' => [
-        'name' => 'Manage Asset Files',
-        'note' => 'Allows the user to upload, download, and delete files associated with assets. (This only makes sense with view privileges or higher.)',
+        'name' => 'Asset-Dateien verwalten',
+        'note' => 'Ermöglicht dem Benutzer, mit Assets verbundene Dateien hochzuladen, herunterzuladen und zu löschen. (Dies ist nur bei Zugriffsrechten oder höher sinnvoll.)',
     ],
 
     'usersfiles' => [
-        'name' => 'Manage User Files',
-        'note' => 'Allows the user to upload, download, and delete files associated with users. (This only makes sense with view privileges or higher.)',
+        'name' => 'Benutzerdateien verwalten',
+        'note' => 'Ermöglicht dem Benutzer, mit Benutzern verbundene Dateien hochzuladen, herunterzuladen und zu löschen. (Dies ist nur bei Zugriffsrechten oder höher sinnvoll.)',
     ],
 
     'modelsfiles' => [
-        'name' => 'Manage Model Files',
-        'note' => 'Allows the user to upload, download, and delete files associated with asset models on both the model view and the asset view screens. (This only makes sense with view privileges or higher.)',
+        'name' => 'Modelldateien verwalten',
+        'note' => 'Ermöglicht dem Benutzer, Dateien zu hochzuladen, herunterzuladen und zu löschen, die mit Asset-Modellen in der Modellansicht und in der Detailansicht verknüpft sind. (Dies macht nur mit Ansichtsberechtigungen oder höher.)',
     ],
 
     'departmentsfiles' => [
-        'name' => 'Manage Department Files',
-        'note' => 'Allows the user to upload, download, and delete files associated with departments. (This only makes sense with view privileges or higher.)',
+        'name' => 'Abteilungsdateien verwalten',
+        'note' => 'Ermöglicht dem Benutzer, mit Abteilungen verbundene Dateien hochzuladen, herunterzuladen und zu löschen. (Dies ist nur bei Zugriffsrechten oder höher sinnvoll.)',
     ],
 
     'suppliersfiles' => [
-        'name' => 'Manage Supplier Files',
-        'note' => 'Allows the user to upload, download, and delete files associated with suppliers. (This only makes sense with view privileges or higher.)',
+        'name' => 'Lieferantendateien verwalten',
+        'note' => 'Ermöglicht dem Benutzer, mit Lieferanten verbundene Dateien hochzuladen, herunterzuladen und zu löschen. (Dies ist nur bei Zugriffsrechten oder höher sinnvoll.)',
     ],
 
     'locationsfiles' => [
-        'name' => 'Manage Location Files',
-        'note' => 'Allows the user to upload, download, and delete files associated with locations.(This only makes sense with view privileges or higher.)',
+        'name' => 'Standortdateien verwalten',
+        'note' => 'Ermöglicht dem Benutzer, mit Standorten verbundene Dateien hochzuladen, herunterzuladen und zu löschen. (Dies ist nur bei Zugriffsrechten oder höher sinnvoll.)',
     ],
 
     'companiesfiles' => [
-        'name' => 'Manage Company Files',
-        'note' => 'Allows the user to upload, download, and delete files associated with companies. (This only makes sense with view privileges or higher.)',
+        'name' => 'Unternehmensdateien verwalten',
+        'note' => 'Ermöglicht dem Benutzer, mit Unternehmen verbundene Dateien hochzuladen, herunterzuladen und zu löschen. (Dies ist nur bei Zugriffsrechten oder höher sinnvoll.)',
     ],
 
     'consumablesfiles' => [
         'name' => 'Verbrauchsdateien verwalten',
-        'note' => 'Allows the user to upload, download, and delete files associated with consumables. (This only makes sense with view privileges or higher.)',
+        'note' => 'Ermöglicht dem Benutzer, mit Verbrauchsmaterialien verbundene Dateien hochzuladen, herunterzuladen und zu löschen. (Dies ist nur bei Zugriffsrechten oder höher sinnvoll.)',
     ],
 
     'consumables' => [
@@ -255,6 +256,7 @@ return [
     ],
     'usersview' => [
         'name' => 'Benutzer anzeigen',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the user as well. Users with this permission will also be able to view edit and checkin history.',
     ],
     'userscreate' => [
         'name' => 'Neue Benutzer Anlegen',

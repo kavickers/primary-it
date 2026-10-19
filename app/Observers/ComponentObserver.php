@@ -18,6 +18,16 @@ class ComponentObserver
         $changed = [];
 
         foreach ($component->getRawOriginal() as $key => $value) {
+            // SoftDeletes drives the delete + restore flows through
+            // save(), which fires `updated` with deleted_at as the
+            // changed field. The `deleting`/`restored` observers log
+            // those actions directly, so excluding deleted_at here
+            // keeps us from double-logging ("delete" plus an "update"
+            // row that only shows the deleted_at diff).
+            if ($key === 'deleted_at') {
+                continue;
+            }
+
             // Check and see if the value changed
             if ($component->getRawOriginal()[$key] != $component->getAttributes()[$key]) {
                 $changed[$key]['old'] = $component->getRawOriginal()[$key];
@@ -49,16 +59,7 @@ class ComponentObserver
      */
     public function created(Component $component)
     {
-        $logAction = new Actionlog;
-        $logAction->item_type = Component::class;
-        $logAction->item_id = $component->id;
-        $logAction->created_at = date('Y-m-d H:i:s');
-        $logAction->action_date = date('Y-m-d H:i:s');
-        $logAction->created_by = auth()->id();
-        if ($component->imported) {
-            $logAction->setActionSource('importer');
-        }
-        $logAction->logaction('create');
+        $component->writeInitialInventoryCreate();
     }
 
     /**

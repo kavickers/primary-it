@@ -6,10 +6,22 @@ use App\Models\Company;
 use App\Models\Location;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class LocationFileTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Swap the private and public disks for in-memory fakes so
+        // uploaded files do not accumulate under storage/private_uploads
+        // and public/uploads across test runs. Was missing here, so
+        // every run of this file left real bytes on disk.
+        Storage::fake('local');
+        Storage::fake('public');
+    }
+
     public function test_location_api_accepts_file_upload()
     {
         // Create a model to work with
@@ -228,7 +240,8 @@ class LocationFileTest extends TestCase
         $superUser = User::factory()->superuser()->create();
         $normalUser = User::factory()
             ->manageLocationFiles()
-            ->create(['company_id' => $company->id]);
+            ->forCompany($company)
+            ->create();
 
         $this->actingAsForApi($superUser)
             ->post(
@@ -255,7 +268,8 @@ class LocationFileTest extends TestCase
         $superUser = User::factory()->superuser()->create();
         $userInCompanyB = User::factory()
             ->manageLocationFiles()
-            ->create(['company_id' => $companyB->id]);
+            ->forCompany($companyB)
+            ->create();
 
         $this->actingAsForApi($superUser)
             ->post(

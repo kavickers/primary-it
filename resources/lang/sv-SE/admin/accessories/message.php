@@ -20,6 +20,8 @@ return [
         'confirm' => 'Är du säker på att du vill ta bort det här tillbehöret?',
         'error' => 'Ett fel uppstod när tillbehöret skulle tas bort. Vänligen försök igen.',
         'success' => 'Tillbehör raderat.',
+        'bulk_success' => 'Tillbehör har raderats.|:count tillbehör har raderats.',
+        'partial_success' => ':count tillbehör har raderats framgångsrikt, men andra kunde inte raderas. Se nedan för detaljer.|:count tillbehör har raderats framgångsrikt, men andra kunde inte raderas. Se nedan för detaljer.',
     ],
 
     'checkout' => [

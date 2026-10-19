@@ -2,16 +2,18 @@
 
 namespace App\Models;
 
-use App\Helpers\Helper;
+use App\Enums\FileStorage;
 use App\Http\Traits\TwoColumnUniqueUndeletedTrait;
+use App\Models\Builders\CategoryQueryBuilder;
 use App\Models\Traits\Searchable;
 use App\Presenters\CategoryPresenter;
 use App\Presenters\Presentable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Watson\Validating\ValidatingTrait;
 
@@ -22,6 +24,8 @@ use Watson\Validating\ValidatingTrait;
  * send a EULA to the user, etc.
  *
  * @version v1.0
+ *
+ * @mixin IdeHelperCategory
  */
 class Category extends SnipeModel
 {
@@ -67,7 +71,7 @@ class Category extends SnipeModel
     /**
      * The attributes that are mass assignable.
      *
-     * @var array
+     * @var list<string>
      */
     protected $fillable = [
         'category_type',
@@ -112,6 +116,23 @@ class Category extends SnipeModel
         'licenses_count',
         'models_count',
     ];
+
+    /**
+     * On hard-delete, wipe the image file. Soft-delete leaves it alone so a
+     * subsequent restore comes back with its image intact.
+     */
+    protected static function booted(): void
+    {
+        static::forceDeleted(function (self $category) {
+            if ($category->image) {
+                try {
+                    Storage::disk('public')->delete(FileStorage::Categories->publicPath().$category->image);
+                } catch (\Exception $e) {
+                    Log::info($e->getMessage());
+                }
+            }
+        });
+    }
 
     /**
      * Checks if category can be deleted
@@ -213,17 +234,23 @@ class Category extends SnipeModel
             return $this->{Str::plural($this->category_type).'_count'};
         }
 
+        // Use the relation method (->assets()) instead of property access
+        // (->assets) — the property form hydrates the entire collection
+        // just to read its size. On an asset category with thousands of
+        // rows that's thousands of model instances allocated for a single
+        // count comparison (visible as huge "Retrieved Models" totals in
+        // Debugbar). Method-style emits a single SELECT count(*).
         switch ($this->category_type) {
             case 'asset':
-                return $this->assets->count();
+                return $this->assets()->count();
             case 'accessory':
-                return $this->accessories->count();
+                return $this->accessories()->count();
             case 'component':
-                return $this->components->count();
+                return $this->components()->count();
             case 'consumable':
-                return $this->consumables->count();
+                return $this->consumables()->count();
             case 'license':
-                return $this->licenses->count();
+                return $this->licenses()->count();
             default:
                 return 0;
         }
@@ -290,14 +317,19 @@ class Category extends SnipeModel
      */
     public function getEula()
     {
-
+        // Route through SnipeModel::sanitizeEulaForRender (protected on
+        // the parent) so this override matches SnipeModel::getEula's
+        // rendered-output shape: parseEscapedMarkedown + <img> tag strip.
+        // Without the strip, callsites that render this method's output
+        // (users/print.blade.php, etc.) would emit <img> tags the parent
+        // path deliberately blocks per the mail-context LFR/SSRF hardening.
         if ($this->eula_text) {
-            return Helper::parseEscapedMarkedown($this->eula_text);
+            return $this->sanitizeEulaForRender($this->eula_text);
         } elseif ((Setting::getSettings()->default_eula_text) && ($this->use_default_eula == '1')) {
-            return Helper::parseEscapedMarkedown(Setting::getSettings()->default_eula_text);
-        } else {
-            return null;
+            return $this->sanitizeEulaForRender(Setting::getSettings()->default_eula_text);
         }
+
+        return null;
     }
 
     /**
@@ -319,27 +351,8 @@ class Category extends SnipeModel
         $this->attributes['checkin_email'] = (int) filter_var($value, FILTER_VALIDATE_BOOLEAN);
     }
 
-    /**
-     * -----------------------------------------------
-     * BEGIN QUERY SCOPES
-     * -----------------------------------------------
-     **/
-
-    /**
-     * Query builder scope for whether or not the category requires acceptance
-     *
-     * @author Vincent Sposato <vincent.sposato@gmail.com>
-     *
-     * @param  Builder  $query  Query builder instance
-     * @return Builder Modified query builder
-     */
-    public function scopeRequiresAcceptance($query)
+    public function newEloquentBuilder($query): CategoryQueryBuilder
     {
-        return $query->where('require_acceptance', '=', true);
-    }
-
-    public function scopeOrderByCreatedBy($query, $order)
-    {
-        return $query->leftJoin('users as admin_sort', 'categories.created_by', '=', 'admin_sort.id')->select('categories.*')->orderBy('admin_sort.first_name', $order)->orderBy('admin_sort.last_name', $order);
+        return new CategoryQueryBuilder($query);
     }
 }

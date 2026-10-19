@@ -39,7 +39,12 @@ return [
         'success' => 'Die Lizenz wurde erfolgreich gelöscht.',
         'bulk_success' => 'Die ausgewählten Lizenzen wurden erfolgreich gelöscht.',
         'partial_success' => 'Lizenz erfolgreich gelöscht. Siehe weitere Informationen unten. | :count Lizenzen wurden erfolgreich gelöscht. Siehe weitere Informationen unten.',
-        'bulk_checkout_warning' => ':license_name has seats that are currently checked out and cannot be deleted. Please check in all seats before deleting.',
+        'bulk_checkout_warning' => ':license_name hat Lizenzen, die derzeit herausgegeben sind und nicht gelöscht werden können. Bitte nehmen Sie alle Lizenzen zurück bevor Sie sie löschen.',
+    ],
+
+    'delete_with_checkin' => [
+        'bulk_success' => ':count Lizenzen wurden erfolgreich nach Einchecken von :seats Lizenzplätzen gelöscht.',
+        'partial_success' => ':count Lizenzen wurden erfolgreich nach Einchecken von :seats Lizenzplätze gelöscht. Weitere Informationen finden Sie unterhalb.',
     ],
 
     'checkout' => [
@@ -55,6 +60,10 @@ return [
         'error' => 'Lizenz wurde nicht zurückgenommen, bitte versuchen Sie es erneut.',
         'not_reassignable' => 'Platz wurde verwendet',
         'success' => 'Die Lizenz wurde erfolgreich zurückgenommen',
+    ],
+
+    'import' => [
+        'no_free_seats' => 'Lizenz ":license" hat keine freien Lizenz-Plätze. ":target" konnte kein Lizenz-Platz hinzugefügt werden.',
     ],
 
 ];

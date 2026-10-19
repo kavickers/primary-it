@@ -4,14 +4,18 @@ return [
 
     'accepted' => 'Bu öğeyi başarıyla kabul ettiniz.',
     'declined' => 'Bu öğeyi başarıyla reddettiniz.',
+    'accept_signature_write_failed' => 'Kabul imzanız depolama alanına kaydedilemedi. Kabul işlemi kaydedilmedi. Lütfen yöneticinizle iletişime geçin.',
+    'accept_pdf_write_failed' => 'Kabul PDF\'si depolama alanına kaydedilemedi. Kabul işlemi kaydedilmedi. Lütfen yöneticinizle iletişime geçin.',
     'bulk_manager_warn' => 'Kullanıcılarınızın başarıyla güncelleştirildi, ancak kaydedilmedi Yöneticisi giriş Yöneticisi\'ni seçtiğiniz çünkü aynı zamanda düzenlenecek kullanıcı listesinde oldu ve kullanıcıların kendi yöneticisi olmayabilir. Yine, yönetici hariç olmak üzere, kullanıcılarınızı seçiniz.',
     'user_exists' => 'Kullanıcı zaten var!',
     'cannot_delete' => 'Kullanıcı mevcut değil veya kullanıcıyı silme yetkiniz yok.',
     'user_not_found' => 'Kullanıcı mevcut değil veya bunları görüntüleme izniniz yok.',
     'user_login_required' => 'Oturum açma alanı gerekli',
     'user_has_no_assets_assigned' => 'Kullanıcıya zimmetlenmiş bir şey yok.',
+    'nothing_currently_assigned' => 'Şu anda atanmış bir şey yok.',
     'user_password_required' => 'Şifre Gerekli.',
     'insufficient_permissions' => 'Yetersiz izinler.',
+    'auth_fields_denied' => 'Bu kullanıcı için kimlik bilgisi veya etkinleştirme alanlarını değiştirme izniniz yok. İstenen alanlar güncellenmedi: :fields',
     'user_deleted_warning' => 'Bu kullanıcı silindi. Bunları düzenlemek veya onları yeni varlıklar atamak için bu kullanıcı geri yüklemek gerekir.',
     'ldap_not_configured' => 'LDAP entegrasyonu bu yükleme için yapılandırılmamış.',
     'password_resets_sent' => 'Etkinleştirilmiş ve geçerli bir e-posta adresine sahip seçilen kullanıcılara şifre sıfırlama bağlantısı gönderildi.',
@@ -19,6 +23,15 @@ return [
     'password_reset_sent' => ':email! adresine bir şifre sıfırlama bağlantısı gönderildi!',
     'user_has_no_email' => 'Bu kullanıcının profilinde bir e-posta adresi yok.',
     'log_record_not_found' => 'Bu kullanıcı için herhangi bir kayıt bulunamadı.',
+
+    'impersonate' => [
+        'started' => 'Şu anda :name olarak oturum açtınız.',
+        'stopped' => 'Kendi hesabınıza geri döndünüz.',
+        'cannot_impersonate_self' => 'Kendiniz olarak oturum açamazsınız.',
+        'cannot_impersonate_superuser' => 'Başka bir süper kullanıcı olarak oturum açamazsınız.',
+        'target_not_active' => 'Bu kullanıcı devre dışı bırakılmış veya silinmiş; onun hesabıyla oturum açılamaz.',
+        'impersonator_missing' => 'Bu taklit oturumu için orijinal hesap artık mevcut değil. Lütfen yeniden oturum açın.',
+    ],
 
     'success' => [
         'create' => 'Kullanıcı başarıyla oluşturuldu.',
@@ -57,6 +70,7 @@ return [
         'password_ldap' => 'Bu hesabın parolası LDAP / Active Directory tarafından yönetilir. Lütfen şifrenizi değiştirmek için BT departmanınızla iletişime geçin.',
         'multi_company_items_assigned' => 'Bu kullanıcının farklı bir şirkete ait atanmış öğeleri var. Lütfen onları kontrol edin veya şirketini düzenleyin.',
         'no_pending_acceptances' => 'Bu kullanıcının hatırlatma gönderilecek bekleyen bir kabulü yok.',
+        'company_not_permitted' => 'İstenen şirket atamalarından biri veya birkaçı izin verilen şirket kapsamınızın dışında.',
     ],
 
     'deletefile' => [

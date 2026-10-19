@@ -19,8 +19,10 @@ return [
     'warranty' => 'Garantie',
     'not_warranty' => 'keine Garantie',
     'complete' => [
-        'confirm' => 'Are you sure you want to mark this maintenance as complete? This cannot be undone.',
-        'success' => 'Maintenance marked as complete.',
-        'error' => 'There was an issue marking this maintenance as complete. Please try again.',
+        'confirm' => 'Sind Sie sicher, dass Sie diese Wartung als abgeschlossen markieren möchten? Dies kann nicht rückgängig gemacht werden.',
+        'success' => 'Wartung als abgeschlossen markiert.',
+        'error' => 'Beim Abschließen der Wartung gab es einen Fehler. Bitte versuchen Sie es erneut.',
     ],
+    'bulk_delete' => 'Es wurden keine Wartungsaufzeichnungen gelöscht (:skipped übersprungen).| :count Wartungsaufzeichnung gelöscht. (:skipped übersprungen)|:count Wartungsaufzeichnungen gelöscht. (:skipped übersprungen)',
+    'bulk_complete' => 'Es wurden keine Wartungsaufzeichnungen als abgeschlossen markiert (:skipped übersprungen oder bereits abgeschlossen).| :count Wartungsaufzeichnung abgeschlossen. (:skipped übersprungen oder bereits abgeschlossen)|:count Wartungsaufzeichnungen abgeschlossen. (:skipped übersprungen oder beirets abgeschlossen)',
 ];

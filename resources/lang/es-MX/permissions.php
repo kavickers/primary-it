@@ -26,7 +26,7 @@ return [
 
     'import' => [
         'name' => 'Importar CSV',
-        'note' => 'This will allow users to import even if access to users, assets, etc is denied elsewhere.',
+        'note' => 'Esto permitirá a los usuarios importar aunque se niegue el acceso a usuarios, activos, etc en otros lugares.',
     ],
 
     'reports' => [
@@ -36,11 +36,12 @@ return [
 
     'assets' => [
         'name' => 'Activos',
-        'note' => 'Otorga acceso a la sección Activos de la aplicación.',
+        'note' => 'Otorga acceso a la sección Activos de la aplicación. ',
     ],
 
     'assetsview' => [
         'name' => 'Ver activos',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the asset model as well. This is to make it easier to share common documents like user manuals across assets without having to upload them to every asset, and to avoid having to grant the user permission to modify asset files. Users with this permission will also be able to view edit and checkin history.',
     ],
 
     'assetscreate' => [
@@ -71,8 +72,8 @@ return [
     ],
 
     'assetsviewrequestable' => [
-        'name' => 'Ver activos solicitables',
-        'note' => 'Permite al usuario ver activos marcados como solicitables.',
+        'name' => 'View Requestable Items',
+        'note' => 'Allows the user to view items that are marked as requestable.',
     ],
 
     'assetsviewencrypted-custom-fields' => [
@@ -255,6 +256,7 @@ return [
     ],
     'usersview' => [
         'name' => 'Ver usuarios',
+        'note' => 'Note that users with this permission will also be able to see (not modify or delete) files uploaded to the user as well. Users with this permission will also be able to view edit and checkin history.',
     ],
     'userscreate' => [
         'name' => 'Crear Nuevos Usuarios',
@@ -306,7 +308,7 @@ return [
         'name' => 'Ver Departamentos',
     ],
     'departmentscreate' => [
-        'name' => 'Create New Departments',
+        'name' => 'Crear nuevos departamentos',
     ],
     'departmentsedit' => [
         'name' => 'Editar Departamentos',
@@ -344,11 +346,11 @@ return [
         'name' => 'Edit Status Labels',
     ],
     'statuslabelsdelete' => [
-        'name' => 'Delete Status Labels',
+        'name' => 'Eliminar Etiquetas de Estado',
     ],
     'custom-fields' => [
         'name' => 'Campos personalizados',
-        'note' => 'Grants access to the Custom Fields section of the application used by Assets.',
+        'note' => 'Dar acceso a la sección de Campos Personalizados de la aplicación utilizada por los Activos.',
     ],
     'customfieldsview' => [
         'name' => 'Ver Campos Personalizados',
@@ -420,11 +422,11 @@ return [
     ],
     'selfapi' => [
         'name' => 'Administrar las claves del API',
-        'note' => 'Allows users to create, view, and revoke their own API tokens. User tokens will have the same permissions as the user who created them.',
+        'note' => 'Permite a los usuarios crear, ver y revocar sus propios tokens API. Los tokens de usuario tendrán los mismos permisos que el usuario que los creo.',
     ],
     'selfedit-location' => [
         'name' => 'Editar Ubicación',
-        'note' => 'Allows users to edit the location associated with their own user account.',
+        'note' => 'Permite a los usuarios editar la ubicación asociada con su propia cuenta de usuario.',
     ],
     'selfcheckout-assets' => [
         'name' => 'Self Check Out Assets',

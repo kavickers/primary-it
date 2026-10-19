@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Ang mga Pagpapanatili sa Asset', // not used anymore
     'maintenances' => 'Ang mga Pagpapanatili',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'I-edit ang Pagpapanatili sa Asset',
     'delete' => 'I-delete ang Pagpapanatili sa Asset',
     'view' => 'Tingnan ang mga Detalye sa Pagpapanatili ng Asset',

@@ -3,6 +3,7 @@
 return [
     'asset_maintenances' => 'Mahinga Tahua', // not used anymore
     'maintenances' => 'Maintenances',
+    'create' => 'Create Asset Maintenance',
     'edit' => 'Whakatika Tiaki Tahua',
     'delete' => 'Mukua te Whakahaere Taonga',
     'view' => 'Tirohia nga Taipitopito Whakahaere Taonga',

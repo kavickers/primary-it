@@ -21,8 +21,15 @@ return [
         'confirm' => 'Sigurado kaba na gusto mong i-delete ang kategoryang ito?',
         'error' => 'Mayroong isyu sa pag-delete ng kategoryan. Mangyaring subukang muli.',
         'success' => 'Category was deleted successfully.',
-        'bulk_success' => 'Categories were deleted successfully.',
+        'bulk_success' => 'Category deleted successfully.|:count categories were deleted successfully.',
         'partial_success' => 'Category deleted successfully. See additional information below. | :count categories were deleted successfully. See additional information below.',
+    ],
+
+    'bulkedit' => [
+        'warn' => 'You are about to edit the properties of the following category:|You are about to edit the properties of the following :count categories:',
+        'no_selection' => 'You must select at least one category to edit.',
+        'no_changes' => 'Walang nabagong mga field, kaya walang nai-update.',
+        'success' => 'Category successfully updated.|:count categories successfully updated.',
     ],
 
 ];

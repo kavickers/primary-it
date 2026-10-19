@@ -20,10 +20,9 @@
 
         @if ($location->deleted_at!='')
             <div class="col-md-12">
-                <div class="callout callout-warning">
-                    <x-icon type="warning" />
+                <x-callout type="warning" icon="warning" live="assertive">
                     {{ trans('admin/locations/message.deleted_warning') }}
-                </div>
+                </x-callout>
             </div>
         @endif
 
@@ -45,12 +44,20 @@
                   @endcan
 
 
-                  <x-tabs.asset-tab count="{{ $location->assets()->AssetsForShow()->count() }}"/>
+
 
                   @can('view', \App\Models\Asset::class)
 
-                      <x-tabs.nav-item
+                          <x-tabs.nav-item
                               name="assets"
+                              icon_type="assets"
+                              label="{{ trans('admin/locations/message.assigned_assets') }}"
+                              count="{{ $location->assignedAssets()->AssetsForShow()->count() }}"
+                              tooltip="{{ trans('admin/locations/message.assigned_assets') }}"
+                          />
+
+                          <x-tabs.nav-item
+                              name="asset-location"
                               icon="fa-solid fa-house-laptop fa-fw"
                               label="{{ trans('general.assets') }}"
                               count="{{ $location->assets()->AssetsForShow()->count() }}"
@@ -58,22 +65,14 @@
                       />
 
                       <x-tabs.nav-item
-                              name="rtd_assets"
+                          name="rtd-assets"
                               icon="fa-solid fa-house-flag fa-fw"
                               label="{{ trans('admin/hardware/form.default_location') }}"
                               count="{{ $location->rtd_assets()->AssetsForShow()->count() }}"
                               tooltip="{{ trans('admin/hardware/form.default_location') }}"
                       />
 
-                      <x-tabs.nav-item
-                              name="assets_assigned"
-                              icon="fas fa-barcode fa-fw"
-                              label="{{ trans('admin/locations/message.assigned_assets') }}"
-                              count="{{ $location->assignedAssets()->AssetsForShow()->count() }}"
-                              tooltip="{{ trans('admin/locations/message.assigned_assets') }}"
-                      />
-
-                  @endcan
+                      @endcan
 
                   @can('view', \App\Models\Accessory::class)
 
@@ -118,7 +117,7 @@
                   <!-- start users tab pane -->
                   @can('view', \App\Models\User::class)
                       <x-tabs.pane name="users">
-                      <x-table.users :route="route('api.users.index',
+                      <x-table.users name="locationUsers" :route="route('api.users.index',
                         [
                             'status' => e(request('status')),
                             'deleted'=> (request('status')=='deleted') ? 'true' : 'false',
@@ -135,20 +134,20 @@
 
                   <!-- start assets tab pane -->
                   @can('view', \App\Models\Asset::class)
-                      <x-tabs.pane name="assets">
-                          <x-table.assets :table_header="trans('admin/locations/message.current_location')" :route="route('api.assets.index', ['location_id' => $location->id])"/>
-                      </x-tabs.pane>
-                      <!-- end assets tab pane -->
-
                       <!-- start assigned assets tab pane -->
-                      <x-tabs.pane name="assets_assigned">
-                          <x-table.assets :table_header="trans('admin/locations/message.assigned_assets')" :route="route('api.assets.index', ['assigned_to' => $location->id, 'assigned_type' => 'App\Models\Location'])"/>
+                      <x-tabs.pane name="assets">
+                          <x-table.assets name="locationAssignedAssets" :table_header="trans('admin/locations/message.assigned_assets')" :route="route('api.assets.index', ['assigned_to' => $location->id, 'assigned_type' => 'App\Models\Location'])"/>
                       </x-tabs.pane>
                       <!-- end assigned assets tab pane -->
 
+                      <x-tabs.pane name="asset-location">
+                          <x-table.assets name="locationCurrentAssets" :table_header="trans('admin/locations/message.current_location')" :route="route('api.assets.index', ['location_id' => $location->id])"/>
+                      </x-tabs.pane>
+                      <!-- end assets tab pane -->
+
                       <!-- start rtd assets tab pane -->
-                      <x-tabs.pane name="rtd_assets">
-                          <x-table.assets :table_header="trans('admin/hardware/form.default_location')" :route="route('api.assets.index', ['rtd_location_id' => $location->id]) "/>
+                      <x-tabs.pane name="rtd-assets">
+                          <x-table.assets name="locationRtdAssets" :table_header="trans('admin/hardware/form.default_location')" :route="route('api.assets.index', ['rtd_location_id' => $location->id]) "/>
                       </x-tabs.pane>
                   @endcan
                   <!-- end rtd assets tab pane -->
@@ -157,14 +156,14 @@
                   <!-- start accessories tab pane -->
                   @can('view', \App\Models\Accessory::class)
                   <x-tabs.pane name="accessories">
-                      <x-table.accessories :route="route('api.accessories.index', ['location_id' => $location->id]) "/>
+                      <x-table.accessories name="locationAccessories" :route="route('api.accessories.index', ['location_id' => $location->id]) "/>
                   </x-tabs.pane>
                   <!-- end accessories tab pane -->
 
                   <!-- start assigned accessories tab pane -->
                   <x-tabs.pane name="accessories_assigned">
 
-                      <x-table.accessories
+                      <x-table.accessories name="locationAssignedAccessories"
                           :table_header="trans('general.accessories_assigned')"
                           :presenter="\App\Presenters\AccessoryPresenter::assignedDataTableLayoutForObject()"
                           :route="route('api.locations.assigned_accessories', ['location' => $location])  "/>
@@ -177,7 +176,7 @@
                   <!-- start consumables tab pane -->
                   @can('view', \App\Models\Consumable::class)
                   <x-tabs.pane name="consumables">
-                      <x-table.consumables :route="route('api.consumables.index', ['location_id' => $location->id])  "/>
+                      <x-table.consumables name="locationConsumables" :route="route('api.consumables.index', ['location_id' => $location->id])  "/>
                   </x-tabs.pane>
                   @endcan
                   <!-- end consumables tab pane -->
@@ -185,14 +184,14 @@
                   <!-- start components tab pane -->
                   @can('view', \App\Models\Component::class)
                   <x-tabs.pane name="components">
-                      <x-table.components :route="route('api.components.index', ['location_id' => $location->id]) "/>
+                      <x-table.components name="locationComponents" :route="route('api.components.index', ['location_id' => $location->id]) "/>
                   </x-tabs.pane>
                   @endcan
                   <!-- end components tab pane -->
 
                   <!-- start child locations tab pane -->
                   <x-tabs.pane name="child_locations">
-                      <x-table.locations :table_header="trans('general.child_locations')" :route="route('api.locations.index', ['parent_id' => $location->id]) "/>
+                      <x-table.locations name="locationLocations" :table_header="trans('general.child_locations')" :route="route('api.locations.index', ['parent_id' => $location->id]) "/>
                   </x-tabs.pane>
                   <!-- end components tab pane -->
 
@@ -205,7 +204,7 @@
 
                   <!-- start history tab pane -->
                   <x-tabs.pane name="history">
-                      <x-table.history :model="$location" :route="route('api.locations.history', $location)"/>
+                      <x-table.history name="locationHistory" :model="$location" :route="route('api.locations.history', $location)" :hide_fields="['order_number']"/>
                   </x-tabs.pane>
                   <!-- end history tab pane -->
 
@@ -245,7 +244,11 @@
 
 @section('moar_scripts')
     @can('files', $location)
-        @include ('modals.upload-file', ['item_type' => 'locations', 'item_id' => $location->id])
+        <x-modals.upload-file item-type="locations" :item-id="$location->id" />
+    @endcan
+
+    @can('checkout', \App\Models\Accessory::class)
+        <x-modals.adjust-quantity />
     @endcan
 
     @include ('partials.bootstrap-table')

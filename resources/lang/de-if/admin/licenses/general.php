@@ -32,8 +32,8 @@ return [
         ],
 
         'checkin_selected' => [
-            'success' => ':count seat checked in successfully. | :count seats checked in successfully.',
-            'no_seats_selected' => 'No seats were selected.',
+            'success' => ':count Lizenz erfolgreich zurückgenommen. | :count Lizenzen erfolgreich zurückgenommen.',
+            'no_seats_selected' => 'Es wurden keine Lizenzen ausgewählt.',
         ],
 
         'checkout_all' => [
@@ -47,6 +47,11 @@ return [
             'warn_no_avail_users' => 'Nichts zu tun. Es gibt keine Benutzer, denen diese Lizenz noch nicht zugewiesen ist.',
             'log_msg' => 'Herausgegeben über Massen-Herausgeben in Lizenzübersicht',
 
+        ],
+
+        'delete_with_checkin' => [
+            'label' => 'Lizenzen zurücknehmen und löschen',
+            'log_msg' => 'Zurückgenommen via Massenlöschung mit Rücknahme im Lizenzindex',
         ],
     ],
 

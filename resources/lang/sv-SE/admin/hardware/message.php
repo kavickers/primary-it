@@ -2,7 +2,7 @@
 
 return [
 
-    'undeployable' => 'The following assets cannot be deployed and have been removed from checkout: :asset_tags',
+    'undeployable' => 'Följande tillgångar kan inte deployas och har tagits bort från utcheckningen: :asset_tags',
     'does_not_exist' => 'Tillgång existerar inte.',
     'does_not_exist_var' => 'Tillgång med taggen :asset_tag hittades inte.',
     'no_tag' => 'Ingen tillgångstagg angiven.',
@@ -16,13 +16,15 @@ return [
     'create' => [
         'error' => 'Tillgången skapades inte :( Försök igen.',
         'success' => 'Tillgången skapades.',
+        'success_no_checkout' => 'Tillgången har skapats men checkades inte ut eftersom du saknar behörighet att checka ut tillgångar.',
+        'checkout_skipped_no_permission' => 'Tillgången har skapats men checkades inte ut till den begärda mottagaren eftersom du saknar behörighet att checka ut tillgångar.',
         'success_linked' => 'Tillgången med taggen :tag har skapats. <strong><a href=":link" style="color: white;">Klicka här för att visa</a></strong>.',
         'multi_success_linked' => 'Tillgång med taggen :links skapades.|:count tillgångar skapades. :links.',
         'partial_failure' => 'En tillgång kunde inte skapas. Anledning: :failures|:count tillgångar kunde inte skapas. Anledning: :failures',
         'target_not_found' => [
-            'user' => 'The assigned user could not be found.',
-            'asset' => 'The assigned asset could not be found.',
-            'location' => 'The assigned location could not be found.',
+            'user' => 'Den tilldelade användaren kunde inte hittas.',
+            'asset' => 'Den tilldelade tillgången kunde inte hittas.',
+            'location' => 'Den tilldelade platsen kunde inte hittas.',
         ],
     ],
 
@@ -33,6 +35,12 @@ return [
         'nothing_updated' => 'Inga fält valdes. Ingenting uppdaterades.',
         'no_assets_selected' => 'Inga tillgångar valdes. Ingenting uppdaterades.',
         'assets_do_not_exist_or_are_invalid' => 'Valda tillgångar kan inte uppdateras.',
+    ],
+
+    'bulk_update' => [
+        'success' => 'Tillgången har uppdaterats.|:count tillgångar har uppdaterats.',
+        'partial' => ':success tillgång(ar) uppdaterades, :failed misslyckades. Se results-arrayen för detaljer.',
+        'error' => 'Inga tillgångar uppdaterades. Se results-arrayen för detaljer.',
     ],
 
     'restore' => [
@@ -68,15 +76,61 @@ return [
         'file_delete_error' => 'Filen kunde inte raderas',
         'file_missing' => 'Den valda filen saknas',
         'file_already_deleted' => 'Den valda filen har redan tagits bort',
+        'file_missing_on_disk' => 'Filen för denna import finns inte längre på disken. Den kan ha raderats utanför Snipe-IT. Radera detta inlägg och ladda upp filen igen för att försöka på nytt.',
+        'file_empty' => 'Denna fil har inga datarader. Ingenting kan importeras från den.',
+        'already_processing' => 'Denna import bearbetas för närvarande av en annan användare. Vänta tills den är klar innan du försöker igen.',
+        'header_row_missing' => 'Denna fil har ingenigenkänd rubrikrad. Radera detta inlägg och ladda upp filen igen för att försöka på nytt.',
         'header_row_has_malformed_characters' => 'Ett eller flera attribut i rubrikraden innehåller felaktigt formatterade UTF-8-tecken',
         'content_row_has_malformed_characters' => 'Ett eller flera attribut i den första raden av innehållet innehåller felaktigt formatterade UTF-8-tecken',
-        'transliterate_failure' => 'Transliteration from :encoding to UTF-8 failed due to invalid characters in input',
+        'transliterate_failure' => 'Translitterering från :encoding till UTF-8 misslyckades på grund av ogiltiga tecken i inmatningen',
+        'bulk_delete' => [
+            'button' => 'Radera valda (:count)',
+            'confirm_title' => 'Radera valda importfiler?',
+            'confirm_body' => 'Du är på väg att permanent radera :count importfil(er). Detta kan inte ångras.',
+            'confirm_button' => 'Radera',
+            'success' => 'Importfilen har raderats.|:count importfiler har raderats.',
+            'skipped' => ':count fil(er) hoppades över eftersom du inte har behörighet att radera dem.',
+            'select_all' => 'Markera alla filer på denna sida',
+            'select_row' => 'Markera :file för massradering',
+        ],
+        'row_count' => '{0} Inga datarader i denna fil|{1} :count datarad att importera|[2,*] :count datarader att importera',
+        'summary' => [
+            'created' => 'Skapad',
+            'updated' => 'Uppdaterad',
+            'skipped' => 'Hoppades över som duplicerad',
+            'errored' => 'Felaktig',
+            'no_changes' => 'Importen avslutades men inget skapades eller uppdaterades. Varje rad hoppades över, vanligtvis eftersom underliggande poster redan fanns. Kontrollera antalen nedan och justera CSV-filen eller importtypen om det inte var vad du förväntade dig.',
+        ],
+        'type_required' => 'Välj en importtyp innan du fortsätter.',
+        'processing' => 'Bearbetar din import. Vänta tills detta är klart innan du stänger sidan.',
+        'backup_running' => 'Säkerhetskopiering körs före importen. Det kan ta en stund för större filer. Vänta.',
+        'backup_label' => 'Backup före import',
+        'backup_complete' => 'Backup klar',
+        'import_label' => 'Importera',
+        'required_fields_missing' => 'Följande obligatoriska fält är inte mappade: :fields',
+        'history' => [
+            'missing_asset_tag_identity' => '(saknar tillgångstagg)',
+            'missing_asset_tag_message' => 'Rad hoppades över: ingen tillgångstagg angiven.',
+            'asset_not_found_message' => 'En tillgång med denna tagg finns inte. Importera tillgångar först, kör sedan om historikimporten.',
+            'target_not_matched_message' => 'Ingen :target_type matchade ”:name”. För användare kan du ändra matchningsalternativen i steg 1 eller skapa användaren först. För platser måste platsnamnet i CSV-filen exakt matcha en befintlig plats.',
+            'invalid_target_type_message' => 'Måltypen ”:value” känns inte igen. Använd ”user” eller ”location”, eller lämna kolumnen tom för att använda standardvärdet user.',
+        ],
+        'wizard' => [
+            'step_type' => 'Välj typ',
+            'step_map' => 'Mappa fält',
+            'step_preview' => 'Förhandsvisa',
+            'back' => 'Bakåt',
+            'next' => 'Nästa',
+            'preview_button' => 'Förhandsvisa',
+            'process' => 'Bearbeta import',
+            'preview_intro' => 'Förhandsgranskning av de första :count raden/raderna efter att din mappning har tillämpats. Använd knappen Bakåt om du behöver redigera de mappade attributen innan import.',
+        ],
     ],
 
     'delete' => [
         'confirm' => 'Är du säker på att du vill radera den här tillgången?',
         'error' => 'Det gick inte att ta bort tillgången. Var god försök igen.',
-        'assigned_to_error' => '{1}Asset Tag: :asset_tag is currently checked out. Check in this device before deletion.|[2,*]Asset Tags: :asset_tag are currently checked out. Check in these devices before deletion.',
+        'assigned_to_error' => '{1}Tillgångstagg: :asset_tag är för närvarande utcheckad. Checka in denna enhet innan radering.|[2,*]Tillgångstagg: :asset_tag är för närvarande utcheckade. Checka in dessa enheter innan radering.',
         'nothing_updated' => 'Inga tillgångar valdes. Ingenting togs bort.',
         'success' => 'Tillgång raderad.',
     ],
@@ -95,8 +149,14 @@ return [
     ],
 
     'multi-checkin' => [
-        'error' => 'Asset was not checked in, please try again|Assets were not checked in, please try again',
-        'success' => 'Asset checked in successfully.|Assets checked in successfully.',
+        'error' => 'Tillgången kunde inte checkas in, försök igen|Tillgångarna kunde inte checkas in, försök igen',
+        'success' => 'Tillgången har checkats in.|Tillgångarna har checkats in.',
+        'no_assets_selected' => 'Du måste välja minst en tillgång från listan',
+    ],
+
+    'multi-audit' => [
+        'success' => ':count tillgång har inventerats.|:count tillgångar har inventerats.',
+        'partial_error' => ':success tillgång inventerad, :failed misslyckades. Kontrollera felen nedan och försök igen.|:success tillgångar inventerade, :failed misslyckades. Kontrollera felen nedan och försök igen.',
         'no_assets_selected' => 'Du måste välja minst en tillgång från listan',
     ],
 
@@ -105,17 +165,35 @@ return [
         'success' => 'Tillgången har checkats in.',
         'user_does_not_exist' => 'Användaren är ogiltig. Var god försök igen.',
         'already_checked_in' => 'Tillgången är redan incheckad.',
-        'force_checkin_orphaned_success' => 'Invalid assignment cleared successfully.',
-        'force_checkin_not_orphaned' => 'Item is not in an invalid assignment state.',
-        'force_checkin_error' => 'Could not clear invalid assignment.',
+        'force_checkin_orphaned_success' => 'Ogiltig tilldelning har rensats.',
+        'force_checkin_not_orphaned' => 'Objektet är inte i ett tillstånd med ogiltig tilldelning.',
+        'force_checkin_error' => 'Kunde inte rensa ogiltig tilldelning.',
 
     ],
 
     'requests' => [
-        'error' => 'Request was not successful, please try again.',
-        'success' => 'Request successfully submitted.',
-        'canceled' => 'Request successfully canceled.',
+        'error' => 'Begäran misslyckades. Försök igen.',
+        'success' => 'Begäran har skickats in.',
+        'canceled' => 'Begäran har avbrutits.',
         'cancel' => 'Avbryt objektbegäran',
+        'duplicate' => 'Du har redan en aktiv begäran för denna tillgång.',
+        'no_active' => 'Du har ingen aktiv begäran att avbryta för denna tillgång.',
+        'insufficient_stock' => 'Det finns inte tillräckligt med lager för att uppfylla denna begäran. Fyll på lagret först.',
+        'confirm_cancel_by_admin' => "Avbryt begäran från :user om :item?",
+        'no_selection' => 'Inga rader har markerats för bearbetning.',
+        'row_stale' => 'Begäran #:id är inte längre väntande och har hoppat över.',
+        'row_qty_invalid' => 'Begäran #:id har en ogiltig kvantitet och har hoppat över.',
+        'row_user_missing' => 'Begäran #:id har ingen giltig mottagare och har hoppat över.',
+        'row_asset_missing' => 'Begäran #:id har ingen giltig tillgång som mål och har hoppat över.',
+        'row_asset_not_requesters' => 'Begäran #:id hoppade över: den markerade tillgången tillhör inte begäraren.',
+        'row_asset_not_available' => 'Begäran #:id hoppade över: den markerade tillgången är inte en tillgänglig enhet av denna modell.',
+        'row_asset_taken' => 'Begäran #:id hoppade över: den markerade tillgången har redan tilldelats någon annan innan inlämning.',
+        'row_company_mismatch' => 'Begäran #:id hoppade över: :user kan inte ta emot objekt från detta företag.',
+        'row_over_allocated' => 'Begäran #:id hoppade över: det finns inte tillräckligt med lager vid tidpunkten för inlämning.',
+        'no_target_assets_for_user' => ':user har inga tillgångar att installera i.',
+        'no_available_units' => 'Inga tillgängliga enheter av denna modell att dela ut.',
+        'bulk_summary' => 'Uppfyllde :fulfilled av :total begäranden.',
+        'bulk_fulfill_notification_intro' => 'Följande kommer att gälla för varje markerad begäran när den uppfylls:',
     ],
 
 ];
