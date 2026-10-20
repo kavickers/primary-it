@@ -69,6 +69,10 @@ Upstream bugs fixed here (not SQL Server-specific; drop our change if upstream f
 - `app/Http/Controllers/SetupController.php`: `setupMigrate()` also creates the Passport clients when the database has none, not only when the key files are missing.
 - `app/Console/Commands/FixMismatchedAssetsAndLogs.php`: only reads asset checkout logs (it matched consumables etc. with the same id and reassigned the asset).
 
+Branding: the footer in `resources/views/layouts/default.blade.php` shows our
+`general.footer_credit_mssql` (in `resources/lang/en-US/general.php`, so other locales fall
+back to English) instead of `general.footer_credit`, without upstream's social media links.
+
 Upstream tests adjusted for SQL Server: `ActionlogCompanyIdBackfillTest`,
 `PendingAcceptanceQuantityOnCheckinTest`, `ImportAssetsTest` (row order),
 `AdjustQuantityRaceConditionTest` (`updlock`), `StatusLabelColorInjectionTest`,
@@ -144,6 +148,15 @@ Keep the `.bak` so you can reset it between attempts.
   (`composer install --no-dev`) don't have the listener.
 
 ## 3. Merge upstream
+
+`upstream` is a source to pull from only: nothing from this fork is ever
+pushed to grokability/snipe-it. Disable pushing to it in every clone:
+
+```bash
+git remote add upstream https://github.com/grokability/snipe-it.git   # if missing
+git remote set-url --push upstream no_push_to_upstream
+git remote -v    # upstream (push) must show no_push_to_upstream
+```
 
 Upgrades land on `master` as squash commits, which don't record the upstream
 commit as a parent, so Git doesn't know how much of upstream is already

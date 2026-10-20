@@ -13,15 +13,18 @@ supported — the SQL Server support is additive and selected via `DB_CONNECTION
 - **Microsoft ODBC Driver 18 for SQL Server** installed on the host running PHP.
 - A SQL Server instance with **mixed-mode authentication** if you intend to use a SQL login.
 
-On Windows, download the matching thread-safe (TS) `php_sqlsrv`/`php_pdo_sqlsrv` DLLs for
-your PHP version and add to `php.ini`:
+On Windows, download the `php_sqlsrv`/`php_pdo_sqlsrv` DLLs that match your PHP version
+and build: non-thread-safe (NTS) for IIS/FastCGI, thread-safe (TS) for Apache mod_php.
+PHP 8.4 and 8.5 need driver 5.13 or later. Add them to `php.ini`, e.g. for PHP 8.5 on IIS:
 
 ```ini
 extension=sodium
 extension=zip
-extension=sqlsrv
-extension=pdo_sqlsrv
+extension=php_sqlsrv_85_nts_x64.dll
+extension=php_pdo_sqlsrv_85_nts_x64.dll
 ```
+
+For a full IIS setup see [deploying-on-iis.md](deploying-on-iis.md).
 
 > If you change `php.ini`, restart your web server (Apache/Nginx/FPM). FastCGI/mod_php
 > workers cache `php.ini` at startup, so a running server will not pick up newly enabled
@@ -33,10 +36,13 @@ Create a database and a login (run as an administrator, e.g. via `sqlcmd`):
 
 ```sql
 CREATE DATABASE snipeit;
-CREATE LOGIN snipeit WITH PASSWORD = 'a-strong-password';
+GO
+CREATE LOGIN snipeit WITH PASSWORD = 'a-strong-password', DEFAULT_DATABASE = snipeit;
+GO
 USE snipeit;
 CREATE USER snipeit FOR LOGIN snipeit;
 ALTER ROLE db_owner ADD MEMBER snipeit;
+GO
 ```
 
 ## .env configuration
