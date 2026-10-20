@@ -42,6 +42,7 @@ Wiring:
 - `app/Providers/AppServiceProvider.php`: registers `SqlServerConnection` for `sqlsrv` in `register()`.
 - `config/database.php`: the `sqlsrv` connection (port, encryption, `SQLSRV_ATTR_FETCHES_NUMERIC_TYPE`).
 - `config/backup.php`: leaves the database out of backups on SQL Server (no dumper exists).
+- `.env.example`: the database section is SQL Server (`DB_CONNECTION=sqlsrv`, `DB_ENCRYPT`, `DB_TRUST_SERVER_CERTIFICATE`) instead of MySQL. When upstream adds `DB_*` keys there, keep ours and only take the new ones that apply to SQL Server.
 
 MySQL-only SQL in application code, each with a `sqlsrv` branch or a portable rewrite:
 
