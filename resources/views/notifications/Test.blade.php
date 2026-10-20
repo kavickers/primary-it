@@ -5,7 +5,7 @@
 {{ trans('mail.test_mail_text') }}
 
 {{ trans('mail.best_regards') }}
-{{ $snipeSettings->site_name }}
+{{ $snipeSettings->site_name ?? 'Snipe-IT' }}
 @if ($setupCompleted)
 @endcomponent
 @endif

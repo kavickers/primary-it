@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Setup\Ui;
 
+use App\Models\Setting;
 use App\Models\User;
 use Tests\TestCase;
 
@@ -48,6 +49,41 @@ class IndexSetupTest extends TestCase
             ->assertOk();
 
         $this->assertDatabaseCount('oauth_personal_access_clients', 1);
+    }
+
+    public function test_test_email_is_sent_to_the_from_address()
+    {
+        config(['mail.default' => 'array', 'mail.from.address' => 'snipeit@example.com']);
+
+        $this->get(route('setup.mailtest'))
+            ->assertOk()
+            ->assertJson(['status' => 'success']);
+
+        $messages = app('mail.manager')->mailer('array')->getSymfonyTransport()->messages();
+        $this->assertCount(1, $messages);
+        $this->assertSame('snipeit@example.com', $messages[0]->getEnvelope()->getRecipients()[0]->getAddress());
+    }
+
+    public function test_test_email_is_sent_before_settings_exist()
+    {
+        config(['mail.default' => 'array']);
+        Setting::query()->delete();
+        Setting::$_cache = null;
+
+        $this->get(route('setup.mailtest'))
+            ->assertOk()
+            ->assertJson(['status' => 'success']);
+
+        $this->assertCount(1, app('mail.manager')->mailer('array')->getSymfonyTransport()->messages());
+    }
+
+    public function test_test_email_failure_returns_the_error()
+    {
+        config(['mail.default' => 'not-a-mailer']);
+
+        $this->get(route('setup.mailtest'))
+            ->assertStatus(500)
+            ->assertJson(['status' => 'error', 'messages' => 'Mailer [not-a-mailer] is not defined.']);
     }
 
     public function test_create_first_user_page_renders()

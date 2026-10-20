@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -1500,10 +1501,11 @@ class SettingsController extends Controller
     public function ajaxTestEmail(): JsonResponse
     {
         try {
-            (new User)->forceFill([
-                'name' => config('mail.from.name'),
-                'email' => config('mail.from.address'),
-            ])->notify(new MailTest);
+            // On-demand and sent now: the setup page runs this before the users
+            // table exists, and queueing a notification for an unsaved User
+            // re-queries it from the database (and finds nobody to send to).
+            Notification::route('mail', [config('mail.from.address') => config('mail.from.name')])
+                ->notifyNow(new MailTest);
             Log::debug('Attempting to send mail to '.config('mail.from.address'));
 
             return response()->json(Helper::formatStandardApiResponse('success', null, trans('mail_sent.mail_sent')));
@@ -1511,7 +1513,7 @@ class SettingsController extends Controller
             Log::error('Mail sent from '.config('mail.from.address').' with errors '.$e->getMessage());
             Log::debug($e);
 
-            return response()->json(Helper::formatStandardApiResponse('success', null, $e->getMessage()));
+            return response()->json(Helper::formatStandardApiResponse('error', null, $e->getMessage()), 500);
         }
     }
 
