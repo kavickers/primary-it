@@ -1,5 +1,27 @@
 ![snipe-it-by-grok](https://github.com/grokability/snipe-it/assets/197404/b515673b-c7c8-4d9a-80f5-9fa58829a602)
 
+## Snipe-IT for Microsoft SQL Server
+
+This is a fork of [grokability/snipe-it](https://github.com/grokability/snipe-it) that adds **Microsoft SQL Server** support. MySQL and MariaDB still work. See [what the SQL Server support changes](docs/microsoft-sql-server.md) and [deploying on IIS](docs/deploying-on-iis.md).
+
+<!-- upstream-sync:start (update with every upstream merge; see docs/upgrading-from-upstream.md, section 8) -->
+### Upstream sync status
+
+[![Upstream commits not yet merged](https://img.shields.io/github/commits-difference/grokability/snipe-it?base=54e1fda41fe2c37012c0511416545c3def9d831b&head=master&label=upstream%20commits%20not%20yet%20merged)](https://github.com/grokability/snipe-it/compare/54e1fda41fe2c37012c0511416545c3def9d831b...master)
+
+| | |
+| --- | --- |
+| Snipe-IT version | **v8.8.4** plus 35 later commits |
+| Upstream commit | [`54e1fda41f`](https://github.com/grokability/snipe-it/commit/54e1fda41fe2c37012c0511416545c3def9d831b), number **26,771** on upstream `master` |
+| Synced on | 23 November 2026 |
+
+The badge is live: it counts the commits upstream has added since that sync, so `0` means this fork has everything upstream has. New upstream releases are merged by following [upgrading-from-upstream.md](docs/upgrading-from-upstream.md).
+<!-- upstream-sync:end -->
+
+Everything below is upstream's README.
+
+-----
+
 [![Crowdin](https://d322cqt584bo4o.cloudfront.net/snipe-it/localized.svg)](https://crowdin.com/project/snipe-it) [![Docker Pulls](https://img.shields.io/docker/pulls/snipe/snipe-it.svg)](https://hub.docker.com/r/snipe/snipe-it/)  [![Tests in MySQL](https://github.com/grokability/snipe-it/actions/workflows/tests-mysql.yml/badge.svg)](https://github.com/grokability/snipe-it/actions/workflows/tests-mysql.yml)
 [![All Contributors](https://img.shields.io/badge/all_contributors-331-orange.svg?style=flat-square)](#contributing) [![Discord](https://badgen.net/badge/icon/discord?icon=discord&label)](https://discord.gg/yZFtShAcKk) [![Repocharts](https://repocharts.com/badge/github/grokability/snipe-it.svg)](https://repocharts.com/repo/github/grokability/snipe-it/?ref=badge)
 

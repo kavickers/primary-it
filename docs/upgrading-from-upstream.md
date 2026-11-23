@@ -7,13 +7,16 @@ touches SQL, and testing against SQL Server before deploying.
 
 The October 2026 upgrade (v8.6.3 → v8.8.0, about 2,600 upstream commits)
 turned up about 20 SQL Server problems, most of them in new upstream code, so
-budget time for the testing steps, not just the merge.
+budget time for the testing steps, not just the merge. The November 2026
+upgrade (v8.8.0 → v8.8.4 plus 35 commits, 776 upstream commits) was smaller:
+5 merge conflicts, 4 migrations and 4 application files to patch.
 
 | | |
 | --- | --- |
 | Upstream remote | `upstream` → https://github.com/grokability/snipe-it.git (`master` = latest release plus fixes) |
 | Our remote | `origin` → https://github.com/kavickers/primary-it.git |
-| Last merge | upstream `c9a696f31c` (v8.8.0 build 25378 plus 48 fixes), October 2026 |
+| Last merge | upstream `54e1fda41f` (v8.8.4 plus 35 commits, upstream commit number 26,771), 23 November 2026. Also shown in the [README](../README.md) |
+| Merge before that | upstream `c9a696f31c` (v8.8.0 build 25378 plus 48 fixes), October 2026 |
 | Tools | [`docs/upgrade-tools/`](upgrade-tools) |
 
 ## 1. What this fork changes
@@ -48,7 +51,8 @@ MySQL-only SQL in application code, each with a `sqlsrv` branch or a portable re
 
 | File | What |
 | --- | --- |
-| `app/Helpers/Helper.php` | `checkLowInventory()` HAVING on count aliases → `havingAggregateAliases()` |
+| `app/Models/Asset.php` | advanced filters `warranty_expires` (`DATEADD`) and `age` (`DATEDIFF`/`GETDATE()`) |
+| `app/Mcp/Tools/ListLicensesTool.php`, `DeleteLicenseTool.php` | `fully_consumed_only`: `whereDoesntHave('freeSeats')` instead of HAVING on the count alias |
 | `app/Http/Controllers/Api/AssetsController.php` | numeric sort on custom fields: `TRY_CAST(... AS FLOAT)` instead of `col * 1` |
 | `app/Http/Controllers/Api/ReportsController.php` | `reportDateExpr()` for date grouping |
 | `app/Http/Controllers/AssetModelsController.php`, `SettingsController.php` | `DATEADD` instead of `DATE_ADD(... INTERVAL ...)` |
@@ -59,16 +63,32 @@ MySQL-only SQL in application code, each with a `sqlsrv` branch or a portable re
 | `app/Console/Commands/DedupeAssets.php` | `havingRaw('COUNT(*) > 1')` |
 | `database/seeders/DatabaseSeeder.php` | foreign key toggling per driver |
 
+`app/Helpers/Helper.php` is no longer patched: since v8.8.4 upstream's
+`checkLowInventory()` filters through a derived table, which SQL Server
+accepts. `havingAggregateAliases()` (in `InlinesAggregateAliases`) has no
+callers left but is kept for the next HAVING on a count alias.
+
+The alias closures in the `*QueryBuilder` classes must build each count the
+same way the matching API controller does. Upstream changed the consumables
+count from `users` to `consumableAssignments` in v8.8.4 and the builder had to
+follow; re-check them when a controller's `withCount()` calls change.
+
 Migrations with SQL Server branches: `2013_11_21_024531`, `2015_09_22_003413`,
 `2015_10_22_003314`, `2015_10_23_182625`, `2021_04_14_180125`, `2022_04_05_135340`,
 `2023_07_13_052204`, `2025_03_06_152922`, `2026_04_20_200000`, `2026_05_19_000001`,
-`2026_10_15_175207`, `2026_10_16_120000`. Upstream rarely edits old migrations, but if it does,
+`2026_10_15_175207`, `2026_10_16_120000`, `2026_10_19_120000`, `2026_10_19_120100`,
+`2026_11_03_212634`, `2026_11_10_164924`. Upstream rarely edits old migrations, but if it does,
 re-apply our branch.
+
+`2026_11_10_164924` (Passport 13: OAuth client ids become UUIDs) is the one to
+remember: upstream converts in place on MySQL only, so our `upSqlServer()` does
+the same for SQL Server and keeps existing API keys working.
 
 Upstream bugs fixed here (not SQL Server-specific; drop our change if upstream fixes it):
 
-- `app/Http/Controllers/SetupController.php`: `setupMigrate()` also creates the Passport clients when the database has none, not only when the key files are missing.
+- `app/Http/Controllers/SetupController.php`: `setupMigrate()` also creates the Passport clients when the database has none, not only when the key files are missing. Since Passport 13 (v8.8.4) "has none" means no `oauth_clients` row with `personal_access_client` set; `oauth_personal_access_clients` is no longer written.
 - `app/Console/Commands/FixMismatchedAssetsAndLogs.php`: only reads asset checkout logs (it matched consumables etc. with the same id and reassigned the asset).
+- `app/Models/Asset.php`: the `warranty_expires` filter accepts an open-ended `2026-01-01..` range (it read a regex group that isn't there and returned a 500).
 
 Branding: the footer in `resources/views/layouts/default.blade.php` shows our
 `general.footer_credit_mssql` (in `resources/lang/en-US/general.php`, so other locales fall
@@ -77,7 +97,9 @@ back to English) instead of `general.footer_credit`, without upstream's social m
 Upstream tests adjusted for SQL Server: `ActionlogCompanyIdBackfillTest`,
 `PendingAcceptanceQuantityOnCheckinTest`, `ImportAssetsTest` (row order),
 `AdjustQuantityRaceConditionTest` (`updlock`), `StatusLabelColorInjectionTest`,
-`ExtraFieldMappingTest`, `Unit/AssetModelTest`, `Setup/Ui/IndexSetupTest`.
+`ExtraFieldMappingTest` (two tests compare a date column with `'not-a-date'`),
+`Unit/AssetModelTest`, `Unit/AssetTest` (matches `update [settings]`),
+`Setup/Ui/IndexSetupTest`.
 
 To regenerate this list after a merge (compare against the upstream commit you merged):
 
@@ -148,6 +170,57 @@ Keep the `.bak` so you can reset it between attempts.
   migrations, or `git checkout` the model files afterwards. Production installs
   (`composer install --no-dev`) don't have the listener.
 
+### Without Docker: XAMPP's PHP and a local SQL Server
+
+The November 2026 upgrade was tested this way, on a Windows machine with
+XAMPP (PHP 8.5 with `sqlsrv` / `pdo_sqlsrv`, and `composer.phar` in
+`<xampp>/php`) and a local SQL Server default instance. Commands are for Git
+Bash, run from the repo.
+
+XAMPP's `php.ini` doesn't load `gd`, `ldap` or `sodium`, which Composer and the
+tests need. Load them from an extra ini directory instead of editing `php.ini`:
+
+```bash
+mkdir -p ~/snipeit-phpini
+printf 'extension=gd\nextension=ldap\nextension=sodium\nmemory_limit=2G\n' > ~/snipeit-phpini/snipeit.ini
+export PHP_INI_SCAN_DIR="$(cygpath -w ~/snipeit-phpini)"
+PHP=/path/to/xampp/php/php.exe
+export OPENSSL_CONF="$(cygpath -w "$(dirname "$PHP")/extras/ssl/openssl.cnf")"   # tests that generate keys need it
+"$PHP" "$(dirname "$PHP")/composer.phar" install     # GitHub sometimes answers 504; run it again
+```
+
+Create the test database (`sqlcmd -S localhost -E -C -Q "CREATE DATABASE snipeit_test"`)
+and a `.env.testing` (gitignored) from `.env.testing.example` with:
+
+```ini
+DB_CONNECTION=sqlsrv
+DB_HOST=localhost
+DB_PORT=0
+DB_DATABASE=snipeit_test
+DB_USERNAME=
+DB_PASSWORD=
+DB_ENCRYPT=yes
+DB_TRUST_SERVER_CERTIFICATE=true
+```
+
+An empty username and password means Windows authentication. `DB_PORT=0` keeps
+the port out of the connection string so the driver uses shared memory, which
+is needed when TCP/IP is disabled on the instance; with TCP/IP enabled, use
+`DB_PORT=1433`.
+
+Then the commands in sections 5 and 6 become `"$PHP" artisan ... --env=testing`
+in place of `dphp -e ... -- php artisan ...`, for example:
+
+```bash
+"$PHP" artisan migrate:fresh --force --env=testing
+"$PHP" artisan test --parallel --processes=4 --recreate-databases --log-junit ../snipeit-results/junit.xml
+```
+
+To use another database for one command, set `DB_DATABASE=<name>` in the
+environment; it takes precedence over `.env.testing`. The parallel run creates
+and drops its own `snipeit_test_test_<n>` databases. Never point any of this at
+a database you want to keep: the tests and `migrate:fresh` drop every table.
+
 ## 3. Merge upstream
 
 `upstream` is a source to pull from only: nothing from this fork is ever
@@ -159,9 +232,16 @@ git remote set-url --push upstream no_push_to_upstream
 git remote -v    # upstream (push) must show no_push_to_upstream
 ```
 
-Upgrades land on `master` as squash commits, which don't record the upstream
-commit as a parent, so Git doesn't know how much of upstream is already
-merged. Tell it, once per clone, before merging (local only, nothing is pushed):
+The November 2026 upgrade is on `master` as a real merge commit ("Merge
+upstream Snipe-IT master"), so Git knows everything up to upstream
+`54e1fda41f` is already merged and `git merge upstream/master` just works.
+Keep it that way: bring the upgrade branch into `master` with a fast-forward
+or `git merge --no-ff`, never a squash, and skip the graft below.
+
+The graft is only for a squashed upgrade, as October 2026 was. A squash
+commit doesn't record the upstream commit as a parent, so Git doesn't know how
+much of upstream is already merged. If the last upgrade on `master` is a
+squash, tell Git, once per clone, before merging (local only, nothing is pushed):
 
 ```bash
 # <squash commit> = the "Upgrade to Snipe-IT ..." commit on master
@@ -266,8 +346,9 @@ re-applying it after a rollback fails on every database because upstream's
 
 ## 6. Run the test suite on SQL Server
 
-About 5,300 tests; ~30 minutes with 3 processes. Run it detached and read the
-results when it finishes:
+About 7,100 tests as of v8.8.4 (5,300 in v8.8.0); ~30 minutes in Docker with 3
+processes, ~25 minutes with XAMPP's PHP and 4 processes. Run it detached and
+read the results when it finishes:
 
 ```bash
 mkdir -p ../snipeit-results
@@ -292,13 +373,31 @@ python docs/upgrade-tools/junit-failures.py ../snipeit-results/junit.xml --class
 dphp -e DB_CONNECTION=sqlite_testing -- vendor/bin/phpunit --filter "$(cat ../snipeit-results/failing.txt)"
 ```
 
-Expected failures as of v8.8.0 (not bugs in this fork):
+Expected failures as of v8.8.4 (not bugs in this fork):
 
 - `Unit/DatabaseSslConfigurationTest` (5 tests): needs the `pdo_mysql` extension, which the test image doesn't have.
 - `Assets/Api/AssetHistoryTest::test_encrypted_custom_field_values_are_masked_for_users_without_encrypted_field_permission`:
   passes alone; in a full run a function-level `static` cache in `ActionlogsTransformer`
   holds custom fields from an earlier test. SQL Server never reuses identity
   values after a rollback, which exposes it.
+- Only when running on Windows without Docker (they fail the same way on
+  SQLite there, and come from Windows paths and temp file names, not the
+  database): `Console/OptimizeTest::test_optimize_succeeds`,
+  `Unit/Helpers/StorageHelperTest::test_readable_path_preserves_missing_extension_on_non_local_driver`,
+  `Authentication/PassportKeysTest::test_application_uses_separate_test_keys`,
+  `Uploads/Base64TempFileLeakTest::test_valid_data_uri_still_produces_a_tempfile_backed_upload`,
+  and two sheet-label tests in `Settings/CustomLabelCrudTest`.
+- Also on Windows: about 90 errors reading `openssl_pkey_export(): Cannot get
+  key` (OIDC, Apple Business Manager and Google Workspace tests) mean PHP can't
+  find `openssl.cnf`. Set `OPENSSL_CONF` to `<xampp>\php\extras\ssl\openssl.cnf`
+  before running and they pass.
+
+Known gap, not covered by a test: the numeric range filters (`gt:` / `lt:`)
+bind their bound as a string, so a decimal such as `1.5` typed into a filter on
+an integer column or a count (quantity, seats, checkouts, age) fails on SQL
+Server with "Conversion failed" where MySQL coerces it. Whole numbers and
+decimal columns such as purchase cost work. The fix, if it ever matters, is
+upstream's own pattern in `Asset.php`: `DB::raw((float) $bound)`.
 
 Add tests for any compatibility fix you make (`tests/Feature/SqlServer/`,
 `tests/Unit/SqlServer*`), and run Pint on changed files:
@@ -378,6 +477,20 @@ Known upstream errors in both passes as of v8.8.0 (fail on MySQL too):
 `model_number`.
 
 ## 8. Commit, deploy
+
+Update the sync status people see on GitHub: the block between the
+`upstream-sync` markers at the top of [`README.md`](../README.md), and the
+"Last merge" row at the top of this file. The values come from:
+
+```bash
+git rev-parse upstream/master              # full hash: the commit link, the compare link and the badge's base= parameter
+git describe --tags upstream/master        # version plus commits since the tag, e.g. 8.8.4-35-g54e1fda41f
+git rev-list --count upstream/master       # upstream commit number
+```
+
+The badge asks GitHub how many commits upstream `master` has that the `base=`
+commit doesn't, so it reads 0 right after a merge and counts up as upstream
+moves on. It only works if `base=` is the upstream commit that was merged.
 
 ```bash
 git add -A && git status        # check nothing generated slipped in (_ide_helper_models.php, public/_ide_helper*, storage/)
