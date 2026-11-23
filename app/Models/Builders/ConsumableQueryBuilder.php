@@ -23,7 +23,7 @@ class ConsumableQueryBuilder extends Builder
     private static function consumablesUsersCountAlias(): array
     {
         return [
-            'consumables_users_count' => fn ($query) => $query->withCount('users as consumables_users_count'),
+            'consumables_users_count' => fn ($query) => $query->withCount('consumableAssignments as consumables_users_count'),
         ];
     }
 

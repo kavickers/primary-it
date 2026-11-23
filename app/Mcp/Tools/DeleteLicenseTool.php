@@ -261,7 +261,9 @@ class DeleteLicenseTool extends Tool
         }
 
         if ($request->boolean('fully_consumed_only')) {
-            $query->having('free_seats_count', '=', 0);
+            // Not a HAVING on the free_seats_count alias: SQL Server can't see
+            // SELECT aliases there.
+            $query->whereDoesntHave('freeSeats');
         }
 
         if ($request->filled('created_before')) {

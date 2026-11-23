@@ -715,12 +715,17 @@ class Asset extends Depreciable implements HasCustomFields, Importable
                 return null;
             }
             $start = $m[1] !== '' ? $m[1] : null;
-            $end = $m[2] !== '' ? $m[2] : null;
+            // preg_match() leaves a trailing unmatched group out of $m, so an
+            // open-ended "2026-01-01.." range has no $m[2].
+            $end = ($m[2] ?? '') !== '' ? $m[2] : null;
             if ($start === null && $end === null) {
                 return null;
             }
 
-            $expr = 'DATE_ADD(assets.purchase_date, INTERVAL assets.warranty_months MONTH)';
+            // SQL Server has DATEADD(datepart, number, date) instead of DATE_ADD(date, INTERVAL n unit).
+            $expr = DB::getDriverName() === 'sqlsrv'
+                ? 'DATEADD(MONTH, assets.warranty_months, assets.purchase_date)'
+                : 'DATE_ADD(assets.purchase_date, INTERVAL assets.warranty_months MONTH)';
             $outerBoolean = $boolean === 'or' ? 'orWhere' : 'where';
             $query->{$outerBoolean}(function ($nested) use ($expr, $start, $end) {
                 if ($start !== null && $end !== null) {
@@ -804,7 +809,10 @@ class Asset extends Depreciable implements HasCustomFields, Importable
             }
             [$gt, $lt] = $bounds;
 
-            $expr = 'TIMESTAMPDIFF(DAY, assets.purchase_date, NOW())';
+            // SQL Server has DATEDIFF(datepart, start, end) instead of TIMESTAMPDIFF() and NOW().
+            $expr = DB::getDriverName() === 'sqlsrv'
+                ? 'DATEDIFF(DAY, assets.purchase_date, GETDATE())'
+                : 'TIMESTAMPDIFF(DAY, assets.purchase_date, NOW())';
             $outerBoolean = $boolean === 'or' ? 'orWhere' : 'where';
             $query->{$outerBoolean}(function ($nested) use ($expr, $gt, $lt) {
                 if ($gt !== null) {

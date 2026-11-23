@@ -108,9 +108,9 @@ class ListLicensesTool extends Tool
         }
 
         if ($request->boolean('fully_consumed_only')) {
-            // Licenses with zero free seats remaining. Uses a HAVING on the
-            // free_seats_count that was already withCount'd above.
-            $licenses->having('free_seats_count', '=', 0);
+            // Licenses with zero free seats remaining. Not a HAVING on the
+            // free_seats_count alias: SQL Server can't see SELECT aliases there.
+            $licenses->whereDoesntHave('freeSeats');
         }
 
         if ($request->filled('created_before')) {

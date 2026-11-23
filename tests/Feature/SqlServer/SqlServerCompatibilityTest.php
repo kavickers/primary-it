@@ -2,11 +2,18 @@
 
 namespace Tests\Feature\SqlServer;
 
+use App\Mcp\Tools\DeleteLicenseTool;
+use App\Mcp\Tools\ListLicensesTool;
 use App\Models\Asset;
+use App\Models\Company;
+use App\Models\Consumable;
+use App\Models\License;
+use App\Models\LicenseSeat;
 use App\Models\Location;
 use App\Models\ReportTemplate;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Laravel\Mcp\Request;
 use Tests\TestCase;
 
 /**
@@ -91,5 +98,59 @@ class SqlServerCompatibilityTest extends TestCase
         $this->settings->set(['digit_separator' => '1.234,56']);
 
         $this->assertSame('1.234,56', DB::table('settings')->value('digit_separator'));
+    }
+
+    public function test_assets_can_be_filtered_by_warranty_expiry_and_age()
+    {
+        $inWarranty = Asset::factory()->create(['purchase_date' => now()->subMonths(6)->toDateString(), 'warranty_months' => 12]);
+        $outOfWarranty = Asset::factory()->create(['purchase_date' => now()->subMonths(30)->toDateString(), 'warranty_months' => 12]);
+
+        $filteredIds = fn (array $filter) => collect(
+            $this->actingAsForApi(User::factory()->superuser()->create())
+                ->getJson(route('api.assets.index', ['filter' => $filter, 'limit' => 100]))
+                ->assertOk()
+                ->json('rows')
+        )->pluck('id')->all();
+
+        $stillCovered = $filteredIds(['warranty_expires' => now()->toDateString().'..']);
+        $this->assertContains($inWarranty->id, $stillCovered);
+        $this->assertNotContains($outOfWarranty->id, $stillCovered);
+
+        $olderThanAYear = $filteredIds(['age' => 'gt:365']);
+        $this->assertContains($outOfWarranty->id, $olderThanAYear);
+        $this->assertNotContains($inWarranty->id, $olderThanAYear);
+    }
+
+    public function test_mcp_license_tools_can_select_fully_consumed_licenses()
+    {
+        $this->actingAs(User::factory()->superuser()->create());
+        $consumed = License::factory()->create(['seats' => 1]);
+        $available = License::factory()->create(['seats' => 1]);
+        $this->assertSame(1, LicenseSeat::where('license_id', $consumed->id)->update(['assigned_to' => User::factory()->create()->id]));
+
+        $listed = (new ListLicensesTool)->handle(new Request(['fully_consumed_only' => true, 'limit' => 100]))->getStructuredContent();
+        $this->assertSame([$consumed->id], array_column($listed['licenses'], 'id'));
+
+        $preview = (new DeleteLicenseTool)->handle(new Request(['fully_consumed_only' => true, 'dry_run' => true]))->getStructuredContent();
+        $this->assertSame(1, $preview['total_matched']);
+        $this->assertNotNull(License::find($available->id));
+    }
+
+    public function test_consumables_sort_by_remaining_counts_checkouts_the_viewer_cannot_see()
+    {
+        $this->settings->enableMultipleFullCompanySupport();
+        [$viewerCompany, $otherCompany] = Company::factory()->count(2)->create();
+        $outsider = User::factory()->forCompany($otherCompany)->create();
+
+        $oneLeft = Consumable::factory()->for($viewerCompany)
+            ->checkedOutToUser($outsider)->checkedOutToUser($outsider)
+            ->create(['qty' => 3]);
+        $twoLeft = Consumable::factory()->for($viewerCompany)->create(['qty' => 2]);
+
+        $this->actingAsForApi(User::factory()->viewConsumables()->forCompany($viewerCompany)->create())
+            ->getJson(route('api.consumables.index', ['sort' => 'remaining', 'order' => 'asc']))
+            ->assertOk()
+            ->assertJsonPath('rows.0.id', $oneLeft->id)
+            ->assertJsonPath('rows.1.id', $twoLeft->id);
     }
 }
