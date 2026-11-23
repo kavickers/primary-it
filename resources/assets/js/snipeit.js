@@ -409,14 +409,24 @@ $(function () {
                 options.minimumResultsForSearch = minResults === 'Infinity' ? Infinity : minResults;
             }
             // Any select2 that lives inside a Bootstrap 3 modal has to be
-            // initialized with dropdownParent set to the modal, or the
-            // search input gets appended to <body> where Bootstrap 3's
-            // modal enforceFocus handler steals focus away from it. See
-            // the same fix on initLivewireSelect2 below for the full
-            // failure-mode explanation.
+            // initialized with dropdownParent set to an element INSIDE the
+            // modal, or the search input gets appended to <body> where
+            // Bootstrap 3's modal enforceFocus handler steals focus away
+            // from it. See the same fix on initLivewireSelect2 below for
+            // the full failure-mode explanation.
+            //
+            // Prefer .modal-content over the outer .modal element. In BS3
+            // the modal itself has overflow-y: auto and .modal-dialog
+            // scrolls inside it; attaching the dropdown to .modal parks
+            // it at absolute coords in the modal's coordinate space, so
+            // once the user scrolls the dialog the dropdown visually
+            // detaches from its button. .modal-content lives inside
+            // .modal-dialog, so it scrolls with the content and the
+            // dropdown stays glued to the button (#20125).
             var $modal = $obj.closest('.modal');
             if ($modal.length) {
-                options.dropdownParent = $modal;
+                var $modalContent = $modal.find('.modal-content').first();
+                options.dropdownParent = $modalContent.length ? $modalContent : $modal;
             }
             $obj.select2(options);
         });
@@ -430,7 +440,12 @@ $(function () {
         // Same modal-detection as the plain select2 init above: scope the
         // dropdown panel to any enclosing Bootstrap 3 modal so its search
         // input doesn't get its focus stolen by the modal's enforceFocus.
+        // Prefer .modal-content so the dropdown scrolls with the dialog
+        // rather than parking at the modal's coordinate-space absolute
+        // position (#20125).
         var $modal = link.closest('.modal');
+        var $modalContent = $modal.find('.modal-content').first();
+        var $ajaxDropdownParent = $modalContent.length ? $modalContent : ($modal.length ? $modal : $(document.body));
 
         link.select2({
 
@@ -440,7 +455,7 @@ $(function () {
              */
             placeholder: '',
             allowClear: true,
-            dropdownParent: $modal.length ? $modal : $(document.body),
+            dropdownParent: $ajaxDropdownParent,
             language: $('meta[name="language"]').attr('content'),
             dir: $('meta[name="language-direction"]').attr('content'),
             
@@ -746,38 +761,29 @@ $(function () {
         var link = $(item);
         var endpoint = link.data('endpoint');
         var $modal = link.closest('.modal');
+        // Prefer .modal-content so the dropdown scrolls with the dialog
+        // instead of parking at the modal's absolute-coord position
+        // (#20125).
+        var $checkboxesModalContent = $modal.find('.modal-content').first();
+        var $checkboxesDropdownParent = $checkboxesModalContent.length ? $checkboxesModalContent : ($modal.length ? $modal : $(document.body));
         var placeholder = link.data('placeholder') || '';
         var countLabel = link.data('count-label') || '{n} selected';
 
-        link.select2({
+        // AJAX pickers reach a selectlist endpoint for paginated results.
+        // Static pickers (no data-endpoint) read from the <option> tags
+        // already in the DOM, same as a plain multi-select. The two
+        // modes share the checkbox templateResult, the "N selected"
+        // templateSelection, the badge strip, and the dropdown-stays-
+        // open-on-tick behavior. Only the data source differs.
+        var hasEndpoint = typeof endpoint === 'string' && endpoint.length > 0;
+
+        var select2Options = {
             placeholder: placeholder,
             allowClear: false,
             closeOnSelect: false,
-            dropdownParent: $modal.length ? $modal : $(document.body),
+            dropdownParent: $checkboxesDropdownParent,
             language: $('meta[name="language"]').attr('content'),
             dir: $('meta[name="language-direction"]').attr('content'),
-            ajax: {
-                url: baseUrl + 'api/v1/' + endpoint + '/selectlist',
-                dataType: 'json',
-                delay: 250,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
-                },
-                data: function (params) {
-                    return {
-                        search: params.term,
-                        page: params.page || 1,
-                        companyId: link.data('company-ids') || link.data('company-id'),
-                        statusType: link.data('asset-status-type'),
-                        excludeId: link.data('exclude-id'),
-                        excludeIds: link.data('exclude-ids'),
-                        assignedTo: link.data('assigned-to'),
-                        onlyTopLevel: link.data('only-top-level'),
-                    };
-                },
-                cache: true,
-            },
             templateResult: function (data) {
                 // "Searching..." / "Loading..." rows have no id and must
                 // render as plain text so select2's placeholder states
@@ -786,10 +792,22 @@ $(function () {
                     return data.text;
                 }
                 var isSelected = link.find('option[value="' + $.escapeSelector(String(data.id)) + '"]').prop('selected');
-                // formatDatalistSafe builds the image / tag-color + text
-                // markup every other picker uses. Wrap it with a leading
-                // checkbox. data-item-id lets later select2:select /
-                // select2:unselect handlers find this row by option id.
+                // Pre-fill data.icon from the <option data-icon="..."> so
+                // formatDatalistSafe can render it. Static (non-ajax)
+                // pickers rely on this since there's no server payload
+                // carrying an icon class. Ajax rows can also set an
+                // icon directly on the server response.
+                if (!data.icon && data.element) {
+                    var optionIcon = $(data.element).data('icon');
+                    if (optionIcon) {
+                        data.icon = optionIcon;
+                    }
+                }
+                // formatDatalistSafe builds the image / tag-color / icon
+                // + text markup every other picker uses. Wrap it with a
+                // leading checkbox. data-item-id lets later
+                // select2:select / select2:unselect handlers find this
+                // row by option id.
                 var $inner = formatDatalistSafe(data);
                 var $row = $(
                     '<span class="js-select2-checkboxes-row">' +
@@ -817,7 +835,42 @@ $(function () {
                 }
                 return countLabel.replace('{n}', count);
             },
-        });
+        };
+
+        if (hasEndpoint) {
+            select2Options.ajax = {
+                url: baseUrl + 'api/v1/' + endpoint + '/selectlist',
+                dataType: 'json',
+                delay: 250,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                },
+                data: function (params) {
+                    return {
+                        search: params.term,
+                        page: params.page || 1,
+                        companyId: link.data('company-ids') || link.data('company-id'),
+                        statusType: link.data('asset-status-type'),
+                        excludeId: link.data('exclude-id'),
+                        excludeIds: link.data('exclude-ids'),
+                        assignedTo: link.data('assigned-to'),
+                        onlyTopLevel: link.data('only-top-level'),
+                        // Opt-in "no value"/id="null" row - mostly for advanced
+                        // search filters for now
+                        includeNull: link.data('include-null'),
+                    };
+                },
+                cache: true,
+            };
+        } else {
+            // Static mode disables select2's search field. Enum-backed
+            // pickers (item_type, action_type, etc.) have small option
+            // sets where scanning the full list is faster than typing.
+            select2Options.minimumResultsForSearch = Infinity;
+        }
+
+        link.select2(select2Options);
 
         // Checkbox-multiselect looks weird with select2's default tag
         // pills under the input: the collapsed "N selected" label is
@@ -830,8 +883,19 @@ $(function () {
         // see WHICH items are selected without opening the dropdown.
         // Each badge carries an X button that unselects the matching
         // option in-place.
+        //
+        // data-badges-container redirects the strip into a shared
+        // container selector, so multiple widgets can share one
+        // combined badge row (used by the activity report toolbar).
+        // Default is per-widget placement right after the control.
         var $badges = $('<div class="js-select2-checkboxes-badges" aria-live="polite"></div>');
-        link.after($badges);
+        var sharedBadgesContainer = link.data('badges-container');
+        if (sharedBadgesContainer && $(sharedBadgesContainer).length) {
+            $badges.addClass('js-select2-checkboxes-badges-shared');
+            $(sharedBadgesContainer).append($badges);
+        } else {
+            link.after($badges);
+        }
 
         // Cap the badge strip so a Select-All against hundreds of
         // options doesn't fill the viewport. First N render in full,
@@ -1004,20 +1068,50 @@ $(function () {
                 var $clearSearch = $('<button type="button" class="js-select2-checkboxes-search-clear" aria-label="Clear search">&times;</button>');
                 $search.after($clearSearch);
 
+                // Re-resolve the search field each call rather than
+                // capturing it once at select2:open time. On multi-
+                // select pickers the inline .select2-search__field
+                // sits inside a .select2-search--inline wrapper whose
+                // width tracks the typed text, and select2 can
+                // re-render that subtree as text changes. A closure-
+                // captured jQuery reference then points at a detached
+                // input that no longer has select2's live keyup
+                // listener bound, so .val('').trigger('keyup') fires
+                // events into the void and the dropdown never re-
+                // queries. Reading it fresh keeps the handler bound
+                // to whichever node is live right now.
+                function liveSearchField() {
+                    var $live = $dropdown.find('.select2-search__field');
+                    if ($live.length) {
+                        return $live;
+                    }
+                    return link.data('select2').$selection.find('.select2-search__field');
+                }
                 function toggleClearSearch() {
-                    var value = $search.val();
+                    var value = liveSearchField().val();
                     $searchContainer.toggleClass('has-content', typeof value === 'string' && value.length > 0);
                 }
                 toggleClearSearch();
-                $search.on('input', toggleClearSearch);
-                $clearSearch.on('mousedown', function (e) {
-                    // mousedown rather than click so this fires before
-                    // select2's own result-click handling swallows the
-                    // event.
+                // Delegate the input listener on the persistent
+                // container instead of the field itself, so select2
+                // re-renders of the inline search field don't lose
+                // the has-content toggle.
+                $searchContainer.on('input', '.select2-search__field', toggleClearSearch);
+                $clearSearch.on('mousedown click', function (e) {
+                    // mousedown rather than click alone so this fires
+                    // before select2's own result-click handling
+                    // swallows the event (single-select case, where
+                    // the × sits inside the dropdown). Bind click too
+                    // so the subsequent click event is also consumed
+                    // on multi-select pickers where the × lives in
+                    // the selection control and select2's own
+                    // selection-mousedown would otherwise toggle the
+                    // dropdown.
                     e.preventDefault();
                     e.stopPropagation();
-                    $search.val('').trigger('input').trigger('keyup');
-                    $search.focus();
+                    var $live = liveSearchField();
+                    $live.val('').trigger('input').trigger('keyup');
+                    $live.focus();
                 });
             }
 
@@ -1026,8 +1120,8 @@ $(function () {
             }
             var $actions = $(
                 '<div class="js-select2-checkboxes-actions">' +
-                '<button type="button" class="btn btn-xs btn-default js-select2-checkboxes-selectall"></button> ' +
-                '<button type="button" class="btn btn-xs btn-default js-select2-checkboxes-clear"></button>' +
+                '<button type="button" class="btn btn-xs btn-theme js-select2-checkboxes-selectall"></button> ' +
+                '<button type="button" class="btn btn-xs btn-theme js-select2-checkboxes-clear"></button>' +
                 '</div>',
             );
             $actions.find('.js-select2-checkboxes-selectall').text(link.data('select-all-label') || 'Select all');
@@ -1036,7 +1130,35 @@ $(function () {
 
             $actions.on('click', '.js-select2-checkboxes-selectall', function (e) {
                 e.preventDefault();
+                if (! hasEndpoint) {
+                    // Static mode: flip every existing <option> on. No
+                    // AJAX round-trip needed. Honors any server-side
+                    // disabled rows via the matching DOM attribute.
+                    link.find('option').each(function () {
+                        var $opt = $(this);
+                        if ($opt.prop('disabled')) {
+                            return;
+                        }
+                        $opt.prop('selected', true);
+                        flipTickFor($opt.val(), true);
+                    });
+                    link.trigger('change');
+                    renderBadges();
+                    return;
+                }
+                // select2 puts the search field in different places
+                // depending on single- vs multi-select. For multi (which
+                // every advanced-filter widget is) the search input
+                // lives inline in the selection control, NOT in the
+                // dropdown. Reading it from $dropdown alone misses the
+                // typed term and posts search='' to the server, which
+                // then returns every row and makes Select All select
+                // things outside the operator's filter. Mirror the two-
+                // location probe earlier in this handler (lines ~1026).
                 var $search = $dropdown.find('.select2-search__field');
+                if (! $search.length) {
+                    $search = link.data('select2').$selection.find('.select2-search__field');
+                }
                 var searchTerm = $search.val() || '';
                 var payload = {
                     all: 1,
@@ -1114,8 +1236,12 @@ $(function () {
 		var value = searchElement.val();
 		return value;
 	}
-	
-	$(".select2-hidden-accessible").on('select2:selecting', function (e) {
+
+    // Force-select-on-close is for single-value pickers where the user
+    // types exactly what they want and clicks out to commit it. Checkbox
+    // multi-select pickers (js-select2-checkboxes) have their own
+    // explicit check behaviour.
+    $(".select2-hidden-accessible").not('.js-select2-checkboxes').on('select2:selecting', function (e) {
 		var data = e.params.args.data;
 		var isMouseUp = false;
 		var element = $(this);
@@ -1136,8 +1262,8 @@ $(function () {
 			}
 		}
 	});
-	
-	$(".select2-hidden-accessible").on('select2:closing', function (e) {
+
+    $("select.js-data-ajax, select[data-endpoint]").not('.js-select2-checkboxes').on('select2:closing', function (e) {
 		var element = $(this);
 		var value = getSelect2Value(element);
 		var noForceAjax = false;
@@ -1147,9 +1273,12 @@ $(function () {
 		
 		if(value && !noForceAjax && !isMouseUp) {
 			var endpoint = element.data("endpoint");
+			if (!endpoint) { return; }
             var statusType = element.data("asset-status-type");
-			$.ajax({
-                url: baseUrl + 'api/v1/' + endpoint + '/selectlist?search=' + value + '&page=1' + (statusType ? '&statusType=' + statusType : ''),
+			var previous = element.data('selectlist-request');
+			if (previous && previous.readyState !== 4) { previous.abort(); }
+			var request = $.ajax({
+                url: baseUrl + 'api/v1/' + endpoint + '/selectlist?search=' + encodeURIComponent(value) + '&page=1' + (statusType ? '&statusType=' + statusType : ''),
 				dataType: 'json',
 				headers: {
 					"X-Requested-With": 'XMLHttpRequest',
@@ -1189,6 +1318,8 @@ $(function () {
 					});
 				}
 			});
+
+			element.data('selectlist-request', request);
 		}
 	});
 
@@ -1241,6 +1372,16 @@ $(function () {
             var icon = $('<i class="fa-solid fa-square" style="font-size: 20px;" aria-hidden="true"></i>');
             icon.css("color", datalist.tag_color );
             inner_div.append(icon)
+        } else if (datalist.icon) {
+            // Icon class string set on the <option data-icon="..."> or
+            // passed on the ajax row payload. Used by the activity
+            // report toolbar's static item_type / target_type /
+            // action_type pickers so each row renders with its matching
+            // Snipe-IT entity icon alongside the label.
+            var inner_div = $("<div style='width: 20px;'>");
+            var icon = $('<i aria-hidden="true"></i>');
+            icon.attr('class', datalist.icon);
+            inner_div.append(icon);
         } else {
             var inner_div=$("<div style='height: 20px; width: 20px;'></div>");
         }
@@ -1834,6 +1975,13 @@ $(function () {
             var breadcrumbAppendedLeaf = null;
 
             var setBreadcrumbTabLeaf = function (label) {
+                // Treat a label that matches the base leaf as "no
+                // label" to stop the trail from reading
+                // "Custom Fields > Custom Fields" when a page's
+                // primary tab shares the title of the page itself.
+                if (label && label.trim() === breadcrumbBaseText) {
+                    label = null;
+                }
                 if (!label) {
                     if (breadcrumbAppendedLeaf) {
                         breadcrumbAppendedLeaf.remove();
@@ -2193,7 +2341,11 @@ function initLivewireSelect2($scope) {
         var opts = {};
         var $modal = $el.closest('.modal');
         if ($modal.length) {
-            opts.dropdownParent = $modal;
+            // Prefer .modal-content so the dropdown scrolls with the
+            // dialog body. See the same note on the plain .select2
+            // init above and GH #20125.
+            var $modalContent = $modal.find('.modal-content').first();
+            opts.dropdownParent = $modalContent.length ? $modalContent : $modal;
         }
         $el.select2(opts);
     });
@@ -3014,3 +3166,88 @@ $(function () {
     $pair.on('change', syncMutexState);
     syncMutexState();
 });
+
+// -----------------------------------------------------------------------------
+// Double-submit guard. Disables submit buttons on form submission so an impatient
+// click doesn't fire the same backend action twice.
+// -----------------------------------------------------------------------------
+(function () {
+    var DEFAULT_SAFETY_TIMEOUT_MS = 30000;
+
+    function disableSubmit($btn) {
+        if ($btn.prop('disabled')) {
+            return;
+        }
+        if (typeof $btn.data('allow-double-submit') !== 'undefined') {
+            return;
+        }
+
+        // fa-fw keeps the spinner at the same width as whatever icon the
+        // button rendered before the swap, so icon-only buttons don't jump
+        // size when the magnifying glass (or other icon) is replaced.
+        var spinner = '<i class="fas fa-spinner fa-spin fa-fw" aria-hidden="true"></i>';
+        // Resolution order for the "Processing..." label:
+        //   1. The button's own data-processing-label (lets a specific button
+        //      say something more precise, e.g. "Running backup...").
+        //   2. The layout-provided translated default on window.snipeit.i18n,
+        //      populated by layouts/default.blade.php. Covers every raw
+        //      <button type="submit"> in the app without needing data attrs.
+        //   3. If neither is set, skip the label swap and just disable so we
+        //      never fall back to an English string from this file.
+        var processingLabel = $btn.data('processing-label')
+            || (window.snipeit && window.snipeit.i18n && window.snipeit.i18n.processing);
+
+        $btn.data('original-html', $btn.html());
+        $btn.prop('disabled', true);
+
+        if ($btn.data('processing-icon-only')) {
+            // Icon-only buttons (topbar search, etc) have no room for a
+            // text swap. Replace just the first <i> with the spinner and
+            // leave the rest of the button HTML (sr-only labels, etc)
+            // untouched. restoreSubmit resets via original-html.
+            var $icon = $btn.find('i').first();
+            if ($icon.length) {
+                $icon.attr('class', 'fas fa-spinner fa-spin fa-fw');
+            }
+        } else if (processingLabel) {
+            $btn.html(spinner + ' ' + processingLabel);
+        }
+
+        var timeoutMs = parseInt($btn.data('safety-timeout-ms'), 10);
+        if (!timeoutMs || timeoutMs < 0) {
+            timeoutMs = DEFAULT_SAFETY_TIMEOUT_MS;
+        }
+
+        var timer = setTimeout(function () {
+            restoreSubmit($btn);
+        }, timeoutMs);
+
+        $btn.data('restore-timer', timer);
+    }
+
+    function restoreSubmit($btn) {
+        var original = $btn.data('original-html');
+        var timer = $btn.data('restore-timer');
+        if (timer) {
+            clearTimeout(timer);
+            $btn.removeData('restore-timer');
+        }
+        $btn.prop('disabled', false);
+        if (typeof original !== 'undefined') {
+            $btn.html(original);
+            $btn.removeData('original-html');
+        }
+    }
+
+    $(document).on('submit', 'form', function () {
+        $(this).find('button[type="submit"]').each(function () {
+            disableSubmit($(this));
+        });
+    });
+
+    window.enableSubmitsIn = function (selector) {
+        $(selector).find('button[type="submit"]').each(function () {
+            restoreSubmit($(this));
+        });
+    };
+})();

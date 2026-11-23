@@ -143,11 +143,9 @@ class AccessoryCheckout extends Model
      * Run additional, advanced searches.
      *
      * @param  array  $terms  The search terms
-     * @return Builder
      */
-    public function advancedTextSearch(Builder $query, array $terms)
+    public function advancedTextSearch(Builder $outer, Builder $nested, array $terms): void
     {
-
         $userQuery = User::where(
             function ($query) use ($terms) {
                 foreach ($terms as $term) {
@@ -178,30 +176,28 @@ class AccessoryCheckout extends Model
             }
         )->select('id');
 
-        $query->where(
-            function ($query) use ($userQuery) {
-                $query->where('assigned_type', User::class)
+        $nested->orWhere(
+            function ($q) use ($userQuery) {
+                $q->where('assigned_type', User::class)
                     ->whereIn('assigned_to', $userQuery);
             }
         )->orWhere(
-            function ($query) use ($locationQuery) {
-                $query->where('assigned_type', Location::class)
+            function ($q) use ($locationQuery) {
+                $q->where('assigned_type', Location::class)
                     ->whereIn('assigned_to', $locationQuery);
             }
         )->orWhere(
-            function ($query) use ($assetQuery) {
-                $query->where('assigned_type', Asset::class)
+            function ($q) use ($assetQuery) {
+                $q->where('assigned_type', Asset::class)
                     ->whereIn('assigned_to', $assetQuery);
             }
         )->orWhere(
-            function ($query) use ($terms) {
+            function ($q) use ($terms) {
                 foreach ($terms as $term) {
                     $search_str = '%'.$term.'%';
-                    $query->where('note', 'like', $search_str);
+                    $q->where('note', 'like', $search_str);
                 }
             }
         );
-
-        return $query;
     }
 }

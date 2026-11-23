@@ -119,7 +119,6 @@ class LoginController extends Controller
 
             try {
 
-                $user = $saml->samlLogin($samlData);
                 $notValidAfter = new \Carbon\Carbon(@$samlData['assertionNotOnOrAfter']);
                 if (\Carbon::now()->greaterThanOrEqualTo($notValidAfter)) {
                     abort(400, 'Expired SAML Assertion');
@@ -133,6 +132,8 @@ class LoginController extends Controller
                     \Log::error($e);
                     abort(400, 'Assertion has already been used.');
                 }
+                // Look up (or auto-create) the user only once the assertion is known fresh and unused.
+                $user = $saml->samlLogin($samlData);
                 if (! is_null($user)) {
                     Auth::login($user);
                 } else {
@@ -525,14 +526,26 @@ class LoginController extends Controller
 
         if ($saml->isEnabled()) {
             $auth = $saml->getAuth();
-            // Defense-in-depth: SamlController::sls sanitizes the SLO
+            // SamlController::sls sanitizes the SLO
             // RelayState through sameOriginUrl at write time, but any
             // future writer that skips that gate (or any parser-
             // differential bypass of sameOriginUrl at write time) would
             // leave the away() emission below unprotected. Re-check at
             // read time so the Location header never carries an off-
             // origin URL that reached session('saml_slo_redirect_url').
-            $sloRedirectUrl = Helper::sameOriginUrl($request->session()->get('saml_slo_redirect_url'));
+            //
+            // Exception!! when the IdP initiated the SLO, the stored URL
+            // is the configured IdP SLO response endpoint (admin-trusted
+            // and by design off-origin to Snipe-IT). Running it through
+            // sameOriginUrl nulls it out, leaves $sloRedirectUrl empty,
+            // and trips the "initiate a new SLO" branch below instead
+            // of completing the one in flight from the IdP.
+            // The write side validated host + scheme against
+            // the configured IdP URL, so honor that decision here.
+            $rawSloRedirectUrl = $request->session()->get('saml_slo_redirect_url');
+            $sloRedirectUrl = $request->session()->get('saml_slo_idp_initiated')
+                ? $rawSloRedirectUrl
+                : Helper::sameOriginUrl($rawSloRedirectUrl);
 
             if (! empty($auth->getSLOurl()) && $settings->saml_slo == '1' && $saml->isAuthenticated() && empty($sloRedirectUrl)) {
                 $sloRequestUrl = $auth->logout(null, [], $saml->getNameId(), $saml->getSessionIndex(), true, $saml->getNameIdFormat(), $saml->getNameIdNameQualifier(), $saml->getNameIdSPNameQualifier());

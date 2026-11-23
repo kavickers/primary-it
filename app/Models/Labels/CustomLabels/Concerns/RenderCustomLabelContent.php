@@ -93,7 +93,7 @@ trait RenderCustomLabelContent
             $layout['logo']['w'],
             $layout['logo']['h'],
             $this->getLogoHAlign(),
-            $this->getLogoVAlign(),
+            $this->getLogoPosition() === 'top' ? 'T' : $this->getLogoVAlign(),
             300,
             true,
             false,
@@ -359,12 +359,41 @@ trait RenderCustomLabelContent
         }
 
         $width = min($this->getLogoMaxWidth(), $body['w']);
+        $alignment = $this->getLogoHAlign();
+
+        if ($this->getLogoPosition() === 'top') {
+            $height = min($width, $body['h']);
+
+            $imageInfo = @getimagesize($record->get('logo'));
+
+            if ($imageInfo && $imageInfo[0] > 0 && $imageInfo[1] > 0) {
+                $height = min(
+                    $width * ($imageInfo[1] / $imageInfo[0]),
+                    $body['h']
+                );
+            }
+
+
+            $x = match ($alignment) {
+                'R' => $body['x2'] - $width,
+                'C' => $body['x1'] + (($body['w'] - $width) / 2),
+                default => $body['x1'],
+            };
+
+            return [
+                'x' => $x,
+                'y' => $body['y1'],
+                'w' => $width,
+                'h' => $height,
+            ];
+        }
+
 
         return $this->anchorBox(
             $body,
             $width,
             $body['h'],
-            $this->getLogoHAlign(),
+            $alignment,
             $this->getLogoVAlign()
         );
     }
@@ -378,31 +407,13 @@ trait RenderCustomLabelContent
         $size = $this->calculate2DBarcodeSize($record, $body);
         $size = min($size, $body['w'], $body['h']);
 
-        $box = $this->anchorBox(
+        return $this->anchorBox(
             $body,
             $size,
             $size,
             $this->getBarcode2DHAlign(),
             $this->getBarcode2DVAlign()
         );
-
-        if ($this->boxesOverlap($box, $logoBox)) {
-            $altHAlign = strtoupper($this->getBarcode2DHAlign()) === 'R' ? 'L' : 'R';
-
-            $altBox = $this->anchorBox(
-                $body,
-                $size,
-                $size,
-                $altHAlign,
-                $this->getBarcode2DVAlign()
-            );
-
-            if (!$this->boxesOverlap($altBox, $logoBox)) {
-                $box = $altBox;
-            }
-        }
-
-        return $box;
     }
 
     protected function resolveTagBox($record, array $body, ?array $barcode2dBox = null, ?array $logoBox = null): ?array
@@ -448,6 +459,24 @@ trait RenderCustomLabelContent
         return $this->clampBox($box, $body);
     }
 
+    protected function resolveContentBody(array $body, ?array $logoBox): array
+    {
+        if (!$logoBox || $this->getLogoPosition() !== 'top') {
+            return $body;
+        }
+
+        $top = min(
+            $body['y2'],
+            $logoBox['y'] + $logoBox['h'] + $this->getLogoMargin()
+        );
+
+        return [
+            ...$body,
+            'y1' => $top,
+            'h' => max(0, $body['y2'] - $top),
+        ];
+    }
+
     protected function calculate2DBarcodeSize($record, array $container): float
     {
         $maxHeight = $container['h'];
@@ -469,30 +498,5 @@ trait RenderCustomLabelContent
         }
 
         return min($body['w'] * 0.35, $body['w']);
-    }
-
-    protected function oppositeHAlign(string $align): string
-    {
-        return strtoupper($align) === 'L' ? 'R' : 'L';
-    }
-
-    protected function syncLogoAnd2DBarcodeHAlign(?string $changedKey = null): void
-    {
-        if (method_exists($this, 'getLogoPlacement') && $this->getLogoPlacement() === 'text_column') {
-            return;
-        }
-
-        if (!$this->getSupportLogo() || !$this->getSupport2DBarcode()) {
-            return;
-        }
-
-        if ($changedKey === 'barcode2D_h_align') {
-            $this->logoHAlign = $this->oppositeHAlign($this->barcode2DHAlign);
-            return;
-        }
-
-        if ($changedKey === 'logo_h_align') {
-            $this->barcode2DHAlign = $this->oppositeHAlign($this->logoHAlign);
-        }
     }
 }

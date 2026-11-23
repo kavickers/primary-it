@@ -21,6 +21,7 @@ use App\Models\Maintenance;
 use App\Models\MaintenanceType;
 use App\Models\Manufacturer;
 use App\Models\PredefinedKit;
+use App\Models\SavedSearch;
 use App\Models\Statuslabel;
 use App\Models\Supplier;
 use App\Models\User;
@@ -42,6 +43,7 @@ use App\Policies\MaintenancePolicy;
 use App\Policies\MaintenanceTypePolicy;
 use App\Policies\ManufacturerPolicy;
 use App\Policies\PredefinedKitPolicy;
+use App\Policies\SavedSearchPolicy;
 use App\Policies\StatuslabelPolicy;
 use App\Policies\SupplierPolicy;
 use App\Policies\UserPolicy;
@@ -80,6 +82,7 @@ class AuthServiceProvider extends ServiceProvider
         Maintenance::class => MaintenancePolicy::class,
         MaintenanceType::class => MaintenanceTypePolicy::class,
         PredefinedKit::class => PredefinedKitPolicy::class,
+        SavedSearch::class => SavedSearchPolicy::class,
         Statuslabel::class => StatuslabelPolicy::class,
         Supplier::class => SupplierPolicy::class,
         User::class => UserPolicy::class,
@@ -109,6 +112,34 @@ class AuthServiceProvider extends ServiceProvider
         Passport::personalAccessTokensExpireIn(CarbonInterval::years($expirationYears));
 
         Passport::cookie(config('passport.cookie_name'));
+
+        // Register the MCP scopes so Passport recognizes them during
+        // token issuance (OAuth consent and PATs). Tool-level
+        // enforcement lives in the SnipeMcpTool trait, which calls
+        // $user->tokenCan('mcp:read') (etc.) per request.
+        Passport::tokensCan(\App\Enums\McpScope::forPassport());
+
+        // Pre-MCP (Passport 13) upgrade PATs carry the old bigint client_id in their JWT
+        // aud claim, which no longer exists after the Passport v13 UUID
+        // migration. Swap Passport's TokenGuard for a subclass that
+        // falls back to oauth_access_tokens.client_id when the aud
+        // lookup misses. See App\Auth\CompatTokenGuard.
+        Auth::resolved(function ($auth): void {
+            $auth->extend('passport', function ($app, $name, array $config) {
+                return tap(new \App\Auth\CompatTokenGuard(
+                    $app->make(\League\OAuth2\Server\ResourceServer::class),
+                    new \Laravel\Passport\PassportUserProvider(
+                        Auth::createUserProvider($config['provider']),
+                        $config['provider']
+                    ),
+                    $app->make(\Laravel\Passport\ClientRepository::class),
+                    $app->make('encrypter'),
+                    $app->make('request')
+                ), function ($guard) use ($app) {
+                    $app->refresh('request', $guard, 'setRequest');
+                });
+            });
+        });
 
         // Federated identity: a provider-agnostic OIDC bearer guard, layered
         // alongside Passport via the `auth:oidc,api` multi-guard. Inert until

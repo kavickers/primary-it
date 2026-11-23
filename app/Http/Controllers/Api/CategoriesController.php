@@ -210,7 +210,7 @@ class CategoriesController extends Controller
         // Don't allow the user to change the category_type once it's been created
         if (($request->filled('category_type')) && ($category->category_type != $request->input('category_type'))) {
             return response()->json(
-                Helper::formatStandardApiResponse('error', null, ['category_type' => trans('admin/categories/message.update.cannot_change_category_type')], 422)
+                Helper::formatStandardApiResponse('error', null, ['category_type' => trans('admin/categories/message.update.cannot_change_category_type')])
             );
         }
         $category->fill($request->all());
@@ -273,7 +273,9 @@ class CategoriesController extends Controller
             $categories = $categories->where('name', 'LIKE', '%'.$request->input('search').'%');
         }
 
-        $categories = $categories->where('category_type', $category_type)->orderBy('name', 'ASC')->paginate(50);
+        $categories = Helper::paginateBuilderOrAll(
+            $categories->where('category_type', $category_type)->orderBy('name', 'ASC')
+        );
 
         // Loop through and set some custom properties for the transformer to use.
         // This lets us have more flexibility in special cases like assets, where

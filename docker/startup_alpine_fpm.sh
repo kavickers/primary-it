@@ -94,6 +94,13 @@ ln -fs \
 ln -fs \
   "/var/lib/snipeit/keys/oauth-private.key" "/var/www/html/storage/oauth-private.key"
 
+# Seed the bundled default avatar into the uploads volume on first start
+# (public/uploads is symlinked to the volume), but never overwrite a
+# default that an admin already uploaded
+if [ ! -f /var/lib/snipeit/data/uploads/default.png ]; then
+  cp /var/www/html/public/img/default.png /var/lib/snipeit/data/uploads/default.png
+fi
+
 # If the Oauth DB files are not present copy the vendor files over to the db migrations
 if [ ! -f "/var/www/html/database/migrations/*create_oauth*" ]
 then
@@ -105,6 +112,9 @@ chown -R www-data:www-data \
   /var/lib/snipeit/data \
   /var/lib/snipeit/dumps \
   /var/lib/snipeit/keys
+
+[ -f /var/lib/snipeit/keys/oauth-public.key ] && chmod 660 /var/lib/snipeit/keys/oauth-public.key
+[ -f /var/lib/snipeit/keys/oauth-private.key ] && chmod 600 /var/lib/snipeit/keys/oauth-private.key
 
 # Migrate/create database
 php artisan migrate --force

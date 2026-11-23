@@ -231,11 +231,7 @@ class LocationsController extends Controller
             // ValidationServiceProvider::fmcs_location for the sibling fix.
             $parent = $location->parent_id ? Location::withoutGlobalScopes()->find($location->parent_id) : null;
             if ($parent && $parent->company_id != $location->company_id) {
-                return response()->json(Helper::formatStandardApiResponse('error', null, trans('general.error_location_parent_company', [
-                    'parent' => $parent->name,
-                    'parent_company' => $parent->company?->name ?? trans('general.unassigned'),
-                    'location_company' => $location->company?->name ?? trans('general.unassigned'),
-                ])));
+                return response()->json(Helper::formatStandardApiResponse('error', null, Location::parentCompanyMismatchMessage($parent, $location->company?->name)));
             }
         }
 
@@ -350,11 +346,7 @@ class LocationsController extends Controller
             // ValidationServiceProvider::fmcs_location for the sibling fix.
             $parent = $location->parent_id ? Location::withoutGlobalScopes()->find($location->parent_id) : null;
             if ($parent && $parent->company_id != $location->company_id) {
-                return response()->json(Helper::formatStandardApiResponse('error', null, trans('general.error_location_parent_company', [
-                    'parent' => $parent->name,
-                    'parent_company' => $parent->company?->name ?? trans('general.unassigned'),
-                    'location_company' => $location->company?->name ?? trans('general.unassigned'),
-                ])));
+                return response()->json(Helper::formatStandardApiResponse('error', null, Location::parentCompanyMismatchMessage($parent, $location->company?->name)));
             }
         }
 
@@ -474,7 +466,7 @@ class LocationsController extends Controller
      */
     public function selectlist(Request $request): array
     {
-        
+
         abort_unless(
             auth()->user()?->canAny(['view.selectlists', 'self.edit_location']),
             403
@@ -558,7 +550,7 @@ class LocationsController extends Controller
             $locations_formatted = new Collection($location_options);
         }
 
-        return (new SelectlistTransformer)->transformSelectlist(Helper::paginateCollection($locations_formatted));
+        return (new SelectlistTransformer)->transformSelectlist(Helper::paginateCollectionOrAll($locations_formatted));
     }
 
     public function history(Request $request, Location $location): JsonResponse|array

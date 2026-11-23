@@ -5,12 +5,14 @@ namespace App\Models;
 use App\Enums\FileStorage;
 use App\Http\Traits\UniqueUndeletedTrait;
 use App\Models\Builders\LocationQueryBuilder;
+use App\Models\Contracts\Importable;
 use App\Models\Traits\CompanyableTrait;
 use App\Models\Traits\HasUploads;
 use App\Models\Traits\Loggable;
 use App\Models\Traits\Searchable;
 use App\Presenters\LocationPresenter;
 use App\Presenters\Presentable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -22,7 +24,7 @@ use Watson\Validating\ValidatingTrait;
 /**
  * @mixin IdeHelperLocation
  */
-class Location extends SnipeModel
+class Location extends SnipeModel implements Importable
 {
     use CompanyableTrait;
     use HasFactory;
@@ -46,9 +48,10 @@ class Location extends SnipeModel
         'state' => 'min:2|max:191|nullable',
         'country' => 'min:2|max:191|nullable',
         'zip' => 'max:10|nullable',
-        'manager_id' => 'exists:users,id|nullable',
+        'manager_id' => 'exists:users,id|nullable|fmcs_manager',
         'parent_id' => 'nullable|exists:locations,id|non_circular:locations,id|parent_matches_location_company',
         'company_id' => 'integer|nullable|exists:companies,id|fmcs_company',
+        'tag_color' => ['nullable', 'regex:/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/'],
     ];
 
     protected $casts = [
@@ -123,6 +126,55 @@ class Location extends SnipeModel
         'manager' => ['first_name', 'last_name', 'display_name'],
         'adminuser' => ['first_name', 'last_name', 'display_name'],
     ];
+
+    /**
+     * Advanced-search filterable fields.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function filterableFields(): array
+    {
+        return [
+            [
+                'field' => 'company',
+                'type' => 'fk',
+                'column' => 'company_id',
+                'endpoint' => 'companies',
+                'label' => trans('admin/companies/table.title'),
+            ],
+            [
+                'field' => 'parent',
+                'type' => 'fk',
+                'column' => 'parent_id',
+                'endpoint' => 'locations',
+                'label' => trans('admin/locations/table.parent'),
+            ],
+            [
+                'field' => 'manager',
+                'type' => 'fk',
+                'column' => 'manager_id',
+                'endpoint' => 'users',
+                'label' => trans('admin/users/table.manager'),
+            ],
+            [
+                'field' => 'created_by',
+                'type' => 'fk',
+                'column' => 'created_by',
+                'endpoint' => 'users',
+                'label' => trans('general.created_by'),
+            ],
+            [
+                'field' => 'created_at',
+                'type' => 'date-range',
+                'label' => trans('general.created_at'),
+            ],
+            [
+                'field' => 'updated_at',
+                'type' => 'date-range',
+                'label' => trans('general.updated_at'),
+            ],
+        ];
+    }
 
     /**
      * On hard-delete, wipe the image file and Files-tab attachments.
@@ -296,8 +348,7 @@ class Location extends SnipeModel
      */
     public function parent()
     {
-        return $this->belongsTo(self::class, 'parent_id', 'id')
-            ->with('parent');
+        return $this->belongsTo(self::class, 'parent_id', 'id');
     }
 
     /**
@@ -311,11 +362,15 @@ class Location extends SnipeModel
             return (int) $this->company_id;
         }
 
+        $visitedIds = [$this->id => true];
         $ancestor = $this->parent()->withoutGlobalScopes()->first();
-        while ($ancestor) {
+
+        while ($ancestor && ! isset($visitedIds[$ancestor->id])) {
             if ($ancestor->company_id) {
                 return (int) $ancestor->company_id;
             }
+
+            $visitedIds[$ancestor->id] = true;
             $ancestor = $ancestor->parent()->withoutGlobalScopes()->first();
         }
 
@@ -361,8 +416,30 @@ class Location extends SnipeModel
      */
     public function children()
     {
-        return $this->hasMany(self::class, 'parent_id')
-            ->with('children');
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /**
+     * Walk up the parent chain, nearest ancestor first. Stops at the first
+     * location already seen so legacy parent_id cycles can't loop forever.
+     *
+     * @return Collection<int, Location>
+     */
+    public function ancestors(): Collection
+    {
+        $ancestors = new Collection;
+
+        $visitedIds = [$this->id => true];
+
+        $cursor = $this->parent;
+
+        while ($cursor && ! isset($visitedIds[$cursor->id])) {
+            $ancestors->push($cursor);
+            $visitedIds[$cursor->id] = true;
+            $cursor = $cursor->parent;
+        }
+
+        return $ancestors;
     }
 
     /**
@@ -436,5 +513,33 @@ class Location extends SnipeModel
     public function newEloquentBuilder($query): LocationQueryBuilder
     {
         return new LocationQueryBuilder($query);
+    }
+
+    /**
+     * Build the parent-company-mismatch error message for store / update
+     * flows (API, web, and the parent_matches_location_company validator
+     * replacer). GHSA-vx68-xhq6-9gmr: the detailed variant disclosed the
+     * cross-tenant parent location's name to any caller who submitted its
+     * id, turning the endpoint into an enumeration oracle for location
+     * names across company boundaries. Legitimate callers who already have
+     * visibility into the parent (superusers, and non-supers whose company
+     * pivot includes the parent's company) still get the detailed
+     * diagnostic. Everyone else gets a generic message that reveals no
+     * cross-tenant data.
+     */
+    public static function parentCompanyMismatchMessage(self $parent, ?string $locationCompanyName): string
+    {
+        $canSeeParent = auth()->user()?->isSuperUser()
+            || Company::isCurrentUserHasAccess($parent);
+
+        if ($canSeeParent) {
+            return trans('general.error_location_parent_company', [
+                'parent' => $parent->name,
+                'parent_company' => $parent->company?->name ?? trans('general.unassigned'),
+                'location_company' => $locationCompanyName ?? trans('general.unassigned'),
+            ]);
+        }
+
+        return trans('general.error_location_parent_company_generic');
     }
 }

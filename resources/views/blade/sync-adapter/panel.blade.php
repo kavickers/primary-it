@@ -9,7 +9,11 @@
 @php
     $slug = $adapter->name();
     $locked = config('app.lock_passwords') === true;
-    $canSync = $adapter->isEnabled() && ! $locked;
+    // Per-instance mutex read: a Pull or Push in flight for this
+    // adapter holds the key, so the buttons go disabled with a tooltip
+    // until it clears. Server rejects duplicate triggers regardless.
+    $runInProgress = \Illuminate\Support\Facades\Cache::store('file')->has($adapter->instance()->lockKey());
+    $canSync = $adapter->isEnabled() && ! $locked && ! $runInProgress;
 
     // Download-link gating. We render the link only when BOTH the
     // persistent session pointer AND the cache entry it points at are
@@ -68,7 +72,7 @@
                 />
                 {{ trans('admin/settings/sync_adapters.pull_dry_run_label') }}
             </label>
-            @if ($adapter instanceof \App\SyncAdapters\PushableAdapter && $adapter->canPush())
+            @if ($adapter instanceof \App\SyncAdapters\PushableSyncAdapter && $adapter->canPush())
                 <label class="form-control">
                     <x-input.checkbox
                         :name="$slug . '_push_dry_run'"
@@ -127,18 +131,20 @@
                     class="js-sync-dry-run-mirror"
                     data-mirrors="{{ $slug }}_pull_dry_run"
                 >
-                <button
-                    type="submit"
-                    class="btn btn-primary js-sync-action-button"
-                    data-dirty-guarded-by="adapter-form-{{ $slug }}"
-                    @disabled(! $canSync)
-                >
-                    <i class="fa-solid fa-cloud-arrow-down js-sync-action-icon" aria-hidden="true"></i>
-                    <span class="js-sync-action-label">{{ trans('admin/settings/sync_adapters.pull_now') }}</span>
-                </button>
+                <span @if ($runInProgress) data-tooltip="true" title="{{ trans('general.operation_already_running', ['operation' => trans('admin/settings/sync_adapters.sync_adapter_run')]) }}" @endif>
+                    <button
+                        type="submit"
+                        class="btn btn-primary js-sync-action-button"
+                        data-dirty-guarded-by="adapter-form-{{ $slug }}"
+                        @disabled(! $canSync)
+                    >
+                        <i class="fa-solid fa-cloud-arrow-down js-sync-action-icon" aria-hidden="true"></i>
+                        <span class="js-sync-action-label">{{ trans('admin/settings/sync_adapters.pull_now') }}</span>
+                    </button>
+                </span>
             </form>
 
-            @if ($adapter instanceof \App\SyncAdapters\PushableAdapter && $adapter->canPush())
+            @if ($adapter instanceof \App\SyncAdapters\PushableSyncAdapter && $adapter->canPush())
                 <form
                     method="POST"
                     action="{{ route('settings.adapters.push', $slug) }}"
@@ -154,15 +160,17 @@
                         class="js-sync-dry-run-mirror"
                         data-mirrors="{{ $slug }}_push_dry_run"
                     >
-                    <button
-                        type="submit"
-                        class="btn btn-default js-sync-action-button"
-                        data-dirty-guarded-by="adapter-form-{{ $slug }}"
-                        @disabled(! $canSync)
-                    >
-                        <i class="fa-solid fa-cloud-arrow-up js-sync-action-icon" aria-hidden="true"></i>
-                        <span class="js-sync-action-label">{{ trans('admin/settings/sync_adapters.push_now') }}</span>
-                    </button>
+                    <span @if ($runInProgress) data-tooltip="true" title="{{ trans('general.operation_already_running', ['operation' => trans('admin/settings/sync_adapters.sync_adapter_run')]) }}" @endif>
+                        <button
+                            type="submit"
+                            class="btn btn-default js-sync-action-button"
+                            data-dirty-guarded-by="adapter-form-{{ $slug }}"
+                            @disabled(! $canSync)
+                        >
+                            <i class="fa-solid fa-cloud-arrow-up js-sync-action-icon" aria-hidden="true"></i>
+                            <span class="js-sync-action-label">{{ trans('admin/settings/sync_adapters.push_now') }}</span>
+                        </button>
+                    </span>
                 </form>
             @endif
 
@@ -175,7 +183,7 @@
 
     {{-- Full-width tip callout --}}
     <x-callout type="info" icon="tip" live="polite" style="margin-top: 10px;">
-        @if ($adapter instanceof \App\SyncAdapters\PushableAdapter && $adapter->canPush())
+        @if ($adapter instanceof \App\SyncAdapters\PushableSyncAdapter && $adapter->canPush())
             {!! trans('admin/settings/sync_adapters.large_fleet_note', [
                 'pull_command' => '<code>php artisan snipeit:pull-inventory '.e($slug).'</code>',
                 'push_command' => '<code>php artisan snipeit:push-inventory '.e($slug).'</code>',

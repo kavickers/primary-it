@@ -61,6 +61,7 @@ class AssetImporter extends ItemImporter
             ['category_id', 'category', fn ($v) => $this->createOrFetchCategory($v)],
             ['company_id', 'company', fn ($v) => $this->createOrFetchCompany($v)],
             ['location_id', 'location', fn ($v) => $this->createOrFetchLocation($v)],
+            ['rtd_location_id', 'default_location', fn ($v) => $this->createOrFetchLocation($v)],
             ['manufacturer_id', 'manufacturer', fn ($v) => $this->createOrFetchManufacturer($v)],
             ['status_id', 'status', fn ($v) => $this->createOrFetchStatusLabel($v)],
             ['supplier_id', 'supplier', fn ($v) => $this->createOrFetchSupplier($v)],
@@ -165,8 +166,8 @@ class AssetImporter extends ItemImporter
 
                 if (! is_null($customFieldValue)) {
                     if ($customField->field_encrypted == 1) {
-                        $this->item['custom_fields'][$customField->db_column_name()] = Crypt::encrypt($customFieldValue);
-                        $this->log('Custom Field '.$customField->name.': '.Crypt::encrypt($customFieldValue));
+                        $this->item['custom_fields'][$customField->db_column_name()] = $customFieldValue;
+                        $this->log('Custom Field '.$customField->name.': [encrypted]');
                     } else {
                         $this->item['custom_fields'][$customField->db_column_name()] = $customFieldValue;
                         $this->log('Custom Field '.$customField->name.': '.$customFieldValue);
@@ -274,10 +275,9 @@ class AssetImporter extends ItemImporter
 
         $item = $this->sanitizeItemForStoring($asset, $editingAsset);
 
-        // The location id fetched by the csv reader is actually the rtd_location_id.
-        // This will also set location_id, but then that will be overridden by the
-        // checkout method if necessary below.
-        if (isset($this->item['location_id'])) {
+        if (isset($this->item['rtd_location_id'])) {
+            $item['rtd_location_id'] = $this->item['rtd_location_id'];
+        } elseif (isset($this->item['location_id'])) {
             $item['rtd_location_id'] = $this->item['location_id'];
         }
 
@@ -303,7 +303,14 @@ class AssetImporter extends ItemImporter
         // Apply custom fields to asset attributes if they exist
         $customFieldsToSave = [];
         if (array_key_exists('custom_fields', $this->item)) {
+            $casts = $asset->getCasts();
+            $encryptedCustomFields = collect($this->customFields)->where('field_encrypted', 1)->keyBy('db_column');
+
             foreach ($this->item['custom_fields'] as $custom_field => $val) {
+                if (isset($encryptedCustomFields[$custom_field]) && ! isset($casts[$custom_field]) && $val !== null && $val !== '') {
+                    $val = Crypt::encrypt($val);
+                }
+
                 $asset->{$custom_field} = $val;
                 $customFieldsToSave[$custom_field] = $val;
             }

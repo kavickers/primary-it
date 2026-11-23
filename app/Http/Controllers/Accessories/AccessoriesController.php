@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Accessories;
 
+use App\Enums\FileStorage;
 use App\Helpers\Helper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AdjustQuantityRequest;
@@ -72,7 +73,7 @@ class AccessoriesController extends Controller
         $accessory->min_amt = request('min_amt');
         $accessory->company_id = Company::getIdForCurrentUser(request('company_id'));
         // order_number + currency don't live on the Accessory parent
-        // column any more — the AccessoryObserver::created hook writes
+        // column any more — the HasOrders creation hook writes
         // the initial Order + OrderItem, and we enrich that Order below
         // (after save) with the form-supplied order_number / currency.
         $accessory->manufacturer_id = request('manufacturer_id');
@@ -88,11 +89,17 @@ class AccessoriesController extends Controller
         $accessory->default_supplier_id = request('default_supplier_id', request('supplier_id'));
 
         if ($request->has('use_cloned_image')) {
-            $cloned_model_img = Accessory::select('image')->find($request->input('clone_image_from_id'));
-            if ($cloned_model_img) {
-                $new_image_name = 'clone-'.date('U').'-'.$cloned_model_img->image;
-                $new_image = 'accessories/'.$new_image_name;
-                Storage::disk('public')->copy('accessories/'.$cloned_model_img->image, $new_image);
+            // Authorize the source first
+            $cloned = Accessory::findOrFail($request->input('clone_image_from_id'));
+            $this->authorize('clone', $cloned);
+
+            $source_image = $cloned->image;
+            if ($source_image) {
+                $new_image_name = 'clone-' . date('U') . '-' . $source_image;
+                Storage::disk('public')->copy(
+                    FileStorage::Accessories->publicPath() . $source_image,
+                    FileStorage::Accessories->publicPath() . $new_image_name,
+                );
                 $accessory->image = $new_image_name;
             }
 
@@ -159,7 +166,7 @@ class AccessoriesController extends Controller
         // date / price from another tab. Field names match the
         // create-form input names so enrichInitialOrderFromRequest
         // in store() picks them up on save and writes them onto the
-        // observer-created initial Order + OrderItem for the new row.
+        // initial Order + OrderItem created by HasOrders for the new row.
         // Explicit assignments (not a foreach) so each typed value from
         // lastOrderPrefill() lands on the matching typed model property
         // without going through a mixed intermediate that would fail
@@ -260,8 +267,7 @@ class AccessoriesController extends Controller
     }
 
     /**
-     * Restore a soft-deleted accessory. Mirrors ComponentsController::postRestore
-     * (restoring is a delete-tier action across the project).
+     * Restore a soft-deleted accessory.
      */
     public function postRestore($id): RedirectResponse
     {

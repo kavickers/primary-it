@@ -34,8 +34,8 @@ class SaveUserRequest extends FormRequest
     public function rules()
     {
         $rules = [
-            'department_id' => 'nullable|integer|exists:departments,id',
-            'manager_id' => 'nullable|integer|exists:users,id',
+            'department_id' => 'nullable|integer|exists:departments,id|fmcs_department',
+            'manager_id' => 'nullable|integer|exists:users,id|fmcs_manager',
             'company_id' => ['nullable', 'integer', 'exists:companies,id'],
             'company_ids' => 'nullable|array',
             'company_ids.*' => 'integer|exists:companies,id',
@@ -108,6 +108,13 @@ class SaveUserRequest extends FormRequest
             // is using the HTTP stack and must see the gate fire.
             $inActualConsole = app()->runningInConsole() && ! app()->runningUnitTests();
             if ($inActualConsole) {
+                return;
+            }
+
+            // An API PATCH that doesn't send company_ids or company_id leaves
+            // the user's memberships untouched, so there's nothing to gate.
+            // The web update always syncs companies, so it stays gated.
+            if ($this->routeIs('api.users.update') && $this->isMethod('PATCH') && ! $this->has('company_ids') && ! $this->filled('company_id')) {
                 return;
             }
 

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\FileStorage;
 use App\Http\Traits\UniqueUndeletedTrait;
 use App\Models\Builders\SupplierQueryBuilder;
+use App\Models\Contracts\Importable;
 use App\Models\Traits\HasUploads;
 use App\Models\Traits\Loggable;
 use App\Models\Traits\Searchable;
@@ -21,7 +22,7 @@ use Watson\Validating\ValidatingTrait;
 /**
  * @mixin IdeHelperSupplier
  */
-class Supplier extends SnipeModel
+class Supplier extends SnipeModel implements Importable
 {
     use HasFactory;
     use HasUploads;
@@ -46,6 +47,7 @@ class Supplier extends SnipeModel
         'country' => 'min:2|max:191|nullable',
         'zip' => 'max:10|nullable',
         'url' => 'sometimes|url|nullable|string|max:250',
+        'tag_color' => ['nullable', 'regex:/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/'],
     ];
 
     /**
@@ -77,6 +79,35 @@ class Supplier extends SnipeModel
     protected $searchableRelations = [];
 
     /**
+     * Advanced-search filterable fields. Suppliers have no company_id or
+     * other model-level FKs beyond created_by.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function filterableFields(): array
+    {
+        return [
+            [
+                'field' => 'created_by',
+                'type' => 'fk',
+                'column' => 'created_by',
+                'endpoint' => 'users',
+                'label' => trans('general.created_by'),
+            ],
+            [
+                'field' => 'created_at',
+                'type' => 'date-range',
+                'label' => trans('general.created_at'),
+            ],
+            [
+                'field' => 'updated_at',
+                'type' => 'date-range',
+                'label' => trans('general.updated_at'),
+            ],
+        ];
+    }
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
@@ -96,6 +127,20 @@ class Supplier extends SnipeModel
             && (($this->licenses_count ?? $this->licenses()->count()) === 0)
             && (($this->maintenances_count ?? $this->maintenances()->count()) === 0)
             && ($this->deleted_at == '');
+    }
+
+    /**
+     * Whether the sidebar info-panel disclosure for this supplier has
+     * anything to reveal. Gates the "+" button so rows with only a name
+     * don't offer an empty expander.
+     */
+    public function hasInfoPanelDetails(): bool
+    {
+        return (bool) ($this->contact
+            || $this->phone
+            || $this->email
+            || $this->url
+            || trim($this->present()->displayAddress()));
     }
 
     /**

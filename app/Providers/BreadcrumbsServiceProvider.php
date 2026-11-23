@@ -52,6 +52,12 @@ class BreadcrumbsServiceProvider extends ServiceProvider
                 ->push(trans('general.'.strtolower(e($statusType))), route('hardware.index', ['status_type' => $statusType]))
             );
 
+        } elseif (request()->is('hardware*') && request()->boolean('past_eol')) {
+            Breadcrumbs::for('hardware.index', fn (Trail $trail) => $trail->parent('home', route('home'))
+                ->push(trans('general.assets'), route('hardware.index'))
+                ->push(trans('general.past_eol'), route('hardware.index', ['past_eol' => 1]))
+            );
+
         } else {
             Breadcrumbs::for('hardware.index', fn (Trail $trail) => $trail->parent('home', route('home'))
                 ->push(trans('general.assets'), route('hardware.index'))
@@ -270,9 +276,17 @@ class BreadcrumbsServiceProvider extends ServiceProvider
         /**
          * Consumables Breadcrumbs
          */
-        Breadcrumbs::for('consumables.index', fn (Trail $trail) => $trail->parent('home', route('home'))
-            ->push(trans('general.consumables'), route('consumables.index'))
-        );
+        $consumablesStatus = request()->status;
+        if (request()->is('consumables*') && in_array($consumablesStatus, ['Archived', 'Deleted'], true)) {
+            Breadcrumbs::for('consumables.index', fn (Trail $trail) => $trail->parent('home', route('home'))
+                ->push(trans('general.consumables'), route('consumables.index'))
+                ->push(trans('general.'.strtolower($consumablesStatus)), route('consumables.index', ['status' => $consumablesStatus]))
+            );
+        } else {
+            Breadcrumbs::for('consumables.index', fn (Trail $trail) => $trail->parent('home', route('home'))
+                ->push(trans('general.consumables'), route('consumables.index'))
+            );
+        }
 
         Breadcrumbs::for('consumables.create', fn (Trail $trail) => $trail->parent('consumables.index', route('consumables.index'))
             ->push(trans('general.create'), route('consumables.create'))
@@ -281,10 +295,14 @@ class BreadcrumbsServiceProvider extends ServiceProvider
         Breadcrumbs::for('consumables.show', function (Trail $trail, Consumable $consumable) {
             $trail->parent('consumables.index', route('consumables.index'));
 
-            // Consumables don't support archived - soft-delete only -
-            // so the inserted segment is just Deleted when applicable.
+            // Deleted takes precedence over archived - a soft-deleted
+            // archived item lives in the Deleted bucket, not Archived.
+            // Linking the segment back to the filtered index gives the
+            // operator a way to pop back to peers in the same state.
             if ($consumable->deleted_at) {
                 $trail->push(trans('general.deleted'), route('consumables.index', ['status' => 'Deleted']));
+            } elseif ($consumable->archived) {
+                $trail->push(trans('general.archived'), route('consumables.index', ['status' => 'Archived']));
             }
 
             $trail->push($consumable->name, route('consumables.show', $consumable));
@@ -326,15 +344,22 @@ class BreadcrumbsServiceProvider extends ServiceProvider
          * Custom fieldsets Breadcrumbs
          */
         Breadcrumbs::for('fieldsets.create', fn (Trail $trail) => $trail->parent('fields.index', route('fields.index'))
+            ->push(trans('admin/custom_fields/general.fieldsets'), route('fields.index').'#fieldsets')
             ->push(trans('admin/custom_fields/general.create_fieldset'), route('fieldsets.create'))
         );
 
         Breadcrumbs::for('fieldsets.show', fn (Trail $trail, CustomFieldset $fieldset) => $trail->parent('fields.index', route('fields.index'))
-            ->push($fieldset->name, route('fields.index'))
+            ->push(trans('admin/custom_fields/general.fieldsets'), route('fields.index').'#fieldsets')
+            ->push($fieldset->name, route('fieldsets.show', $fieldset))
         );
 
-        Breadcrumbs::for('fieldsets.edit', fn (Trail $trail, CustomFieldset $fieldset) => $trail->parent('fields.index', route('fields.index'))
-            ->push($fieldset->display_name, route('fieldsets.show', $fieldset))
+        // Shim route is named `fieldsets.edit.show`, not `fieldsets.edit`
+        // (see routes/web/fields.php - the shim exists for bootstrap-table
+        // URL compatibility). Breadcrumbs::for keys must match the route
+        // name exactly.
+        Breadcrumbs::for('fieldsets.edit.show', fn (Trail $trail, CustomFieldset $fieldset) => $trail->parent('fields.index', route('fields.index'))
+            ->push(trans('admin/custom_fields/general.fieldsets'), route('fields.index').'#fieldsets')
+            ->push($fieldset->name, route('fieldsets.show', $fieldset))
             ->push(trans('general.update'))
         );
 
@@ -607,6 +632,11 @@ class BreadcrumbsServiceProvider extends ServiceProvider
                 ->push(trans('general.users'), route('users.index'))
                 ->push(trans('general.login_enabled'), route('users.index'))
             );
+        } elseif ((request()->is('users*')) && request()->filled('end_date_within')) {
+            Breadcrumbs::for('users.index', fn (Trail $trail) => $trail->parent('home', route('home'))
+                ->push(trans('general.users'), route('users.index'))
+                ->push(trans('general.offboarding_soon'), route('users.index'))
+            );
         } else {
             Breadcrumbs::for('users.index', fn (Trail $trail) => $trail->parent('home', route('home'))
                 ->push(trans('general.users'), route('users.index'))
@@ -633,21 +663,17 @@ class BreadcrumbsServiceProvider extends ServiceProvider
     }
 
     /**
-     * Append parent -> child location breadcrumbs recursively for a location.
+     * Append root -> location breadcrumbs for a location, built from
+     * Location::ancestors() so a legacy parent_id cycle stops instead of
+     * looping forever.
      */
     private function pushLocationHierarchy(Trail $trail, Location $location): void
     {
-        $ancestorChain = [];
-        $cursor = $location;
-
-        while ($cursor !== null) {
-            array_unshift($ancestorChain, $cursor);
-            $cursor = $cursor->parent;
+        foreach ($location->ancestors()->reverse() as $ancestor) {
+            $trail->push($ancestor->name, route('locations.show', $ancestor));
         }
 
-        foreach ($ancestorChain as $node) {
-            $trail->push($node->name, route('locations.show', $node));
-        }
+        $trail->push($location->name, route('locations.show', $location));
     }
 
     /**

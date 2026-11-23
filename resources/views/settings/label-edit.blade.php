@@ -212,20 +212,36 @@
 @stop
 @push('js')
     <script>
-        $(document).on('change', '.align-sync', function () {
-            const key = $(this).data('key');
-            const value = $(this).val();
+        $(document).on(
+            'change',
+            'select[name="content[logo_h_align]"], select[name="content[barcode2D_h_align]"], select[name="content[logo_position]"]',
+            function () {
+                const $logoPosition = $('select[name="content[logo_position]"]');
+                const $logo = $('select[name="content[logo_h_align]"]');
+                const $barcode = $('select[name="content[barcode2D_h_align]"]');
 
-            if (key === 'logo_h_align') {
-                $('select[name="content[barcode2D_h_align]"]')
-                    .val(value === 'L' ? 'R' : 'L');
-            }
+                if ($logoPosition.val() === 'top') {
+                    return;
+                }
 
-            if (key === 'barcode2D_h_align') {
-                $('select[name="content[logo_h_align]"]')
-                    .val(value === 'L' ? 'R' : 'L');
+                const isLogo = this.name !== 'content[barcode2D_h_align]';
+                const value = isLogo ? $logo.val() : $barcode.val();
+
+                if (!['L', 'R'].includes(value)) {
+                    return;
+                }
+
+                const opposite = value === 'L' ? 'R' : 'L';
+                const $other = isLogo ? $barcode : $logo;
+
+                if ($other.val() === value) {
+                    $other.val(opposite).trigger('change.select2');
+
+                    // Refresh the preview after both alignments are updated.
+                    this.form.dispatchEvent(new Event('change'));
+                }
             }
-        });
+        );
 
         function syncContentSupportGroups() {
             $('.label-editor-group[data-support-toggle]').each(function () {

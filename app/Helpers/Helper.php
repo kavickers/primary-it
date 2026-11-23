@@ -15,11 +15,10 @@ use App\Models\Setting;
 use App\Models\Statuslabel;
 use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
@@ -104,6 +103,86 @@ class Helper
     }
 
     /**
+     * Scheme deny-list for user-supplied URLs rendered as hrefs.
+     *
+     * Scoped to the code-executing schemes a browser will evaluate in
+     * the page origin. Everything else passes through (`file://`,
+     * `vnc://`, `ssh://`, `rdp://`, `smb://`, `obsidian://`, and other
+     * custom app protocols) because the browser delegates those to an
+     * external handler rather than executing them in the page origin.
+     *
+     * Normalization matches what the browser normalizes before it
+     * parses the scheme: strips leading whitespace + ASCII control
+     * characters, lowercases, and resolves embedded tab / CR / LF in
+     * the scheme portion. Without this a payload like
+     * `JavaScr\tipt:alert(1)` would sail past a naive prefix check.
+     */
+    public static function safeUrl(?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        // Browsers strip tabs, CRs, LFs and null bytes anywhere inside
+        // the scheme portion before parsing. Mirror that here so
+        // `java\tscript:...` is caught the same way `javascript:...` is.
+        $cleaned = preg_replace('/[\x00-\x1f]+/', '', $value);
+        $trimmed = ltrim((string) $cleaned);
+
+        $colonPos = strpos($trimmed, ':');
+        if ($colonPos === false) {
+            // Relative URL / fragment / query-string. No scheme to
+            // delegate to, so the browser treats it as same-origin.
+            return $value;
+        }
+
+        $scheme = strtolower(substr($trimmed, 0, $colonPos));
+        $denied = ['javascript', 'vbscript', 'livescript', 'mocha', 'data'];
+
+        return in_array($scheme, $denied, true) ? '' : $value;
+    }
+
+    /**
+     * Strict-hex allow-list for user-supplied colors rendered inside
+     * an inline `style` attribute. A model row carrying a bad value
+     * (either pre-validation or from a bulk importer bypass) renders
+     * as empty, which collapses the `style` attribute at the sink
+     * site rather than leaking CSS declarations to every viewer.
+     *
+     * Matches the four CSS hex-color shapes browsers accept: #RGB,
+     * #RGBA, #RRGGBB, #RRGGBBAA. Anything else, including CSS color
+     * keywords (`red`), `rgb()`, `hsl()`, is rejected because the
+     * color-picker inputs on every model that owns a `tag_color`
+     * column emit hex strings exclusively.
+     */
+    public static function safeColor(?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        return preg_match('/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $value) === 1
+            ? $value
+            : '';
+    }
+
+    /**
+     * String-returning wrapper around the `<x-tag-color>` Blade
+     * component for presenters that build HTML via concatenation.
+     * `$type` is an icon-helper key (default `square`), `$color` is
+     * the model's `tag_color` (nullable). Empty string when the
+     * color is missing or does not pass safeColor(), so callers can
+     * `.`-concatenate unconditionally.
+     */
+    public static function tagColorIcon(?string $color, string $type = 'square', ?string $title = null): string
+    {
+        return trim((string) \Illuminate\Support\Facades\Blade::render(
+            '<x-tag-color :color="$color" :type="$type" :title="$title" />',
+            compact('color', 'type', 'title'),
+        ));
+    }
+
+    /**
      * Slice an in-memory Collection into a LengthAwarePaginator using the
      * page + perPage values normalized by SetPaginationDefaults middleware.
      *
@@ -168,6 +247,26 @@ class Helper
             max($capped->count(), 1),
             1,
         );
+    }
+
+    /**
+     * Selectlist endpoints that pass an Eloquent builder straight to ->paginate()
+     * use this so the ?all=1 contract (used by the select2-checkboxes
+     * Select All button) behaves the same across every picker.
+     */
+    public static function paginateBuilderOrAll(Builder $query, int $defaultPerPage = 50, ?int $cap = null): LengthAwarePaginator
+    {
+        if (! request()->boolean('all')) {
+            return $query->paginate($defaultPerPage);
+        }
+
+        $cap ??= (int) config('app.max_unpaginated_records', 5000);
+        $clientCap = (int) request()->integer('cap', PHP_INT_MAX);
+        if ($clientCap > 0) {
+            $cap = min($cap, $clientCap);
+        }
+
+        return $query->paginate(max($cap, 1));
     }
 
     public static function parseEscapedMarkedownInline($str = null)
@@ -711,16 +810,23 @@ class Helper
      *
      * @return array
      */
-    public static function statusTypeList()
+    public static function statusTypeList(?string $scope = null)
     {
-        $statuslabel_types =
-              ['' => trans('admin/hardware/form.select_statustype')]
-            + ['deployable' => trans('admin/hardware/general.deployable')]
-            + ['pending' => trans('admin/hardware/general.pending')]
-            + ['undeployable' => trans('admin/hardware/general.undeployable')]
-            + ['archived' => trans('admin/hardware/general.archived')];
+        // Build the list from the StatusLabelType enum so this and the
+        // enum stay in sync. Order mirrors the historical UI ordering
+        // rather than enum declaration order.
+        $types = [
+            \App\Enums\StatusLabelType::Deployable->value => \App\Enums\StatusLabelType::Deployable->label(),
+            \App\Enums\StatusLabelType::Pending->value => \App\Enums\StatusLabelType::Pending->label(),
+            \App\Enums\StatusLabelType::Undeployable->value => \App\Enums\StatusLabelType::Undeployable->label(),
+            \App\Enums\StatusLabelType::Archived->value => \App\Enums\StatusLabelType::Archived->label(),
+        ];
 
-        return $statuslabel_types;
+        if ($scope === 'non_deployable') {
+            unset($types[\App\Enums\StatusLabelType::Deployable->value]);
+        }
+
+        return ['' => trans('admin/hardware/form.select_statustype')] + $types;
     }
 
     /**
@@ -894,46 +1000,46 @@ class Helper
     {
         $alert_threshold = (int) Setting::getSettings()->alert_threshold;
 
-        // Push the "below threshold" filter into SQL via havingRaw on the
-        // withCount alias, so only rows that will actually alert get
-        // hydrated. Previous shape loaded every row with min_amt set and
-        // filtered in PHP. On a 1000-item deployment with 5 low-inventory
-        // items that meant 200x more rows than needed. Also select only
-        // the columns the foreach uses (id / name / qty / min_amt),
-        // avoiding hydration of long text columns like License::serial.
-        // select() must come BEFORE withCount(): withCount uses addSelect
-        // under the hood, so a select() after would wipe the count alias.
+        // Push the "below threshold" filter into SQL so only rows that
+        // will actually alert get hydrated.
         //
-        // GROUP BY every selected column, not just the primary key. Under
-        // ONLY_FULL_GROUP_BY, MySQL and MariaDB are supposed to accept
-        // "GROUP BY <PK>, SELECT <other cols>" via functional-dependency
-        // detection, but that detection fails on some MariaDB versions
-        // when a correlated subquery is in the SELECT list (withCount
-        // generates one). Since id is unique, adding the other columns
-        // is a cardinality no-op and works on every engine + sql_mode.
+        // Each query is wrapped in Model::fromSub(...) so the withCount
+        // alias (consumed_count, checkouts_count, etc.) becomes a plain
+        // column of the derived table, which the outer whereRaw can
+        // then filter on. The earlier shape used HAVING against the
+        // alias directly, which MySQL accepts but PostgreSQL rejects
+        // ("column does not exist" because PG won't resolve SELECT
+        // aliases in HAVING). See issue #19891.
         //
-        // havingAggregateAliases() is havingRaw() everywhere except SQL Server,
-        // which can't see SELECT aliases in HAVING (see InlinesAggregateAliases).
-        $consumables = Consumable::select('id', 'name', 'qty', 'min_amt')
-            ->withCount('consumableAssignments as consumables_users_count')
+        // Low-stock alert fires when the "still-in-play" count drops
+        // below (min_amt + threshold). Still-in-play means not yet
+        // marked consumed, so an outstanding distribution (handed out,
+        // not yet reported used up) still counts against min_amt
+        // rather than tripping the alert. This matches the Consumable
+        // policy decision that consumed is terminal and permanent.
+        $consumablesSub = Consumable::select('id', 'name', 'qty', 'min_amt')
+            ->withCount(['consumableAssignments as consumed_count' => function ($query) {
+                $query->whereNotNull('consumed_at');
+            }])
             ->whereNotNull('min_amt')
-            ->groupBy('consumables.id', 'consumables.name', 'consumables.qty', 'consumables.min_amt')
-            ->havingAggregateAliases('(qty - consumables_users_count) < (min_amt + ?)', [
-                'consumables_users_count' => fn ($query) => $query->withCount('consumableAssignments as consumables_users_count'),
-            ], [$alert_threshold])
+            ->notArchived();
+        $consumables = Consumable::query()
+            ->withoutGlobalScopes()
+            ->fromSub($consumablesSub, 'consumables')
+            ->whereRaw('(qty - consumed_count) < (min_amt + ?)', [$alert_threshold])
             ->get();
 
         // Archived accessories are retired from active inventory and
         // should not drive low-stock alerts even when they fall below
         // their min_amt threshold.
-        $accessories = Accessory::select('id', 'name', 'qty', 'min_amt')
+        $accessoriesSub = Accessory::select('id', 'name', 'qty', 'min_amt')
             ->withCount('checkouts as checkouts_count')
             ->whereNotNull('min_amt')
-            ->notArchived()
-            ->groupBy('accessories.id', 'accessories.name', 'accessories.qty', 'accessories.min_amt')
-            ->havingAggregateAliases('(qty - checkouts_count) < (min_amt + ?)', [
-                'checkouts_count' => fn ($query) => $query->withCount('checkouts as checkouts_count'),
-            ], [$alert_threshold])
+            ->notArchived();
+        $accessories = Accessory::query()
+            ->withoutGlobalScopes()
+            ->fromSub($accessoriesSub, 'accessories')
+            ->whereRaw('(qty - checkouts_count) < (min_amt + ?)', [$alert_threshold])
             ->get();
 
         // Components are checked out with a per-assignment quantity
@@ -946,27 +1052,28 @@ class Helper
         // CompanyableScope so cross-company checkouts count against
         // stock the same way the model method does. coalesce() maps
         // "no assignments" (SUM returns NULL) back to 0 so the
-        // havingRaw comparison stays numeric.
+        // whereRaw comparison stays numeric.
+        //
         // Archived components are retired from active inventory and
         // should not drive low-stock alerts even when they fall below
         // their min_amt threshold.
-        $components = Component::select('id', 'name', 'qty', 'min_amt')
+        $componentsSub = Component::select('id', 'name', 'qty', 'min_amt')
             ->withSum('unconstrainedAssets as sum_unconstrained_assets', 'components_assets.assigned_qty')
             ->whereNotNull('min_amt')
-            ->notArchived()
-            ->groupBy('components.id', 'components.name', 'components.qty', 'components.min_amt')
-            ->havingAggregateAliases('(qty - COALESCE(sum_unconstrained_assets, 0)) < (min_amt + ?)', [
-                'sum_unconstrained_assets' => fn ($query) => $query->withSum('unconstrainedAssets as sum_unconstrained_assets', 'components_assets.assigned_qty'),
-            ], [$alert_threshold])
+            ->notArchived();
+        $components = Component::query()
+            ->withoutGlobalScopes()
+            ->fromSub($componentsSub, 'components')
+            ->whereRaw('(qty - COALESCE(sum_unconstrained_assets, 0)) < (min_amt + ?)', [$alert_threshold])
             ->get();
 
-        $asset_models = AssetModel::select('id', 'name', 'min_amt')
+        $assetModelsSub = AssetModel::select('id', 'name', 'min_amt')
             ->where('min_amt', '>', 0)
-            ->withCount(['availableAssets', 'assets'])
-            ->groupBy('models.id', 'models.name', 'models.min_amt')
-            ->havingAggregateAliases('available_assets_count < (min_amt + ?)', [
-                'available_assets_count' => fn ($query) => $query->withCount('availableAssets'),
-            ], [$alert_threshold])
+            ->withCount(['availableAssets', 'assets']);
+        $asset_models = AssetModel::query()
+            ->withoutGlobalScopes()
+            ->fromSub($assetModelsSub, 'models')
+            ->whereRaw('available_assets_count < (min_amt + ?)', [$alert_threshold])
             ->get();
 
         // Use the licenses_available withCount alias directly in the
@@ -974,15 +1081,15 @@ class Helper
         // fires two extra queries per row (licenseSeatsCount via
         // getLicenseSeatsCountAttribute() and assigned_seats_count via
         // getAssignedSeatsCountAttribute()), plus a third
-        // unReassignableCount() query for non-reassignable licenses —
+        // unReassignableCount() query for non-reassignable licenses,
         // classic N+1 on a licenses-with-min_amt list.
-        $licenses = License::select('id', 'name', 'min_amt')
+        $licensesSub = License::select('id', 'name', 'min_amt')
             ->withCount('availCount as licenses_available')
-            ->where('min_amt', '>', 0)
-            ->groupBy('licenses.id', 'licenses.name', 'licenses.min_amt')
-            ->havingAggregateAliases('licenses_available < (min_amt + ?)', [
-                'licenses_available' => fn ($query) => $query->withCount('availCount as licenses_available'),
-            ], [$alert_threshold])
+            ->where('min_amt', '>', 0);
+        $licenses = License::query()
+            ->withoutGlobalScopes()
+            ->fromSub($licensesSub, 'licenses')
+            ->whereRaw('licenses_available < (min_amt + ?)', [$alert_threshold])
             ->get();
 
         $items_array = [];
@@ -1081,8 +1188,6 @@ class Helper
     {
         $finfo = @finfo_open(FILEINFO_MIME_TYPE); // return mime type ala mimetype extension
         $filetype = @finfo_file($finfo, $file);
-        finfo_close($finfo);
-
         if (($filetype == 'image/jpeg') || ($filetype == 'image/jpg') || ($filetype == 'image/png') || ($filetype == 'image/bmp') || ($filetype == 'image/gif') || ($filetype == 'image/avif') || ($filetype == 'image/webp')) {
             return $filetype;
         }
@@ -1104,8 +1209,6 @@ class Helper
     {
         $finfo = @finfo_open(FILEINFO_MIME_TYPE); // return mime type ala mimetype extension
         $filetype = @finfo_file($finfo, $file);
-        finfo_close($finfo);
-
         if (($filetype == 'video/mp4') || ($filetype == 'video/quicktime') || ($filetype == 'video/mpeg') || ($filetype == 'video/ogg') || ($filetype == 'video/webm') || ($filetype == 'video/x-msvide')) {
             return $filetype;
         }
@@ -1127,8 +1230,6 @@ class Helper
     {
         $finfo = @finfo_open(FILEINFO_MIME_TYPE); // return mime type ala mimetype extension
         $filetype = @finfo_file($finfo, $file);
-        finfo_close($finfo);
-
         if (($filetype == 'audio/mpeg') || ($filetype == 'audio/ogg')) {
             return $filetype;
         }
@@ -1324,33 +1425,6 @@ class Helper
     }
 
     /**
-     * Gracefully handle decrypting encrypted fields (custom fields, etc).
-     *
-     * @todo allow this to handle more than just strings (arrays, etc)
-     *
-     * @author A. Gianotto
-     *
-     * @since 3.6
-     *
-     * @param  string  $string
-     * @return string
-     */
-    public static function gracefulDecrypt(CustomField $field, $string)
-    {
-        if ($field->isFieldDecryptable($string)) {
-            try {
-                Crypt::decrypt($string);
-
-                return Crypt::decrypt($string);
-            } catch (DecryptException $e) {
-                return 'Error Decrypting: '.$e->getMessage();
-            }
-        }
-
-        return $string;
-    }
-
-    /**
      * Resolves the value to render in a custom-field form input for the current
      * request. Encapsulates the "encrypted + no view.encrypted_custom_fields
      * gate" branch so every element type in custom_fields_form.blade.php
@@ -1359,18 +1433,18 @@ class Helper
      *
      * Returns the shared masked-value string when the field is encrypted and
      * the caller cannot view encrypted custom fields. Otherwise returns the
-     * decrypted stored value for the given $item, or the model-scoped default
+     * decrypted stored value for the given $item, or the supplied default
      * value when no $item is present (create form path).
      */
-    public static function customFieldFormValue(CustomField $field, $item, $model)
+    public static function customFieldFormValue(CustomField $field, ?\Illuminate\Database\Eloquent\Model $item, mixed $defaultValue = null): mixed
     {
         if ($field->field_encrypted && ! Gate::allows('assets.view.encrypted_custom_fields')) {
             return strtoupper(trans('admin/custom_fields/general.encrypted'));
         }
 
         $value = isset($item)
-            ? self::gracefulDecrypt($field, $item->{$field->db_column_name()})
-            : $field->defaultValue($model->id);
+            ? $item->{$field->db_column_name()}
+            : $defaultValue;
 
         // DATE / DATETIME custom fields can hold non-YYYY-MM-DD strings
         // in the DB (e.g. `3/28/2025` from a historic CSV import that
@@ -1910,6 +1984,50 @@ class Helper
         $appHost = parse_url(config('app.url'), PHP_URL_HOST);
 
         if ($host !== null && strcasecmp($host, (string) $appHost) !== 0) {
+            return null;
+        }
+
+        return $url;
+    }
+
+    /**
+     * Narrow trust gate for the IdP-initiated SAML SLO response URL.
+     *
+     *
+     * $expectedUrl is the IdP SLO response URL from SP settings
+     * (Auth::getSLOResponseUrl). Null / empty on either input returns
+     * null, same as sameOriginUrl.
+     */
+    public static function sameHostAsConfiguredIdpUrl(?string $url, ?string $expectedUrl): ?string
+    {
+        if ($url === null || $url === '' || $expectedUrl === null || $expectedUrl === '') {
+            return null;
+        }
+
+        $url = str_replace(["\r", "\n"], '', $url);
+
+        $urlParts = parse_url($url);
+        $expectedParts = parse_url($expectedUrl);
+        if ($urlParts === false || $expectedParts === false) {
+            return null;
+        }
+
+        $scheme = isset($urlParts['scheme']) ? strtolower($urlParts['scheme']) : '';
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+
+        if (isset($urlParts['user']) || isset($urlParts['pass'])) {
+            return null;
+        }
+
+        $actualHost = $urlParts['host'] ?? null;
+        $expectedHost = $expectedParts['host'] ?? null;
+        if ($actualHost === null || $expectedHost === null) {
+            return null;
+        }
+
+        if (strcasecmp($actualHost, $expectedHost) !== 0) {
             return null;
         }
 

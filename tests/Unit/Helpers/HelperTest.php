@@ -374,6 +374,78 @@ class HelperTest extends TestCase
         $this->assertNull(Helper::sameOriginUrl('https://user:pass@evil.example.com/'));
     }
 
+    public function test_same_host_as_configured_idp_url_returns_null_for_empty_input(): void
+    {
+        $this->assertNull(Helper::sameHostAsConfiguredIdpUrl(null, 'https://keycloak.example.net/sls'));
+        $this->assertNull(Helper::sameHostAsConfiguredIdpUrl('', 'https://keycloak.example.net/sls'));
+        $this->assertNull(Helper::sameHostAsConfiguredIdpUrl('https://keycloak.example.net/sls', null));
+        $this->assertNull(Helper::sameHostAsConfiguredIdpUrl('https://keycloak.example.net/sls', ''));
+    }
+
+    public function test_same_host_as_configured_idp_url_accepts_idp_target_off_origin()
+    {
+        // Issue #20023 regression: when Keycloak sends an IdP-initiated
+        // LogoutRequest, SamlController::sls must be able to carry the
+        // SP-configured IdP SLO response URL back to LoginController
+        // even though it is off-origin. This is the gate that lets that
+        // happen.
+        config(['app.url' => 'https://snipe-it.example.com']);
+        $expected = 'https://keycloak.example.net/realms/snipe/protocol/saml';
+        $target = $expected.'?SAMLResponse=abc&RelayState=https%3A%2F%2Fapp.example.com%2Fdashboard';
+
+        $this->assertSame($target, Helper::sameHostAsConfiguredIdpUrl($target, $expected));
+    }
+
+    public function test_same_host_as_configured_idp_url_rejects_host_mismatch()
+    {
+        // A toolkit bug or crafted input that pointed the Location at a
+        // third-party host (not the SP-configured IdP) must be dropped.
+        $this->assertNull(
+            Helper::sameHostAsConfiguredIdpUrl(
+                'https://attacker.example.net/phish',
+                'https://keycloak.example.net/sls'
+            )
+        );
+    }
+
+    public function test_same_host_as_configured_idp_url_rejects_dangerous_schemes()
+    {
+        $expected = 'https://keycloak.example.net/sls';
+        $this->assertNull(Helper::sameHostAsConfiguredIdpUrl('javascript:alert(1)', $expected));
+        $this->assertNull(Helper::sameHostAsConfiguredIdpUrl('data:text/html,<script>alert(1)</script>', $expected));
+        $this->assertNull(Helper::sameHostAsConfiguredIdpUrl('file:///etc/passwd', $expected));
+    }
+
+    public function test_same_host_as_configured_idp_url_rejects_userinfo_authority()
+    {
+        // Credentials in the authority can hide the real host behind an
+        // `@`, which is a parser-differential bypass of the host-match
+        // check. Reject outright, matching sameOriginUrl's treatment.
+        $expected = 'https://keycloak.example.net/sls';
+        $this->assertNull(Helper::sameHostAsConfiguredIdpUrl('https://user@attacker.example.net@keycloak.example.net/', $expected));
+        $this->assertNull(Helper::sameHostAsConfiguredIdpUrl('https://user:pass@keycloak.example.net/sls', $expected));
+    }
+
+    public function test_same_host_as_configured_idp_url_strips_crlf()
+    {
+        $expected = 'https://keycloak.example.net/sls';
+        $target = "https://keycloak.example.net/sls?SAMLResponse=abc\r\nSet-Cookie: attacker=1";
+
+        $sanitized = Helper::sameHostAsConfiguredIdpUrl($target, $expected);
+
+        $this->assertNotNull($sanitized);
+        $this->assertStringNotContainsString("\r", $sanitized);
+        $this->assertStringNotContainsString("\n", $sanitized);
+    }
+
+    public function test_same_host_as_configured_idp_url_host_match_is_case_insensitive()
+    {
+        $this->assertSame(
+            'https://Keycloak.Example.Net/sls?SAMLResponse=abc',
+            Helper::sameHostAsConfiguredIdpUrl('https://Keycloak.Example.Net/sls?SAMLResponse=abc', 'https://keycloak.example.net/sls')
+        );
+    }
+
     public function test_safe_intended_returns_stored_url_when_it_passes_the_origin_guard(): void
     {
         config(['app.url' => 'https://app.example.com']);
@@ -449,7 +521,7 @@ class HelperTest extends TestCase
         // because CustomField columns are added at runtime and are not in
         // Asset's $fillable, so `new Asset([...])` would silently drop them.
         $asset = new \App\Models\Asset;
-        $asset->{$field->db_column} = \Illuminate\Support\Facades\Crypt::encrypt('very-secret-value');
+        $asset->{$field->db_column} = 'very-secret-value';
 
         $model = \App\Models\AssetModel::factory()->make();
 
@@ -457,7 +529,7 @@ class HelperTest extends TestCase
 
         $this->assertSame(
             strtoupper(trans('admin/custom_fields/general.encrypted')),
-            Helper::customFieldFormValue($field, $asset, $model)
+            Helper::customFieldFormValue($field, $asset)
         );
     }
 
@@ -467,7 +539,7 @@ class HelperTest extends TestCase
         $field = \App\Models\CustomField::where('name', 'Test Encrypted')->first();
 
         $asset = new \App\Models\Asset;
-        $asset->{$field->db_column} = \Illuminate\Support\Facades\Crypt::encrypt('very-secret-value');
+        $asset->{$field->db_column} = 'very-secret-value';
 
         $model = \App\Models\AssetModel::factory()->make();
 
@@ -475,7 +547,7 @@ class HelperTest extends TestCase
 
         $this->assertSame(
             'very-secret-value',
-            Helper::customFieldFormValue($field, $asset, $model)
+            Helper::customFieldFormValue($field, $asset)
         );
     }
 
@@ -492,7 +564,7 @@ class HelperTest extends TestCase
 
         $model = \App\Models\AssetModel::factory()->make();
 
-        $this->assertSame('16', Helper::customFieldFormValue($field, $asset, $model));
+        $this->assertSame('16', Helper::customFieldFormValue($field, $asset));
     }
 
     public function test_custom_field_form_value_returns_default_when_item_is_null(): void
@@ -501,11 +573,13 @@ class HelperTest extends TestCase
         // model-scoped default value for the field.
         \App\Models\CustomField::factory()->ram()->create();
         $field = \App\Models\CustomField::where('name', 'RAM')->first();
-        $model = \App\Models\AssetModel::factory()->create();
+        $model = \App\Models\AssetModel::factory()->hasMultipleCustomFields([$field])->create();
+        $model->defaultValues()->attach($field, ['default_value' => '16']);
+        $defaults = \App\Models\CustomFieldDefault::valuesFor($model);
 
         $this->assertSame(
-            $field->defaultValue($model->id),
-            Helper::customFieldFormValue($field, null, $model)
+            '16',
+            Helper::customFieldFormValue($field, null, $defaults[$field->db_column] ?? null)
         );
     }
 
@@ -516,13 +590,15 @@ class HelperTest extends TestCase
         // so the mask should win over the default-value fallback.
         \App\Models\CustomField::factory()->testEncrypted()->create();
         $field = \App\Models\CustomField::where('name', 'Test Encrypted')->first();
-        $model = \App\Models\AssetModel::factory()->create();
+        $model = \App\Models\AssetModel::factory()->hasMultipleCustomFields([$field])->create();
+        $model->defaultValues()->attach($field, ['default_value' => 'default secret']);
+        $defaults = \App\Models\CustomFieldDefault::valuesFor($model);
 
         $this->actingAs(\App\Models\User::factory()->editAssets()->create());
 
         $this->assertSame(
             strtoupper(trans('admin/custom_fields/general.encrypted')),
-            Helper::customFieldFormValue($field, null, $model)
+            Helper::customFieldFormValue($field, null, $defaults[$field->db_column] ?? null)
         );
     }
 
@@ -548,7 +624,7 @@ class HelperTest extends TestCase
         $asset->{$field->db_column} = '3/28/2025';
         $model = \App\Models\AssetModel::factory()->make();
 
-        $this->assertSame('2025-03-28', Helper::customFieldFormValue($field, $asset, $model));
+        $this->assertSame('2025-03-28', Helper::customFieldFormValue($field, $asset));
     }
 
     public function test_custom_field_form_value_normalizes_us_formatted_datetime_to_ymd_his(): void
@@ -563,7 +639,7 @@ class HelperTest extends TestCase
         $asset->{$field->db_column} = '3/28/2025 09:15:00';
         $model = \App\Models\AssetModel::factory()->make();
 
-        $this->assertSame('2025-03-28 09:15:00', Helper::customFieldFormValue($field, $asset, $model));
+        $this->assertSame('2025-03-28 09:15:00', Helper::customFieldFormValue($field, $asset));
     }
 
     public function test_custom_field_form_value_leaves_already_normalized_date_untouched(): void
@@ -578,7 +654,7 @@ class HelperTest extends TestCase
         $asset->{$field->db_column} = '2026-08-20';
         $model = \App\Models\AssetModel::factory()->make();
 
-        $this->assertSame('2026-08-20', Helper::customFieldFormValue($field, $asset, $model));
+        $this->assertSame('2026-08-20', Helper::customFieldFormValue($field, $asset));
     }
 
     public function test_custom_field_form_value_leaves_unparseable_date_value_untouched(): void
@@ -598,6 +674,186 @@ class HelperTest extends TestCase
         $asset->{$field->db_column} = '2028 1st Qtr';
         $model = \App\Models\AssetModel::factory()->make();
 
-        $this->assertSame('2028 1st Qtr', Helper::customFieldFormValue($field, $asset, $model));
+        $this->assertSame('2028 1st Qtr', Helper::customFieldFormValue($field, $asset));
+    }
+
+    // =====================================================================
+    // safeUrl: GHSA-65hf-5j7r-2xvv sink helper for user-supplied URLs
+    // rendered as hrefs. Deny-list of code-executing schemes.
+    // =====================================================================
+
+    public function test_safe_url_passes_through_http_and_https(): void
+    {
+        $this->assertSame('http://example.com/x', Helper::safeUrl('http://example.com/x'));
+        $this->assertSame('https://example.com/x', Helper::safeUrl('https://example.com/x'));
+    }
+
+    public function test_safe_url_passes_through_custom_app_schemes(): void
+    {
+        // file://, vnc://, ssh://, rdp://, smb://, obsidian://, etc.
+        // delegate to an external handler and do not execute code
+        // in the page origin, so they stay allowed.
+        $this->assertSame('file:///etc/hosts', Helper::safeUrl('file:///etc/hosts'));
+        $this->assertSame('vnc://corp.example.com', Helper::safeUrl('vnc://corp.example.com'));
+        $this->assertSame('obsidian://open?vault=x', Helper::safeUrl('obsidian://open?vault=x'));
+    }
+
+    public function test_safe_url_passes_through_relative_urls(): void
+    {
+        $this->assertSame('/hardware/5', Helper::safeUrl('/hardware/5'));
+        $this->assertSame('hardware/5', Helper::safeUrl('hardware/5'));
+        $this->assertSame('#fragment', Helper::safeUrl('#fragment'));
+    }
+
+    public function test_safe_url_returns_empty_for_null_or_empty_input(): void
+    {
+        $this->assertSame('', Helper::safeUrl(null));
+        $this->assertSame('', Helper::safeUrl(''));
+    }
+
+    public function test_safe_url_rejects_javascript_scheme(): void
+    {
+        $this->assertSame('', Helper::safeUrl('javascript:alert(document.domain)'));
+    }
+
+    public function test_safe_url_rejects_javascript_scheme_case_insensitive(): void
+    {
+        $this->assertSame('', Helper::safeUrl('JavaScript:alert(1)'));
+        $this->assertSame('', Helper::safeUrl('JAVASCRIPT:alert(1)'));
+    }
+
+    public function test_safe_url_rejects_other_executable_schemes(): void
+    {
+        $this->assertSame('', Helper::safeUrl('vbscript:MsgBox(1)'));
+        $this->assertSame('', Helper::safeUrl('livescript:foo'));
+        $this->assertSame('', Helper::safeUrl('mocha:foo'));
+        $this->assertSame('', Helper::safeUrl('data:text/html,<script>alert(1)</script>'));
+    }
+
+    public function test_safe_url_strips_control_characters_in_scheme_before_check(): void
+    {
+        // Browsers normalize these out before parsing the scheme,
+        // so the helper must too or a payload like java\tscript:...
+        // would sail past the prefix check.
+        $this->assertSame('', Helper::safeUrl("java\tscript:alert(1)"));
+        $this->assertSame('', Helper::safeUrl("java\nscript:alert(1)"));
+        $this->assertSame('', Helper::safeUrl("java\rscript:alert(1)"));
+        $this->assertSame('', Helper::safeUrl("javascript\0:alert(1)"));
+    }
+
+    public function test_safe_url_strips_leading_whitespace_before_scheme_check(): void
+    {
+        $this->assertSame('', Helper::safeUrl(' javascript:alert(1)'));
+        $this->assertSame('', Helper::safeUrl("\t javascript:alert(1)"));
+        $this->assertSame('', Helper::safeUrl("\n\tjavascript:alert(1)"));
+    }
+
+    // =====================================================================
+    // safeColor: GHSA-8rcp-h6xj-5v7h sink helper for user-supplied
+    // colors rendered inside an inline style attribute. Strict hex-only
+    // allow-list so a CSS declaration cannot inject.
+    // =====================================================================
+
+    public function test_safe_color_accepts_valid_hex_shapes(): void
+    {
+        $this->assertSame('#abc', Helper::safeColor('#abc'));
+        $this->assertSame('#abcd', Helper::safeColor('#abcd'));
+        $this->assertSame('#aabbcc', Helper::safeColor('#aabbcc'));
+        $this->assertSame('#aabbccdd', Helper::safeColor('#aabbccdd'));
+        $this->assertSame('#FFFFFF', Helper::safeColor('#FFFFFF'));
+    }
+
+    public function test_safe_color_rejects_css_declarations(): void
+    {
+        // Core advisory payload: semicolon escape into additional
+        // CSS declarations.
+        $this->assertSame('', Helper::safeColor('red; position:fixed; top:0; left:0;'));
+        $this->assertSame('', Helper::safeColor('#aaa; display:none'));
+    }
+
+    public function test_safe_color_rejects_color_keywords(): void
+    {
+        // Keywords are technically valid CSS, but the color-picker
+        // inputs emit hex only. Stricter is safer.
+        $this->assertSame('', Helper::safeColor('red'));
+        $this->assertSame('', Helper::safeColor('transparent'));
+        $this->assertSame('', Helper::safeColor('currentColor'));
+    }
+
+    public function test_safe_color_rejects_rgb_hsl_functions(): void
+    {
+        $this->assertSame('', Helper::safeColor('rgb(255, 0, 0)'));
+        $this->assertSame('', Helper::safeColor('hsl(120, 100%, 50%)'));
+    }
+
+    public function test_safe_color_rejects_malformed_hex(): void
+    {
+        $this->assertSame('', Helper::safeColor('#'));
+        $this->assertSame('', Helper::safeColor('#x'));
+        $this->assertSame('', Helper::safeColor('#aabbccdde'));
+        $this->assertSame('', Helper::safeColor('aabbcc'));
+        $this->assertSame('', Helper::safeColor('#aa bb'));
+    }
+
+    public function test_safe_color_returns_empty_for_null_or_empty_input(): void
+    {
+        $this->assertSame('', Helper::safeColor(null));
+        $this->assertSame('', Helper::safeColor(''));
+    }
+
+    public function test_paginate_builder_or_all_uses_default_per_page_without_all_flag(): void
+    {
+        // Baseline: a plain selectlist call (no ?all=1) must behave as
+        // if the controller had called ->paginate(50) directly, so the
+        // helper is a safe drop-in for every endpoint it's wired into.
+        Location::factory()->count(5)->create();
+
+        $paginator = Helper::paginateBuilderOrAll(Location::query());
+
+        $this->assertSame(50, $paginator->perPage());
+        $this->assertSame(5, $paginator->total());
+    }
+
+    public function test_paginate_builder_or_all_expands_to_cap_when_all_flag_set(): void
+    {
+        // With ?all=1 the helper must return every row in one page so
+        // the select2-checkboxes Select All button doesn't need to walk
+        // paginated pages (which is the whole gap #20106 reported).
+        Location::factory()->count(75)->create();
+
+        $this->app['request']->merge(['all' => 1]);
+
+        $paginator = Helper::paginateBuilderOrAll(Location::query());
+
+        $this->assertSame(75, $paginator->total());
+        $this->assertCount(75, $paginator->items(), 'All 75 rows must land on page 1 under ?all=1.');
+    }
+
+    public function test_paginate_builder_or_all_honors_client_cap_as_lowering_only_ceiling(): void
+    {
+        // A client ?cap=N is a suggestion that can only LOWER the
+        // effective cap, never raise it above the server knob. This
+        // test pins the lowering-only direction.
+        Location::factory()->count(30)->create();
+
+        $this->app['request']->merge(['all' => 1, 'cap' => 10]);
+
+        $paginator = Helper::paginateBuilderOrAll(Location::query());
+
+        $this->assertCount(10, $paginator->items(), 'Client ?cap=10 must lower the returned set to 10 rows.');
+    }
+
+    public function test_paginate_builder_or_all_rejects_cap_higher_than_server_ceiling(): void
+    {
+        // Malicious ?cap=99999999 must not blow past the server-side
+        // MAX_UNPAGINATED config, so cap the cap at the server value.
+        config(['app.max_unpaginated_records' => 25]);
+        Location::factory()->count(40)->create();
+
+        $this->app['request']->merge(['all' => 1, 'cap' => 99999999]);
+
+        $paginator = Helper::paginateBuilderOrAll(Location::query());
+
+        $this->assertCount(25, $paginator->items(), 'Client cap must be clamped to the server-side ceiling.');
     }
 }

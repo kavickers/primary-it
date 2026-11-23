@@ -3,27 +3,13 @@
 namespace App\Providers;
 
 use App\Exceptions\SyncAdapterVendorException;
-use App\Models\Accessory;
 use App\Models\Asset;
-use App\Models\AssetModel;
-use App\Models\Component;
-use App\Models\Consumable;
-use App\Models\License;
-use App\Models\Location;
 use App\Models\Maintenance;
 use App\Models\Setting;
 use App\Models\SnipeSCIMConfig;
-use App\Models\User;
-use App\Observers\AccessoryObserver;
-use App\Observers\AssetModelObserver;
 use App\Observers\AssetObserver;
-use App\Observers\ComponentObserver;
-use App\Observers\ConsumableObserver;
-use App\Observers\LicenseObserver;
-use App\Observers\LocationObserver;
 use App\Observers\MaintenanceObserver;
 use App\Observers\SettingObserver;
-use App\Observers\UserObserver;
 use App\Services\SqlServer\SqlServerConnection;
 use App\View\Composers\ImpersonationBannerComposer;
 use App\View\Composers\SidebarComposer;
@@ -36,6 +22,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Passport\Passport;
 use Rollbar\Laravel\RollbarServiceProvider;
 
 /**
@@ -70,6 +57,17 @@ class AppServiceProvider extends ServiceProvider
             $url->forceScheme('https');
         }
 
+        Passport::enablePasswordGrant();
+
+        // Route OAuth consent to the MCP-specific view only when the
+        // authorization request actually targets an MCP scope.
+        Passport::authorizationView(function (array $parameters) {
+            $requestsMcpScope = collect($parameters['scopes'] ?? [])
+                ->contains(fn($scope) => str_starts_with($scope->id, 'mcp:'));
+
+            return view($requestsMcpScope ? 'mcp.authorize' : 'passport.authorize', $parameters);
+        });
+
         if (! config('app.allow_insecure_hosts')) {  // unless you set APP_ALLOW_INSECURE_HOSTS, you should PROHIBIT forging domain parts of URL via Host: headers
             $url_parts = parse_url(config('app.url'));
             if ($url_parts && array_key_exists('scheme', $url_parts) && array_key_exists('host', $url_parts)) { // check for the *required* parts of a bare-minimum URL
@@ -85,16 +83,10 @@ class AppServiceProvider extends ServiceProvider
         View::composer('partials.impersonation-banner', ImpersonationBannerComposer::class);
 
         Schema::defaultStringLength(191);
-        Accessory::observe(AccessoryObserver::class);
+
         Asset::observe(AssetObserver::class);
-        AssetModel::observe(AssetModelObserver::class);
-        Component::observe(ComponentObserver::class);
-        Consumable::observe(ConsumableObserver::class);
-        License::observe(LicenseObserver::class);
-        Location::observe(LocationObserver::class);
         Maintenance::observe(MaintenanceObserver::class);
         Setting::observe(SettingObserver::class);
-        User::observe(UserObserver::class);
 
         // Defense against sync-adapter base URLs pointing at the vendor's
         // web console instead of their API. A wrong URL commonly returns
@@ -125,7 +117,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-
         if ($this->app->environment('local')) {
             $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
             $this->app->register(TelescopeServiceProvider::class);

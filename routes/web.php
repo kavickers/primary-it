@@ -38,6 +38,7 @@ use App\Http\Controllers\StatuslabelsController;
 use App\Http\Controllers\StorageProxyController;
 use App\Http\Controllers\SuppliersController;
 use App\Http\Controllers\SyncAdapterController;
+use App\Http\Controllers\UnacceptedAcceptancesController;
 use App\Http\Controllers\UploadedFilesController;
 use App\Http\Controllers\ViewAssetsController;
 use App\Livewire\Importer;
@@ -411,9 +412,13 @@ Route::group(['prefix' => 'admin', 'middleware' => ['auth', 'authorize:superuser
         ->name('settings.labels.save');
 
     Route::get('/settings/labels/create', [LabelsController::class, 'create'])
-        ->name('settings.labels.create');
+        ->name('settings.labels.create')
+        ->breadcrumbs(fn(Trail $trail) => $trail->parent('settings.labels.index')
+            ->push(ucfirst(trans('general.create')), route('settings.labels.create')));
     Route::get('/settings/labels/{label}/edit', [LabelsController::class, 'edit'])
-        ->name('settings.labels.edit');
+        ->name('settings.labels.edit')
+        ->breadcrumbs(fn(Trail $trail) => $trail->parent('settings.labels.index')
+            ->push(ucfirst(trans('general.edit')), route('settings.labels.edit', request()->route('label'))));;
     Route::post('/settings/labels', [LabelsController::class, 'store'])
         ->name('settings.labels.store');
     Route::put('/settings/labels/{label}', [LabelsController::class, 'update'])
@@ -875,32 +880,32 @@ Route::group(['prefix' => 'reports', 'middleware' => ['auth']], function () {
     Route::post('activity', [ReportsController::class, 'postActivityReport'])
         ->name('reports.activity.post');
 
-    Route::get('unaccepted_assets/{deleted?}', [ReportsController::class, 'getAssetAcceptanceReport'])
-        ->name('reports/unaccepted_assets')
-        // Same reasoning as reports.activity above: scoped viewers
-        // arrive via the Needs Attention widget's link and would 403
-        // if we exposed a "Reports" middle crumb linking to
-        // reports.index.
-        ->breadcrumbs(function (Trail $trail) {
-            $trail->parent('home');
-            if (Gate::allows('reports.view')) {
-                $trail->push(trans('general.reports'), route('reports.index'));
-            }
-            $trail->push(trans('general.unaccepted_asset_report'), route('reports/unaccepted_assets'));
+    // Old /reports/unaccepted_assets* URLs. The surface moved out of
+    // reports in v8.9 because the actions (reminder sends, deletes)
+    // belong behind a checkout-shaped grant, not reports.view. Keep
+    // 301s on the old URLs so external bookmarks and the console
+    // command docs don't break.
+    Route::redirect('unaccepted_assets', '/unaccepted-acceptances', 301);
+    Route::redirect('unaccepted_assets/deleted', '/unaccepted-acceptances?deleted=deleted', 301);
 
-            return $trail;
-        });
+});
 
-    Route::post('unaccepted_assets/sent_reminder', [ReportsController::class, 'sentAssetAcceptanceReminder'])
-        ->name('reports/unaccepted_assets_sent_reminder');
+Route::middleware(['auth'])->group(function () {
+    Route::get('unaccepted-acceptances', [UnacceptedAcceptancesController::class, 'index'])
+        ->name('unaccepted-acceptances.index')
+        ->breadcrumbs(fn (Trail $trail) => $trail->parent('home', route('home'))
+            ->push(trans('general.unaccepted_asset_report'), route('unaccepted-acceptances.index'))
+        );
 
-    Route::delete('unaccepted_assets/{acceptanceId}/delete', [ReportsController::class, 'deleteAssetAcceptance'])
-        ->name('reports/unaccepted_assets_delete');
+    Route::post('unaccepted-acceptances/send-reminder', [UnacceptedAcceptancesController::class, 'sendReminder'])
+        ->name('unaccepted-acceptances.send-reminder');
 
-    Route::post(
-        'unaccepted_assets/{deleted?}', [ReportsController::class, 'postAssetAcceptanceReport'])
-        ->name('reports/export/unaccepted_assets');
+    Route::post('unaccepted-acceptances/bulk-send-reminders', [UnacceptedAcceptancesController::class, 'bulkSendReminders'])
+        ->name('unaccepted-acceptances.bulk-send-reminders');
 
+    Route::delete('unaccepted-acceptances/{acceptanceId}', [UnacceptedAcceptancesController::class, 'destroy'])
+        ->whereNumber('acceptanceId')
+        ->name('unaccepted-acceptances.destroy');
 });
 
 Route::get(

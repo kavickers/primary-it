@@ -44,6 +44,35 @@ class NinjaOneAdapterTest extends TestCase
         $this->assertDatabaseHas('asset_external_sources', ['source' => 'ninjaone', 'external_id' => '99']);
     }
 
+    public function test_token_exchange_requests_both_monitoring_and_management_scopes()
+    {
+        /*
+         * Regression for issue #20020. NinjaOne only issues the scopes
+         * literally named in the token-exchange POST body. If scope is
+         * just "monitoring", the push side (PATCH /v2/device/{id}/
+         * custom-fields) fails with 401 insufficient_privileges. The
+         * single cached bearer has to carry both scopes so pull and
+         * push both work against the same token.
+         */
+        $adapter = $this->configuredAdapter();
+
+        Http::fake([
+            '*/ws/oauth/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
+            '*/v2/devices-detailed*' => Http::response([]),
+        ]);
+
+        iterator_to_array($adapter->pull());
+
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), '/ws/oauth/token')) {
+                return false;
+            }
+            parse_str($request->body(), $parsed);
+
+            return ($parsed['scope'] ?? null) === 'monitoring management';
+        });
+    }
+
     public function test_normalized_record_carries_expected_fields()
     {
         $adapter = $this->configuredAdapter();
@@ -90,6 +119,53 @@ class NinjaOneAdapterTest extends TestCase
         $this->assertSame('alice', $record->assignedUserName);
         $this->assertSame('42', $record->vendorGroupId);
         $this->assertNotNull($record->lastSeen);
+    }
+
+    public function test_fetch_groups_returns_ninjaone_organizations_as_id_label_pairs()
+    {
+        $adapter = $this->configuredAdapter();
+
+        Http::fake([
+            '*/ws/oauth/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
+            '*/v2/organizations*' => Http::response([
+                ['id' => 1, 'name' => 'Acme Corp'],
+                ['id' => 2, 'name' => 'Globex'],
+            ]),
+        ]);
+
+        $this->assertSame([
+            ['id' => '1', 'label' => 'Acme Corp'],
+            ['id' => '2', 'label' => 'Globex'],
+        ], $adapter->fetchGroups());
+    }
+
+    public function test_fetch_groups_pages_through_all_organizations()
+    {
+        // The client pages with ?after=<lastId>&pageSize=N until a
+        // short page comes back. Force a two-page walk so the cursor
+        // advance (last id of page one -> after on page two) stays
+        // regression-covered even when real MSP installs have <500
+        // orgs.
+        $adapter = $this->configuredAdapter();
+
+        $pageSize = 500;
+        $firstPage = [];
+        for ($i = 1; $i <= $pageSize; $i++) {
+            $firstPage[] = ['id' => $i, 'name' => 'Org '.$i];
+        }
+
+        Http::fake([
+            '*/ws/oauth/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
+            '*/v2/organizations*' => Http::sequence()
+                ->push($firstPage)
+                ->push([['id' => $pageSize + 1, 'name' => 'Final Org']]),
+        ]);
+
+        $groups = $adapter->fetchGroups();
+
+        $this->assertCount($pageSize + 1, $groups);
+        $this->assertSame(['id' => '1', 'label' => 'Org 1'], $groups[0]);
+        $this->assertSame(['id' => (string) ($pageSize + 1), 'label' => 'Final Org'], $groups[$pageSize]);
     }
 
     public function test_zero_last_contact_does_not_produce_epoch_1970()

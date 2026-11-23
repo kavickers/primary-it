@@ -97,7 +97,7 @@ trait HasCustomLabelEditorSections
                                 'label' => trans('admin/labels/general.fields.barcode2D_v_align'),
                                 'options' => [
                                     'T' => trans('admin/labels/general.options.top'),
-                                    'M' => trans('admin/labels/general.options.middle'),
+                                    'C' => trans('admin/labels/general.options.middle'),
                                     'B' => trans('admin/labels/general.options.bottom'),
                                 ],
                             ],
@@ -151,6 +151,14 @@ trait HasCustomLabelEditorSections
                             'logo_margin' => [
                                 'type' => 'number',
                                 'label' => trans('admin/labels/general.fields.logo_margin'),
+                            ],
+                            'logo_position' => [
+                                'type' => 'select',
+                                'label' => trans('admin/labels/general.fields.logo_position'),
+                                'options' => [
+                                    'inline' => trans('admin/labels/general.options.inline'),
+                                    'top' => trans('admin/labels/general.options.top'),
+                                ],
                             ],
                             'logo_h_align' => [
                                 'type' => 'select',

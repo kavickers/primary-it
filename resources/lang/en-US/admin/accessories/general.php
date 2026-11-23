@@ -4,6 +4,8 @@ return [
     'accessory_category' => 'Accessory Category',
     'accessory_name' => 'Accessory Name',
     'checkout' => 'Checkout Accessory',
+    'bulk_checkout' => 'Bulk Checkout Accessories',
+    'accessories_selected' => 'Accessories Selected',
     'checkin' => 'Checkin Accessory',
     'create' => 'Create Accessory',
     'edit' => 'Edit Accessory',
@@ -20,9 +22,5 @@ return [
     'clone' => 'Clone Accessory',
     'delete_disabled' => 'This accessory cannot be deleted yet because some items are still checked out.',
     'accessory_deleted_warning' => 'This accessory has been deleted. You must restore it before you can assign it.',
-    'bulk_delete_help' => 'Review the accessories you are about to delete. Accessories with checkouts are unselected and cannot be removed until their checkouts are returned.',
-    'bulk_delete_warn' => 'You are about to delete :accessory_count accessory.|You are about to delete :accessory_count accessories.',
-    'bulk_edit_warn' => 'You are editing :accessory_count accessory.|You are editing :accessory_count accessories.',
-    'bulk_edit_help' => 'Only fields you fill below are written to the selected accessories. Leave a field blank to leave it as-is.',
 
 ];

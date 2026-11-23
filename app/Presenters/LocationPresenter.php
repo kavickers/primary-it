@@ -63,7 +63,7 @@ class LocationPresenter extends Presenter
             ], [
                 'field' => 'parent',
                 'scope' => 'col',
-                'searchable' => false,
+                'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
                 'title' => trans('admin/locations/table.parent'),
@@ -258,7 +258,7 @@ class LocationPresenter extends Presenter
             ], [
                 'field' => 'manager',
                 'scope' => 'col',
-                'searchable' => false,
+                'searchable' => true,
                 'sortable' => true,
                 'switchable' => true,
                 'title' => trans('admin/users/table.manager'),
@@ -440,9 +440,9 @@ class LocationPresenter extends Presenter
     {
 
         if (auth()->user()->can('view', ['\App\Models\Location', $this])) {
-            return ($this->tag_color ? "<i class='fa-solid fa-fw fa-square' style='color: ".e($this->tag_color)."' aria-hidden='true'></i>" : '').'<a href="'.route('locations.show', e($this->id)).'">'.e($this->display_name).'</a>';
+            return \App\Helpers\Helper::tagColorIcon($this->tag_color).'<a href="'.route('locations.show', e($this->id)).'">'.e($this->display_name).'</a>';
         }
 
-        return ($this->tag_color ? "<i class='fa-solid fa-fw fa-square' style='color: ".e($this->tag_color)."' aria-hidden='true'></i> " : '').e($this->display_name);
+        return \App\Helpers\Helper::tagColorIcon($this->tag_color).e($this->display_name);
     }
 }

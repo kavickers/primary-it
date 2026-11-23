@@ -1,5 +1,6 @@
 @props([
     'infoPanelObj' => null,
+    'fieldset' => null,
     'img_path' => null,
     'qr_code_url' => null,
     'snipeSettings' => \App\Models\Setting::getSettings()
@@ -128,6 +129,8 @@
                 </x-copy-to-clipboard>
             </x-info-element>
 
+            <x-info-panel.mfg-fields :model="$infoPanelObj->model" />
+
         @elseif ($infoPanelObj->model_number)
             <!-- This is not an asset (with a model) so just grab it off the object -->
             <x-info-element icon_type="number" title="{{ trans('general.model_no') }}">
@@ -136,6 +139,10 @@
                     {{ $infoPanelObj->model_number }}
                 </x-copy-to-clipboard>
             </x-info-element>
+        @endif
+
+        @if ($infoPanelObj instanceof \App\Models\AssetModel)
+            <x-info-panel.mfg-fields :model="$infoPanelObj" />
         @endif
 
         @if ($infoPanelObj->item_no)
@@ -353,9 +360,9 @@
         @endif
 
 
-        @if ($infoPanelObj->fieldset)
+        @if ($fieldset)
             <x-info-element icon_type="fieldset" title="{{ trans('admin/custom_fields/general.fieldset_name') }}">
-                {!!  $infoPanelObj->fieldset->present()->nameUrl !!}
+                {!!  $fieldset->present()->nameUrl !!}
             </x-info-element>
         @endif
 
@@ -366,13 +373,7 @@
 
         @if (($infoPanelObj instanceof \App\Models\Location) && (isset($infoPanelObj->parent)) && ($infoPanelObj->parent))
             @php
-                $locationAncestors = [];
-                $ancestorCursor = $infoPanelObj->parent;
-
-                while ($ancestorCursor) {
-                    array_unshift($locationAncestors, $ancestorCursor);
-                    $ancestorCursor = $ancestorCursor->parent;
-                }
+                $locationAncestors = $infoPanelObj->ancestors()->reverse();
             @endphp
             <x-info-element icon_type="parent" title="{{ trans('admin/locations/table.parent') }}">
                 @foreach ($locationAncestors as $ancestor)
@@ -663,10 +664,9 @@
         @endif
 
 
-        @if ($infoPanelObj->tag_color)
-            <x-info-element>
-                <x-icon type="square" class="fa-fw" style="color: {{ $infoPanelObj->tag_color }}" title="{{ trans('general.tag_color') }}"/>
-                {{ $infoPanelObj->tag_color }}
+        @if (\App\Helpers\Helper::safeColor($infoPanelObj->tag_color) !== '')
+            <x-info-element icon_type="square" :icon_color="$infoPanelObj->tag_color" :title="trans('general.tag_color')">
+                {{ \App\Helpers\Helper::safeColor($infoPanelObj->tag_color) }}
             </x-info-element>
         @endif
 

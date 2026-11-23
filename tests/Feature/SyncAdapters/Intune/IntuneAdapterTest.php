@@ -92,6 +92,48 @@ class IntuneAdapterTest extends TestCase
         $this->assertNotNull($record->lastSeen);
     }
 
+    public function test_nextlink_pagination_follows_skiptoken_cursor_through_every_page()
+    {
+        // Regression for #19916. Before the fix, managedDevices() passed
+        // an empty-array $query to Http::get(), which Laravel forwards as
+        // Guzzle's `query` option. Guzzle replaces the URL's query string
+        // even when the option is an empty array, so the $skiptoken on
+        // the @odata.nextLink cursor got stripped and Graph served page 1
+        // forever. Tenants under ~1,000 devices never saw it because they
+        // only ever had one page.
+        $adapter = $this->configuredAdapter();
+
+        $callsPerPage = ['page1' => 0, 'page2' => 0];
+
+        Http::fake([
+            '*/oauth2/v2.0/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
+            '*/v1.0/deviceManagement/managedDevices*' => function ($request) use (&$callsPerPage) {
+                if (str_contains($request->url(), '$skiptoken=cursor-abc')) {
+                    $callsPerPage['page2']++;
+
+                    return Http::response([
+                        'value' => [$this->intuneDevice(id: 'guid-page2', name: 'host-page2')],
+                    ]);
+                }
+
+                $callsPerPage['page1']++;
+
+                return Http::response([
+                    'value' => [$this->intuneDevice(id: 'guid-page1', name: 'host-page1')],
+                    '@odata.nextLink' => 'https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?$skiptoken=cursor-abc',
+                ]);
+            },
+        ]);
+
+        $records = iterator_to_array($adapter->pull(), preserve_keys: false);
+
+        $ids = array_map(fn ($record) => $record->sourceId, $records);
+        $this->assertEqualsCanonicalizing(['guid-page1', 'guid-page2'], $ids,
+            'Pagination must follow @odata.nextLink and yield both pages, not loop on page 1.');
+        $this->assertSame(1, $callsPerPage['page1'], 'Page 1 should be fetched exactly once.');
+        $this->assertSame(1, $callsPerPage['page2'], 'Page 2 (via $skiptoken) should be fetched exactly once.');
+    }
+
     public function test_nextlink_cursor_cannot_redirect_bearer_to_arbitrary_host()
     {
         // Graph normally serves `@odata.nextLink` from the same host as
@@ -150,13 +192,17 @@ class IntuneAdapterTest extends TestCase
             || str_contains($request->url(), 'graph.microsoft.com/page2'));
     }
 
-    public function test_scope_tag_filter_resolves_names_to_ids_and_sends_odata_filter()
+    public function test_scope_tag_filter_narrows_devices_via_client_side_check()
     {
+        // Server-side scope-tag filtering is not supported by Microsoft
+        // Graph on either v1.0 or beta (see #19849). The adapter now
+        // iterates the full /v1.0/ device list and does a per-device
+        // beta GET to resolve roleScopeTagIds, then filters client-side.
         $adapter = $this->configuredAdapter(scopeTagFilter: 'Marketing, 7');
 
         Http::fake([
             '*/oauth2/v2.0/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
-            '*/v1.0/deviceManagement/roleScopeTags*' => Http::response([
+            '*/beta/deviceManagement/roleScopeTags*' => Http::response([
                 'value' => [
                     ['id' => '3', 'displayName' => 'Marketing'],
                     ['id' => '7', 'displayName' => 'Engineering'],
@@ -166,65 +212,113 @@ class IntuneAdapterTest extends TestCase
             '*/v1.0/deviceManagement/managedDevices*' => Http::response([
                 'value' => [
                     $this->intuneDevice(id: 'guid-marketing', name: 'host-marketing'),
+                    $this->intuneDevice(id: 'guid-finance', name: 'host-finance'),
+                    $this->intuneDevice(id: 'guid-notag', name: 'host-notag'),
                 ],
+            ]),
+            '*/beta/deviceManagement/managedDevices/guid-marketing*' => Http::response([
+                'id' => 'guid-marketing',
+                'roleScopeTagIds' => ['3'],
+            ]),
+            '*/beta/deviceManagement/managedDevices/guid-finance*' => Http::response([
+                'id' => 'guid-finance',
+                'roleScopeTagIds' => ['11'],
+            ]),
+            '*/beta/deviceManagement/managedDevices/guid-notag*' => Http::response([
+                'id' => 'guid-notag',
+                'roleScopeTagIds' => [],
+            ]),
+        ]);
+
+        $records = iterator_to_array($adapter->pull());
+
+        $this->assertCount(1, $records);
+        $this->assertSame('guid-marketing', $records[0]->sourceId);
+    }
+
+    public function test_blank_scope_tag_filter_skips_per_device_checks()
+    {
+        // No filter means we stay on /v1.0/ for the list AND we don't
+        // make any per-device beta calls.
+        $adapter = $this->configuredAdapter(scopeTagFilter: '');
+
+        Http::fake([
+            '*/oauth2/v2.0/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
+            '*/v1.0/deviceManagement/managedDevices*' => Http::response([
+                'value' => [$this->intuneDevice(id: 'guid-whatever', name: 'host-whatever')],
             ]),
         ]);
 
         iterator_to_array($adapter->pull());
 
-        Http::assertSent(function ($request) {
-            if (! str_contains($request->url(), '/v1.0/deviceManagement/managedDevices')) {
-                return false;
-            }
-            $url = urldecode($request->url());
-
-            return str_contains($url, 'roleScopeTagIds/any(x:')
-                && str_contains($url, "x eq '3'")
-                && str_contains($url, "x eq '7'");
-        });
-    }
-
-    public function test_blank_scope_tag_filter_sends_no_odata_filter()
-    {
-        $adapter = $this->configuredAdapter(scopeTagFilter: '');
-
-        Http::fake([
-            '*/oauth2/v2.0/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
-            '*/v1.0/deviceManagement/managedDevices*' => Http::response(['value' => []]),
-        ]);
-
-        iterator_to_array($adapter->pull());
-
-        // No roleScopeTags call fired, no $filter param on the devices call.
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/v1.0/deviceManagement/roleScopeTags'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'deviceManagement/roleScopeTags'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/beta/deviceManagement/managedDevices'));
         Http::assertSent(fn ($request) => str_contains($request->url(), '/v1.0/deviceManagement/managedDevices')
             && ! str_contains(urldecode($request->url()), '$filter'));
     }
 
     public function test_unresolved_scope_tag_entry_is_dropped()
     {
-        // "Ghost" matches no tag. "Marketing" resolves to 3. Expect the
-        // outgoing filter to carry 3 only.
+        // "Ghost" matches no tag. "Marketing" resolves to 3. Device
+        // tagged '3' should pass, device tagged '11' should not.
         $adapter = $this->configuredAdapter(scopeTagFilter: 'Marketing, Ghost');
 
         Http::fake([
             '*/oauth2/v2.0/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
-            '*/v1.0/deviceManagement/roleScopeTags*' => Http::response([
+            '*/beta/deviceManagement/roleScopeTags*' => Http::response([
                 'value' => [['id' => '3', 'displayName' => 'Marketing']],
             ]),
-            '*/v1.0/deviceManagement/managedDevices*' => Http::response(['value' => []]),
+            '*/v1.0/deviceManagement/managedDevices*' => Http::response([
+                'value' => [
+                    $this->intuneDevice(id: 'guid-marketing', name: 'host-marketing'),
+                    $this->intuneDevice(id: 'guid-finance', name: 'host-finance'),
+                ],
+            ]),
+            '*/beta/deviceManagement/managedDevices/guid-marketing*' => Http::response([
+                'id' => 'guid-marketing',
+                'roleScopeTagIds' => ['3'],
+            ]),
+            '*/beta/deviceManagement/managedDevices/guid-finance*' => Http::response([
+                'id' => 'guid-finance',
+                'roleScopeTagIds' => ['11'],
+            ]),
         ]);
 
-        iterator_to_array($adapter->pull());
+        $records = iterator_to_array($adapter->pull());
 
-        Http::assertSent(function ($request) {
-            if (! str_contains($request->url(), '/v1.0/deviceManagement/managedDevices')) {
-                return false;
-            }
-            $url = urldecode($request->url());
+        $this->assertCount(1, $records);
+        $this->assertSame('guid-marketing', $records[0]->sourceId);
+    }
 
-            return str_contains($url, "x eq '3'") && ! str_contains($url, 'Ghost');
-        });
+    public function test_scope_tag_detail_fetch_failure_excludes_the_device()
+    {
+        // If the per-device beta GET fails for one device (4xx/5xx,
+        // timeout), that device is excluded from the sync rather than
+        // silently falling through the filter.
+        $adapter = $this->configuredAdapter(scopeTagFilter: 'Marketing');
+
+        Http::fake([
+            '*/oauth2/v2.0/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
+            '*/beta/deviceManagement/roleScopeTags*' => Http::response([
+                'value' => [['id' => '3', 'displayName' => 'Marketing']],
+            ]),
+            '*/v1.0/deviceManagement/managedDevices*' => Http::response([
+                'value' => [
+                    $this->intuneDevice(id: 'guid-good', name: 'host-good'),
+                    $this->intuneDevice(id: 'guid-broken', name: 'host-broken'),
+                ],
+            ]),
+            '*/beta/deviceManagement/managedDevices/guid-good*' => Http::response([
+                'id' => 'guid-good',
+                'roleScopeTagIds' => ['3'],
+            ]),
+            '*/beta/deviceManagement/managedDevices/guid-broken*' => Http::response([], 500),
+        ]);
+
+        $records = iterator_to_array($adapter->pull());
+
+        $this->assertCount(1, $records);
+        $this->assertSame('guid-good', $records[0]->sourceId);
     }
 
     public function test_scope_tag_ids_surface_on_normalized_record_as_comma_joined_string()
@@ -249,10 +343,10 @@ class IntuneAdapterTest extends TestCase
         $this->assertSame('3,7', $records[0]->extra['intune_role_scope_tag_ids']);
     }
 
-    private function configuredAdapter(?string $scopeTagFilter = null): IntuneAdapter
+    private function configuredAdapter(?string $scopeTagFilter = null, string $url = 'https://graph.microsoft.com'): IntuneAdapter
     {
         $instance = SyncAdapterInstance::where('slug', 'intune')->firstOrFail();
-        SyncAdapterConfig::put($instance->id, 'url', 'https://graph.microsoft.com');
+        SyncAdapterConfig::put($instance->id, 'url', $url);
         SyncAdapterConfig::put($instance->id, 'tenant_id', 'stub-tenant');
         SyncAdapterConfig::put($instance->id, 'client_id', 'stub-client');
         SyncAdapterConfig::put($instance->id, 'client_secret', Crypt::encrypt('fake-secret'));
@@ -261,6 +355,74 @@ class IntuneAdapterTest extends TestCase
         }
 
         return new IntuneAdapter($instance->fresh());
+    }
+
+    public function test_base_url_presets_cover_every_microsoft_graph_cloud_still_in_service()
+    {
+        $adapter = $this->configuredAdapter();
+
+        $presets = $adapter->baseUrlPresets();
+
+        $this->assertIsArray($presets);
+        $this->assertContains('https://graph.microsoft.com', $presets);
+        $this->assertContains('https://graph.microsoft.us', $presets);
+        $this->assertContains('https://microsoftgraph.chinacloudapi.cn', $presets);
+    }
+
+    public function test_url_validation_rejects_non_preset_hosts_with_a_listed_error()
+    {
+        // An admin typing `https://not-graph.example.com` would otherwise
+        // see Laravel's stock "The selected intune_url is invalid"
+        // message, which doesn't tell them WHICH URLs would be valid.
+        // The adapter supplies a custom message that lists the three
+        // live Microsoft Graph clouds.
+        $rules = (new IntuneAdapter(SyncAdapterInstance::where('slug', 'intune')->firstOrFail()))->validationRules();
+        $messages = (new IntuneAdapter(SyncAdapterInstance::where('slug', 'intune')->firstOrFail()))->validationMessages();
+
+        $this->assertArrayHasKey('intune_url.in', $messages);
+        $this->assertStringContainsString('https://graph.microsoft.com', $messages['intune_url.in']);
+        $this->assertStringContainsString('https://graph.microsoft.us', $messages['intune_url.in']);
+        $this->assertStringContainsString('https://microsoftgraph.chinacloudapi.cn', $messages['intune_url.in']);
+
+        $this->assertContains('required', $rules['intune_url']);
+        $this->assertNotEmpty(
+            array_filter($rules['intune_url'], fn ($rule) => $rule instanceof \Illuminate\Validation\Rules\In),
+            'intune_url rules must include an In:[presets] constraint',
+        );
+    }
+
+    public function test_oauth_scope_is_graph_origin_only_regardless_of_configured_base_url_path()
+    {
+        // Regression for issue #20118 field report. Admins who follow
+        // Microsoft's "Graph starts at this URL" docs sometimes paste
+        // the full endpoint (`https://graph.microsoft.com/beta/
+        // deviceManagement/managedDevices`) into the Base URL field.
+        // Entra rejects a client-credentials scope that carries a
+        // path with AADSTS500011 because there's no service
+        // principal registered at that URI. The Graph service
+        // principal is identified by the origin only. Scope must be
+        // `https://graph.microsoft.com/.default` regardless of which
+        // Graph endpoint the caller plans to hit.
+        $adapter = $this->configuredAdapter(
+            url: 'https://graph.microsoft.com/beta/deviceManagement/managedDevices',
+        );
+
+        $capturedScope = null;
+        Http::fake([
+            '*/oauth2/v2.0/token' => function ($request) use (&$capturedScope) {
+                parse_str($request->body(), $parsed);
+                $capturedScope = $parsed['scope'] ?? null;
+
+                return Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]);
+            },
+            '*' => Http::response(['value' => []]),
+        ]);
+
+        foreach ($adapter->pull() as $_record) {
+            // Draining the iterator triggers the token request.
+        }
+
+        $this->assertSame('https://graph.microsoft.com/.default', $capturedScope);
     }
 
     /**
@@ -305,6 +467,44 @@ class IntuneAdapterTest extends TestCase
 
         $this->assertDatabaseMissing('asset_external_sources', ['source' => 'intune', 'external_id' => 'guid-no-serial']);
         $this->assertSame(0, Asset::query()->count(), 'No asset should be created when the model requires a serial and the vendor record has none.');
+    }
+
+    public function test_vendor_record_with_serial_creates_when_model_requires_serial()
+    {
+        // Regression for #19901. Asset::save() injects a `required` rule
+        // on the serial field when the resolved model has
+        // require_serial = 1. The old shell-asset write ran save() before
+        // the mapping loop populated the serial, so Watson rejected
+        // records that DID carry a serial from the vendor. The reporter
+        // saw this on a tenant where 6 of 260 Intune devices had serials
+        // and ended up skipped with "The serial field is required."
+        AssetModel::factory()->create([
+            'name' => 'Generic Model',
+            'require_serial' => 1,
+        ]);
+
+        $adapter = $this->configuredAdapter();
+
+        Http::fake([
+            '*/oauth2/v2.0/token' => Http::response(['access_token' => 'stub-bearer', 'expires_in' => 3600]),
+            '*/v1.0/deviceManagement/managedDevices*' => Http::response([
+                'value' => [
+                    [
+                        'id' => 'guid-has-serial',
+                        'deviceName' => 'intune-host-with-serial',
+                        'serialNumber' => 'VENDOR-SERIAL-ABC123',
+                        'model' => 'Generic Model',
+                    ],
+                ],
+            ]),
+        ]);
+
+        foreach ($adapter->pull() as $record) {
+            SyncAdapter::syncFromRecord($record);
+        }
+
+        $this->assertDatabaseHas('asset_external_sources', ['source' => 'intune', 'external_id' => 'guid-has-serial']);
+        $this->assertDatabaseHas('assets', ['serial' => 'VENDOR-SERIAL-ABC123']);
     }
 
     public function test_vendor_record_without_serial_still_creates_when_model_does_not_require_serial()

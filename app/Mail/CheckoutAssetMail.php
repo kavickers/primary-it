@@ -101,8 +101,8 @@ class CheckoutAssetMail extends BaseMailable
         }
 
         // Check if the item has custom fields associated with it
-        if (($this->item->model) && ($this->item->model->fieldset)) {
-            $fields = $this->item->model->fieldset->fields;
+        if (($this->item->custom_fieldset)) {
+            $fields = $this->item->custom_fieldset->fields;
 
             foreach ($fields as $field) {
                 if (! $field->show_in_email || $field->field_encrypted == '1') {
@@ -138,6 +138,7 @@ class CheckoutAssetMail extends BaseMailable
                 'last_checkout' => $this->last_checkout,
                 'expected_checkin' => $this->expected_checkin,
                 'location' => $this->getLocation(),
+                'default_location' => $this->getDefaultLocation(),
                 'introduction_line' => $this->introductionLine(),
             ],
         );
@@ -203,5 +204,10 @@ class CheckoutAssetMail extends BaseMailable
         }
 
         return null;
+    }
+
+    private function getDefaultLocation(): ?string
+    {
+        return $this->item->defaultLoc?->name;
     }
 }
