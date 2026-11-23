@@ -24,6 +24,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('consumables_users', function (Blueprint $table) {
+            // Drop the index first: SQL Server won't drop an indexed column.
+            $table->dropIndex(['consumed_at']);
             $table->dropColumn('consumed_at');
         });
     }

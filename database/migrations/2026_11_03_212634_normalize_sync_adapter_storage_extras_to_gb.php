@@ -58,6 +58,20 @@ return new class extends Migration
                 continue;
             }
 
+            // SQL Server converts the text column to INT for "col / 1000000000",
+            // which overflows on any byte count over 2 GB and is integer division
+            // below that. Divide as FLOAT instead, and leave values that aren't
+            // numeric alone.
+            if (DB::getDriverName() === 'sqlsrv') {
+                DB::table('assets')
+                    ->whereRaw("TRY_CAST([$column] AS FLOAT) IS NOT NULL")
+                    ->update([
+                        $column => DB::raw("CONVERT(NVARCHAR(64), CAST(TRY_CAST([$column] AS FLOAT) / 1000000000 AS DECIMAL(20, 4)))"),
+                    ]);
+
+                continue;
+            }
+
             DB::table('assets')
                 ->whereNotNull($column)
                 ->update([

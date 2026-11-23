@@ -30,7 +30,8 @@ use Illuminate\Support\Str;
  * is only used by the test suite (fresh DB per run) and not for
  * production Snipe-IT installs. Postgres isn't officially supported
  * by Passport's Snipe-IT fork but is covered by a drop-and-recreate
- * path for symmetry with SQLite.
+ * path for symmetry with SQLite. SQL Server (this fork) gets its own
+ * in-place flow, upSqlServer(), so existing tokens survive.
  *
  * Idempotency: MySQL DDL is not transactional, so a prior partial run
  * can leave shadow columns in place. Every Schema add is guarded by a
@@ -54,6 +55,13 @@ return new class extends Migration
 
         if ($driver === 'sqlite' || $driver === 'pgsql') {
             $this->upSqliteOrPostgres();
+            $this->hashLegacyClientSecrets();
+
+            return;
+        }
+
+        if ($driver === 'sqlsrv') {
+            $this->upSqlServer();
             $this->hashLegacyClientSecrets();
 
             return;
@@ -255,6 +263,106 @@ return new class extends Migration
                 'updated_at' => $client->updated_at,
             ]);
         }
+    }
+
+    /**
+     * SQL Server path: the same in-place swap as MySQL, so existing clients,
+     * personal access tokens and auth codes keep working after the upgrade
+     * (the SQLite/Postgres drop-and-recreate would revoke every API key).
+     *
+     * SQL Server has no CHANGE/MODIFY, cannot alter the type of an IDENTITY
+     * column, will not drop a column the primary key or an index depends on,
+     * and auto-names the inline primary key, so each step goes through the
+     * schema builder and the key constraint is looked up before it is dropped.
+     * DDL is transactional here, so a failed run rolls back as a whole.
+     */
+    private function upSqlServer(): void
+    {
+        // Already UUIDs: down() is a no-op off MySQL, so a rollback followed
+        // by a re-run lands here.
+        if (! in_array(Schema::getColumnType('oauth_clients', 'id'), ['bigint', 'int'], true)) {
+            return;
+        }
+
+        $dependents = ['oauth_access_tokens', 'oauth_auth_codes', 'oauth_personal_access_clients'];
+
+        foreach ($dependents as $dependent) {
+            DB::table($dependent)
+                ->whereNotIn('client_id', fn ($q) => $q->select('id')->from('oauth_clients'))
+                ->delete();
+        }
+
+        $idMap = [];
+        foreach (DB::table('oauth_clients')->pluck('id') as $oldId) {
+            $idMap[(int) $oldId] = (string) Str::orderedUuid();
+        }
+
+        Schema::table('oauth_clients', function (Blueprint $table) {
+            $table->char('id_uuid', 36)->nullable();
+        });
+        foreach ($dependents as $dependent) {
+            Schema::table($dependent, function (Blueprint $table) {
+                $table->char('client_id_uuid', 36)->nullable();
+            });
+        }
+
+        foreach ($idMap as $oldId => $newUuid) {
+            DB::table('oauth_clients')->where('id', $oldId)->update(['id_uuid' => $newUuid]);
+            foreach ($dependents as $dependent) {
+                DB::table($dependent)->where('client_id', $oldId)->update(['client_id_uuid' => $newUuid]);
+            }
+        }
+
+        $clientsTable = DB::getTablePrefix().'oauth_clients';
+        $primaryKey = DB::selectOne(
+            "SELECT name FROM sys.key_constraints WHERE type = 'PK' AND parent_object_id = OBJECT_ID(?)",
+            [$clientsTable]
+        );
+        if ($primaryKey) {
+            DB::statement('ALTER TABLE ['.$clientsTable.'] DROP CONSTRAINT ['.$primaryKey->name.']');
+        }
+
+        $this->swapSqlServerColumn('oauth_clients', 'id', 'id_uuid');
+        Schema::table('oauth_clients', function (Blueprint $table) {
+            $table->primary('id');
+        });
+
+        foreach ($dependents as $dependent) {
+            $this->swapSqlServerColumn($dependent, 'client_id', 'client_id_uuid');
+        }
+    }
+
+    /**
+     * Replace $column with the backfilled $shadow column as CHAR(36) NOT NULL,
+     * carrying over any (non-primary) indexes that covered $column.
+     */
+    private function swapSqlServerColumn(string $table, string $column, string $shadow): void
+    {
+        $indexes = collect(Schema::getIndexes($table))
+            ->filter(fn (array $index) => ! $index['primary'] && in_array($column, $index['columns'], true))
+            ->values();
+
+        Schema::table($table, function (Blueprint $blueprint) use ($indexes) {
+            foreach ($indexes as $index) {
+                $blueprint->dropIndex($index['name']);
+            }
+        });
+        Schema::table($table, function (Blueprint $blueprint) use ($column) {
+            $blueprint->dropColumn($column);
+        });
+        Schema::table($table, function (Blueprint $blueprint) use ($column, $shadow) {
+            $blueprint->renameColumn($shadow, $column);
+        });
+        Schema::table($table, function (Blueprint $blueprint) use ($column) {
+            $blueprint->char($column, 36)->nullable(false)->change();
+        });
+        Schema::table($table, function (Blueprint $blueprint) use ($indexes) {
+            foreach ($indexes as $index) {
+                $index['unique']
+                    ? $blueprint->unique($index['columns'], $index['name'])
+                    : $blueprint->index($index['columns'], $index['name']);
+            }
+        });
     }
 
     public function down(): void
