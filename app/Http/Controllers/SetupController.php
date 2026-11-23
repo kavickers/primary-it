@@ -258,8 +258,10 @@ class SetupController extends Controller
         $output = Artisan::output();
         // The keys can outlive the database (e.g. a new database for an existing
         // install), so also create the Passport clients if this database has none.
+        // Passport 13 marks the personal access client on oauth_clients and no
+        // longer writes to oauth_personal_access_clients.
         if ((! file_exists(storage_path().'/oauth-private.key')) || (! file_exists(storage_path().'/oauth-public.key'))
-            || (! DB::table('oauth_personal_access_clients')->exists())) {
+            || (! DB::table('oauth_clients')->where('personal_access_client', true)->exists())) {
             Artisan::call('migrate', ['--path' => 'vendor/laravel/passport/database/migrations', '--force' => true]);
             Artisan::call('passport:install', ['--no-interaction' => true]);
         }

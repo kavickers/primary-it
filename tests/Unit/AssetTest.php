@@ -332,7 +332,8 @@ class AssetTest extends TestCase
 
         $capturedStatements = [];
         DB::listen(function ($query) use (&$capturedStatements) {
-            if (str_starts_with($query->sql, 'update "settings"') || str_starts_with($query->sql, 'update `settings`')) {
+            // SQL Server quotes identifiers with brackets.
+            if (str_starts_with($query->sql, 'update "settings"') || str_starts_with($query->sql, 'update `settings`') || str_starts_with($query->sql, 'update [settings]')) {
                 $capturedStatements[] = $query->sql;
             }
         });

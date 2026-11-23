@@ -370,7 +370,13 @@ class ExtraFieldMappingTest extends TestCase
         SyncAdapter::syncFromRecord($record);
 
         $this->assertDatabaseHas('assets', ['name' => 'host-eol-bad']);
-        $this->assertDatabaseMissing('assets', ['name' => 'host-eol-bad', 'asset_eol_date' => 'not-a-date']);
+
+        // SQL Server can't compare a DATE column with 'not-a-date' at all.
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'sqlsrv') {
+            $this->assertDatabaseHas('assets', ['name' => 'host-eol-bad', 'asset_eol_date' => null]);
+        } else {
+            $this->assertDatabaseMissing('assets', ['name' => 'host-eol-bad', 'asset_eol_date' => 'not-a-date']);
+        }
     }
 
     public function test_extra_can_route_to_native_model_number()

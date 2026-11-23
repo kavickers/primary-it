@@ -4,6 +4,7 @@ namespace Tests\Feature\Setup\Ui;
 
 use App\Models\Setting;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class IndexSetupTest extends TestCase
@@ -43,12 +44,12 @@ class IndexSetupTest extends TestCase
 
     public function test_migration_creates_passport_clients()
     {
-        $this->assertDatabaseEmpty('oauth_personal_access_clients');
+        $this->assertDatabaseMissing('oauth_clients', ['personal_access_client' => true]);
 
         $this->post(route('setup.migrate'))
             ->assertOk();
 
-        $this->assertDatabaseCount('oauth_personal_access_clients', 1);
+        $this->assertSame(1, DB::table('oauth_clients')->where('personal_access_client', true)->count());
     }
 
     public function test_test_email_is_sent_to_the_from_address()
